@@ -27,7 +27,7 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # Initialize extensions (uncomment when you have your db set up in models/)
-    #db.init_app(app)
+    db.init_app(app)
 
     # Register Blueprints to connect the modular routes/ files to the main app[cite: 1]
     # app.register_blueprint(user_bp, url_prefix='/users')
