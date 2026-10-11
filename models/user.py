@@ -7,6 +7,11 @@ from datetime import datetime, timezone
 class User(db.Model):
     __tablename__ = 'users'
 
+    # Available roles
+    ADMIN = "admin"
+    EMPLOYEE = "employee"
+    HR = "hr"
+
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True)
     email: Mapped[str] = mapped_column(String(120), unique=True)
