@@ -12,4 +12,4 @@ def init_database():
             print(f"Error creating database tables: {e}")
 
 if __name__ == "__main__":
-    init_database
+    init_database()

@@ -9,5 +9,8 @@ db = SQLAlchemy(model_class=Base)
 # tas import mo dito models and shi
 # from .employee import Employee
 from .user import User
-# from .dep
-# from .atte
+from .department import Department
+from .leave import Leave
+from .payroll import Payroll
+from .employee import Employee
+from .attendance import Attendance

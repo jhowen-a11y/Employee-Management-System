@@ -23,7 +23,7 @@ def create_app():
     
     # MySQL Database Connection 
     # This pulls the MySQL connection string we defined in the .env file
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI')
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL') 
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # Initialize extensions (uncomment when you have your db set up in models/)
