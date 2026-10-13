@@ -27,6 +27,16 @@ class Employee(db.Model):
 
     department: Mapped["Department"] = relationship(back_populates="employees")
 
+    leave_requests: Mapped[list["Leave"]] = relationship(back_populates="employee")
+
+    attendance_records: Mapped[list["Attendance"]] = relationship(
+        back_populates="employee"
+    )
+
+    payroll_records: Mapped[list["Payroll"]] = relationship(
+        back_populates="employee"
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now())
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now(),onupdate=func.now())

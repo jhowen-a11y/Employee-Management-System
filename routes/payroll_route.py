@@ -1,6 +1,5 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -14,10 +13,10 @@ payroll_bp = Blueprint(
     url_prefix="/payroll"
 )
 
-
+# AYUSIN MO TO NATANGGAP NG NEGATIVE YN pag sa deductions and sh
 def read_money(value, default=None):
     """Convert a form value into a non-negative Decimal."""
-    if value is None or value.strip() == "":
+    if value is None :
         return default
 
     try:
@@ -38,7 +37,6 @@ def read_date(value):
 
 # View all payroll records
 @payroll_bp.route("/")
-@login_required
 def payroll_list():
     payroll_records = Payroll.query.order_by(
         Payroll.pay_period_start.desc()
@@ -52,7 +50,6 @@ def payroll_list():
 
 # View one payroll record
 @payroll_bp.route("/<int:payroll_id>")
-@login_required
 def payroll_detail(payroll_id):
     payroll = Payroll.query.get_or_404(payroll_id)
 
@@ -64,7 +61,6 @@ def payroll_detail(payroll_id):
 
 # Add a payroll record
 @payroll_bp.route("/add", methods=["GET", "POST"])
-@login_required
 def add_payroll():
     employees = Employee.query.order_by(Employee.last_name).all()
 
@@ -127,7 +123,6 @@ def add_payroll():
 
 # Edit a payroll record
 @payroll_bp.route("/<int:payroll_id>/edit", methods=["GET", "POST"])
-@login_required
 def edit_payroll(payroll_id):
     payroll = Payroll.query.get_or_404(payroll_id)
     employees = Employee.query.order_by(Employee.last_name).all()
@@ -188,7 +183,6 @@ def edit_payroll(payroll_id):
 
 # Delete a payroll record
 @payroll_bp.route("/<int:payroll_id>/delete", methods=["POST"])
-@login_required
 def delete_payroll(payroll_id):
     payroll = Payroll.query.get_or_404(payroll_id)
 

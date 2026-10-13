@@ -3,9 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>base</title>
+    <title>{% block title %}EMS{% endblock %}</title>
 </head>
 <body>
     <h1>this is the base</h1>
+
+    <nav>
+    <a href="/">Dashboard</a>
+    <a href="/employees/">Employees</a>
+    <a href="/attendance/">Attendance</a>
+    <a href="/departments/">Departments</a>
+    <a href="/leaves/">Leave Requests</a>
+    <a href="/payroll/">Payroll</a>
+    </nav>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
 </body>
 </html>

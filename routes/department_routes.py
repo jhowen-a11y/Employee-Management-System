@@ -1,6 +1,5 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
 
 from models import db
 from models.department import Department
@@ -14,7 +13,6 @@ department_bp = Blueprint(
 
 # View all departments
 @department_bp.route("/")
-@login_required
 def department_list():
     departments = Department.query.order_by(
         Department.department_name.asc()
@@ -28,7 +26,6 @@ def department_list():
 
 # View one department
 @department_bp.route("/<int:department_id>")
-@login_required
 def department_detail(department_id):
     department = Department.query.get_or_404(department_id)
 
@@ -40,7 +37,6 @@ def department_detail(department_id):
 
 # Add a department
 @department_bp.route("/add", methods=["GET", "POST"])
-@login_required
 def add_department():
     if request.method == "POST":
         department_name = request.form.get(
@@ -80,7 +76,6 @@ def add_department():
 
 # Edit a department
 @department_bp.route("/<int:department_id>/edit", methods=["GET", "POST"])
-@login_required
 def edit_department(department_id):
     department = Department.query.get_or_404(department_id)
 
@@ -128,7 +123,6 @@ def edit_department(department_id):
 
 # Delete a department
 @department_bp.route("/<int:department_id>/delete", methods=["POST"])
-@login_required
 def delete_department(department_id):
     department = Department.query.get_or_404(department_id)
 

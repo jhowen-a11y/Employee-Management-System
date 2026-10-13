@@ -1,9 +1,14 @@
 import os
-from flask import Flask
+from flask import Flask, render_template
 from dotenv import load_dotenv
 
 # Assuming you will set up Flask-SQLAlchemy in your models directory
 from models import db 
+from routes.employee_routes import employee_bp
+from routes.attendance_routes import attendance_bp
+from routes.department_routes import department_bp
+from routes.leave_route import leave_bp
+from routes.payroll_route import payroll_bp
 
 # Import the route blueprints from the routes/ folder[cite: 1]
 # from routes.employee_routes import employee_bp
@@ -34,17 +39,21 @@ def create_app():
 
     # Initialize extensions (uncomment when you have your db set up in models/)
     db.init_app(app)
+    app.register_blueprint(employee_bp)
+    app.register_blueprint(attendance_bp)
+    app.register_blueprint(department_bp)
+    app.register_blueprint(leave_bp)
+    app.register_blueprint(payroll_bp)
 
     # Register Blueprints to connect the modular routes/ files to the main app[cite: 1]
     # app.register_blueprint(user_bp, url_prefix='/users')
     # app.register_blueprint(employee_bp, url_prefix='/employees')
     # app.register_blueprint(attendance_bp, url_prefix='/attendance')
 
-
     @app.route('/')
     def index():
-        # This will eventually render templates/login.html or templates/dashboard.html[cite: 1]
-        return "Welcome to the Employee Management System"
+        
+        return render_template("base.html")
 
     return app
 
@@ -52,5 +61,4 @@ if __name__ == '__main__':
     app = create_app()
     debug_mode = os.environ.get('FLASK_DEBUG') == '1'
     app.run(debug=debug_mode)
-
-# PATI DITO
+    

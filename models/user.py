@@ -1,6 +1,6 @@
 from . import db
 from sqlalchemy import String, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
 
@@ -20,6 +20,10 @@ class User(db.Model):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    employee: Mapped["Employee | None"] = relationship(
+        back_populates="user"
+    )
 
     # TAS DAPAT LAGI MAY GANTO PARA SA SH kunyare nag add ng user edi mag pprint sa console netong
     # user kem keme role keme

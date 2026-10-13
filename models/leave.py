@@ -29,7 +29,7 @@ class Leave(db.Model):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now(),onupdate=func.now())
 
     # Relationship to Employee
-    employee: Mapped["Employee"] = relationship(back_populates="leave_requests")
+    employee: Mapped["Employee"] = relationship(back_populates="leave_requests") # san galing tong leave_requests
 
     def __repr__(self):
         return (

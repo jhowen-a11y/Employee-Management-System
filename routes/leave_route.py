@@ -1,6 +1,5 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
 from datetime import date
 
 from models import db
@@ -15,21 +14,19 @@ leave_bp = Blueprint(
 
 # View all leave requests
 @leave_bp.route("/")
-@login_required
 def leave_list():
     leaves = Leave.query.order_by(
         Leave.created_at.desc()
     ).all()
 
     return render_template(
-        "leaves/list.html",
+        "leave/list.html",
         leaves=leaves
     )
 
 
 # Submit a leave request
 @leave_bp.route("/add", methods=["GET", "POST"])
-@login_required
 def add_leave():
     if request.method == "POST":
         employee_id = request.form.get("employee_id", type=int)
@@ -74,7 +71,6 @@ def add_leave():
 
 # View a specific leave request
 @leave_bp.route("/<int:leave_id>")
-@login_required
 def leave_detail(leave_id):
     leave = Leave.query.get_or_404(leave_id)
 
@@ -86,7 +82,6 @@ def leave_detail(leave_id):
 
 # Update leave request status
 @leave_bp.route("/<int:leave_id>/status", methods=["POST"])
-@login_required
 def update_leave_status(leave_id):
     leave = Leave.query.get_or_404(leave_id)
 
@@ -107,7 +102,6 @@ def update_leave_status(leave_id):
 
 # Delete a leave request
 @leave_bp.route("/<int:leave_id>/delete", methods=["POST"])
-@login_required
 def delete_leave(leave_id):
     leave = Leave.query.get_or_404(leave_id)
 

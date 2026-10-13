@@ -1,6 +1,5 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
 from datetime import date, time
 
 from models import db
@@ -33,7 +32,6 @@ def parse_time(value):
 
 # View all attendance records
 @attendance_bp.route("/")
-@login_required
 def attendance_list():
     records = Attendance.query.order_by(
         Attendance.attendance_date.desc()
@@ -47,7 +45,6 @@ def attendance_list():
 
 # View one attendance record
 @attendance_bp.route("/<int:attendance_id>")
-@login_required
 def attendance_detail(attendance_id):
     record = Attendance.query.get_or_404(attendance_id)
 
@@ -59,7 +56,6 @@ def attendance_detail(attendance_id):
 
 # Add an attendance record
 @attendance_bp.route("/add", methods=["GET", "POST"])
-@login_required
 def add_attendance():
     employees = Employee.query.order_by(Employee.last_name).all()
 
@@ -127,7 +123,6 @@ def add_attendance():
     "/<int:attendance_id>/edit",
     methods=["GET", "POST"]
 )
-@login_required
 def edit_attendance(attendance_id):
     record = Attendance.query.get_or_404(attendance_id)
     employees = Employee.query.order_by(Employee.last_name).all()
@@ -195,7 +190,6 @@ def edit_attendance(attendance_id):
     "/<int:attendance_id>/delete",
     methods=["POST"]
 )
-@login_required
 def delete_attendance(attendance_id):
     record = Attendance.query.get_or_404(attendance_id)
 
