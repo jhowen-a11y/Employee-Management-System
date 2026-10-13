@@ -60,10 +60,11 @@ DB_PASSWORD=your_mysql_password
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=employee_management
+SECRET_KEY=replace_with_a_random_secret
 FLASK_DEBUG=1
 ```
 
-`app.py` builds the SQLAlchemy connection URL from the `DB_*` variables. Keep `.env` private and do not commit real credentials.
+`app.py` builds the SQLAlchemy connection URL from the `DB_*` variables. Set `SECRET_KEY` to a long, random value and keep `.env` private; do not commit real credentials. If it is omitted, the app generates a temporary key, so session data will not survive a restart.
 
 ### Create tables and run
 

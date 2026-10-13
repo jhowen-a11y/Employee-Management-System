@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 
 from models import db
+from models.employee import Employee
 from models.leave import Leave
 
 leave_bp = Blueprint(
@@ -28,6 +29,11 @@ def leave_list():
 # Submit a leave request
 @leave_bp.route("/add", methods=["GET", "POST"])
 def add_leave():
+    employees = Employee.query.order_by(
+        Employee.last_name.asc(),
+        Employee.first_name.asc()
+    ).all()
+
     if request.method == "POST":
         employee_id = request.form.get("employee_id", type=int)
         leave_type = request.form.get("leave_type", "").strip()
@@ -66,7 +72,7 @@ def add_leave():
         flash("Leave request submitted successfully!", "success")
         return redirect(url_for("leave.leave_list"))
 
-    return render_template("leaves/add.html")
+    return render_template("leave/add.html", employees=employees)
 
 
 # View a specific leave request
@@ -75,7 +81,7 @@ def leave_detail(leave_id):
     leave = Leave.query.get_or_404(leave_id)
 
     return render_template(
-        "leaves/detail.html",
+        "leave/detail.html",
         leave=leave
     )
 

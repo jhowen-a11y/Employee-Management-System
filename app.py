@@ -1,43 +1,57 @@
 import os
+from pathlib import Path
+
 from flask import Flask, render_template
 from dotenv import load_dotenv
+from sqlalchemy.engine import URL
 
-# Assuming you will set up Flask-SQLAlchemy in your models directory
-from models import db 
+from models import db
 from routes.employee_routes import employee_bp
 from routes.attendance_routes import attendance_bp
 from routes.department_routes import department_bp
 from routes.leave_route import leave_bp
 from routes.payroll_route import payroll_bp
 
-# Import the route blueprints from the routes/ folder[cite: 1]
-# from routes.employee_routes import employee_bp
-# from routes.user_routes import user_bp
-# from routes.attendance_routes import attendance_bp
-
 def create_app():
-    # Load environment variables from the .env file FIRST
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().with_name(".env"))
 
-    # Initialize the Flask application
     app = Flask(__name__)
 
-    # Application Configuration using environment variables
-    # We provide a fallback string just in case the .env fails to load in development
-    app.config['SQLALCHEMY_DATABASE_URI'] = (
-    f"mysql+pymysql://{os.getenv('DB_USER')}:"
-    f"{os.getenv('DB_PASSWORD')}@"
-    f"{os.getenv('DB_HOST')}:"
-    f"{os.getenv('DB_PORT')}/"
-    f"{os.getenv('DB_NAME')}"
-)
-    
-    # MySQL Database Connection 
-    # This pulls the MySQL connection string we defined in the .env file
-    
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    secret_key = os.getenv("SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("SECRET_KEY must be set in the environment or .env file.")
 
-    # Initialize extensions (uncomment when you have your db set up in models/)
+    required_settings = ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_NAME")
+    missing_settings = [
+        name for name in required_settings if not os.getenv(name)
+    ]
+    if missing_settings:
+        raise RuntimeError(
+            "Missing required database settings: "
+            + ", ".join(missing_settings)
+        )
+
+    try:
+        database_port = int(os.getenv("DB_PORT", "3306"))
+    except ValueError as error:
+        raise RuntimeError("DB_PORT must be a valid port number.") from error
+    if not 1 <= database_port <= 65535:
+        raise RuntimeError("DB_PORT must be between 1 and 65535.")
+
+    app.config.update(
+        SECRET_KEY=secret_key,
+        DEBUG=os.getenv("FLASK_DEBUG", "0").strip() == "1",
+        SQLALCHEMY_DATABASE_URI=URL.create(
+            drivername="mysql+pymysql",
+            username=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
+            host=os.environ["DB_HOST"],
+            port=database_port,
+            database=os.environ["DB_NAME"],
+        ),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    )
+
     db.init_app(app)
     app.register_blueprint(employee_bp)
     app.register_blueprint(attendance_bp)
@@ -45,20 +59,13 @@ def create_app():
     app.register_blueprint(leave_bp)
     app.register_blueprint(payroll_bp)
 
-    # Register Blueprints to connect the modular routes/ files to the main app[cite: 1]
-    # app.register_blueprint(user_bp, url_prefix='/users')
-    # app.register_blueprint(employee_bp, url_prefix='/employees')
-    # app.register_blueprint(attendance_bp, url_prefix='/attendance')
-
-    @app.route('/')
+    @app.route("/")
     def index():
-        
         return render_template("base.html")
 
     return app
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app = create_app()
-    debug_mode = os.environ.get('FLASK_DEBUG') == '1'
-    app.run(debug=debug_mode)
-    
+    app.run(debug=app.config["DEBUG"])
