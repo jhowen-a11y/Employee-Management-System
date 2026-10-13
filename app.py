@@ -19,11 +19,17 @@ def create_app():
 
     # Application Configuration using environment variables
     # We provide a fallback string just in case the .env fails to load in development
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-dev-secret-key')
+    app.config['SQLALCHEMY_DATABASE_URI'] = (
+    f"mysql+pymysql://{os.getenv('DB_USER')}:"
+    f"{os.getenv('DB_PASSWORD')}@"
+    f"{os.getenv('DB_HOST')}:"
+    f"{os.getenv('DB_PORT')}/"
+    f"{os.getenv('DB_NAME')}"
+)
     
     # MySQL Database Connection 
     # This pulls the MySQL connection string we defined in the .env file
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL') 
+    
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # Initialize extensions (uncomment when you have your db set up in models/)

@@ -1,0 +1,199 @@
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import login_required
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
+from models import db
+from models.payroll import Payroll
+from models.employee import Employee
+
+payroll_bp = Blueprint(
+    "payroll",
+    __name__,
+    url_prefix="/payroll"
+)
+
+
+def read_money(value, default=None):
+    """Convert a form value into a non-negative Decimal."""
+    if value is None or value.strip() == "":
+        return default
+
+    try:
+        amount = Decimal(value.strip())
+        if not amount.is_finite() or amount < 0:
+            return None
+        return amount.quantize(Decimal("0.01"))
+    except InvalidOperation:
+        return None
+
+
+def read_date(value):
+    try:
+        return date.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+
+
+# View all payroll records
+@payroll_bp.route("/")
+@login_required
+def payroll_list():
+    payroll_records = Payroll.query.order_by(
+        Payroll.pay_period_start.desc()
+    ).all()
+
+    return render_template(
+        "payroll/list.html",
+        payroll_records=payroll_records
+    )
+
+
+# View one payroll record
+@payroll_bp.route("/<int:payroll_id>")
+@login_required
+def payroll_detail(payroll_id):
+    payroll = Payroll.query.get_or_404(payroll_id)
+
+    return render_template(
+        "payroll/detail.html",
+        payroll=payroll
+    )
+
+
+# Add a payroll record
+@payroll_bp.route("/add", methods=["GET", "POST"])
+@login_required
+def add_payroll():
+    employees = Employee.query.order_by(Employee.last_name).all()
+
+    if request.method == "POST":
+        employee_id = request.form.get("employee_id", type=int)
+        period_start = read_date(request.form.get("pay_period_start"))
+        period_end = read_date(request.form.get("pay_period_end"))
+        payment_date_value = request.form.get("payment_date", "").strip()
+
+        basic_salary = read_money(request.form.get("basic_salary"))
+        allowances = read_money(request.form.get("allowances"), Decimal("0.00"))
+        deductions = read_money(request.form.get("deductions"), Decimal("0.00"))
+
+        payment_date = (
+            read_date(payment_date_value) if payment_date_value else None
+        )
+
+        employee = db.session.get(Employee, employee_id) if employee_id else None
+
+        if employee is None:
+            flash("Please select a valid employee.", "error")
+        elif not period_start or not period_end:
+            flash("Please enter valid pay period dates.", "error")
+        elif period_end < period_start:
+            flash("Pay period end cannot be before its start.", "error")
+        elif payment_date_value and not payment_date:
+            flash("Please enter a valid payment date.", "error")
+        elif basic_salary is None or allowances is None or deductions is None:
+            flash("Enter valid, non-negative payroll amounts.", "error")
+        else:
+            net_pay = basic_salary + allowances - deductions
+
+            payroll = Payroll(
+                employee_id=employee.id,
+                pay_period_start=period_start,
+                pay_period_end=period_end,
+                basic_salary=basic_salary,
+                allowances=allowances,
+                deductions=deductions,
+                net_pay=net_pay,
+                payment_date=payment_date
+            )
+
+            db.session.add(payroll)
+            db.session.commit()
+
+            flash("Payroll record added successfully!", "success")
+            return redirect(url_for("payroll.payroll_list"))
+
+        return render_template(
+            "payroll/add.html",
+            employees=employees
+        )
+
+    return render_template(
+        "payroll/add.html",
+        employees=employees
+    )
+
+
+# Edit a payroll record
+@payroll_bp.route("/<int:payroll_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_payroll(payroll_id):
+    payroll = Payroll.query.get_or_404(payroll_id)
+    employees = Employee.query.order_by(Employee.last_name).all()
+
+    if request.method == "POST":
+        employee_id = request.form.get("employee_id", type=int)
+        period_start = read_date(request.form.get("pay_period_start"))
+        period_end = read_date(request.form.get("pay_period_end"))
+        payment_date_value = request.form.get("payment_date", "").strip()
+
+        basic_salary = read_money(request.form.get("basic_salary"))
+        allowances = read_money(request.form.get("allowances"), Decimal("0.00"))
+        deductions = read_money(request.form.get("deductions"), Decimal("0.00"))
+
+        payment_date = (
+            read_date(payment_date_value) if payment_date_value else None
+        )
+
+        employee = db.session.get(Employee, employee_id) if employee_id else None
+
+        if employee is None:
+            flash("Please select a valid employee.", "error")
+        elif not period_start or not period_end:
+            flash("Please enter valid pay period dates.", "error")
+        elif period_end < period_start:
+            flash("Pay period end cannot be before its start.", "error")
+        elif payment_date_value and not payment_date:
+            flash("Please enter a valid payment date.", "error")
+        elif basic_salary is None or allowances is None or deductions is None:
+            flash("Enter valid, non-negative payroll amounts.", "error")
+        else:
+            payroll.employee_id = employee.id
+            payroll.pay_period_start = period_start
+            payroll.pay_period_end = period_end
+            payroll.basic_salary = basic_salary
+            payroll.allowances = allowances
+            payroll.deductions = deductions
+            payroll.net_pay = basic_salary + allowances - deductions
+            payroll.payment_date = payment_date
+
+            db.session.commit()
+
+            flash("Payroll record updated successfully!", "success")
+            return redirect(url_for("payroll.payroll_list"))
+
+        return render_template(
+            "payroll/edit.html",
+            payroll=payroll,
+            employees=employees
+        )
+
+    return render_template(
+        "payroll/edit.html",
+        payroll=payroll,
+        employees=employees
+    )
+
+
+# Delete a payroll record
+@payroll_bp.route("/<int:payroll_id>/delete", methods=["POST"])
+@login_required
+def delete_payroll(payroll_id):
+    payroll = Payroll.query.get_or_404(payroll_id)
+
+    db.session.delete(payroll)
+    db.session.commit()
+
+    flash("Payroll record deleted successfully!", "success")
+    return redirect(url_for("payroll.payroll_list"))
