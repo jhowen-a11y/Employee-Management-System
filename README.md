@@ -1,102 +1,94 @@
 # Employee Management System
 
-A modular web application built with Python and Flask for managing employees, user authentication, and attendance tracking. 
+A Flask application for managing employee records, departments, attendance, leave requests, and payroll. It uses Flask-SQLAlchemy with a MySQL database and Jinja templates.
 
-## 🛠 Tech Stack
+## Tech stack
 
-*   **Backend:** Python 3.x, Flask
-*   **Database:** MySQL (via Flask-SQLAlchemy & PyMySQL)
-*   **Frontend:** HTML, CSS, JavaScript (Jinja2 Templates)
-*   **Environment Management:** python-dotenv
+- Python 3
+- Flask
+- Flask-SQLAlchemy and SQLAlchemy
+- MySQL with the PyMySQL driver
+- Jinja templates
+- python-dotenv
 
-## 📂 Project Structure
-
-This project follows a modular Flask architecture using Blueprints:
+## Project structure
 
 ```text
-employee_management/
-├── app.py                     # Main application entry point and configuration
-├── .env                       # Environment variables (Database credentials, keys)
-├── requirements.txt           # Python dependencies
-├── models/                    # Database models (SQLAlchemy)
-│   ├── attendance.py
-│   ├── department.py
-│   ├── employee.py
-│   └── user.py
-├── routes/                    # Flask Blueprints (API / View routes)
-│   ├── attendance_routes.py
-│   ├── employee_routes.py
-│   └── user_routes.py
-├── static/                    # Static assets
-│   ├── css/
-│   └── js/
-└── templates/                 # HTML templates
-    ├── dashboard.html
-    ├── employees.html
-    └── login.html
+.
+├── app.py                  # Flask application factory and entry point
+├── init_db.py              # Creates database tables
+├── requirements.txt        # Python dependencies
+├── models/                 # SQLAlchemy models and relationships
+├── routes/                 # Flask blueprints for application features
+├── static/                 # CSS and JavaScript assets
+└── templates/              # Jinja templates grouped by feature
 ```
 
-## 🚀 Getting Started
+## Setup
 
-Follow these steps to set up the project locally for development.
+### Prerequisites
 
-### 1. Prerequisites
-*   [Python 3.8+](https://www.python.org/downloads/)
-*   [MySQL Server](https://dev.mysql.com/downloads/) running locally or remotely.
+- Python 3.10 or newer
+- MySQL Server
 
-### 2. Clone and Setup Environment
-Clone the repository and navigate into the project directory:
-```bash
-git clone <your-repository-url>
-cd employee_management
+### Install dependencies
+
+Create and activate a virtual environment, then install the project dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install PyMySQL
 ```
 
-Create and activate a virtual environment:
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
+The app uses PyMySQL in its MySQL connection URL. Install it if it is not already included in your environment.
 
-# macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
+### Configure MySQL
+
+Create a database, for example:
+
+```sql
+CREATE DATABASE employee_management;
 ```
 
-### 3. Install Dependencies
-```bash
-pip install Flask Flask-SQLAlchemy pymysql python-dotenv
+Create a `.env` file in the project root with credentials for that database:
+
+```env
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=employee_management
+FLASK_DEBUG=1
 ```
-*(Note: Once you have your dependencies finalized, you can freeze them into a `requirements.txt` using `pip freeze > requirements.txt`)*
 
-### 4. Database Configuration
-1. Open your MySQL client (e.g., MySQL Workbench, CLI) and create the database:
-   ```sql
-   CREATE DATABASE employee_management;
-   ```
-2. Create a `.env` file in the root directory (alongside `app.py`) and add your database credentials:
-   ```env
-   FLASK_APP=app.py
-   FLASK_DEBUG=1
-   SECRET_KEY=your-development-secret-key
-   
-   # MySQL Connection
-   DB_USER=root
-   DB_PASSWORD=your_mysql_password
-   DB_HOST=localhost
-   DB_PORT=3306
-   DB_NAME=employee_management
-   
-   SQLALCHEMY_DATABASE_URI=mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
-   ```
+`app.py` builds the SQLAlchemy connection URL from the `DB_*` variables. Keep `.env` private and do not commit real credentials.
 
-### 5. Run the Application
-Start the Flask development server:
-```bash
-flask run
-# OR
+### Create tables and run
+
+Create the database tables:
+
+```powershell
+python init_db.py
+```
+
+Start the development server:
+
+```powershell
 python app.py
 ```
-The application will be accessible at `http://127.0.0.1:5000/`.
 
-## 🚧 Development Status
-Currently in the initial production phase. Core file structure, database connections, and environment variables are configured. Next steps involve defining the SQLAlchemy models and wiring up the Flask Blueprints.
+The app is served at <http://127.0.0.1:5000/>.
+
+## Features and routes
+
+| Feature | URL prefix | Description |
+| --- | --- | --- |
+| Employees | `/employees` | List and view employee records |
+| Departments | `/departments` | List, view, add, edit, and delete departments |
+| Attendance | `/attendance` | List, view, add, edit, and delete attendance records |
+| Leave | `/leaves` | List, view, submit, update status, and delete leave requests |
+| Payroll | `/payroll` | List, view, add, edit, and delete payroll records |
+
+Employee, department, attendance, leave, and payroll models are defined in `models/` and connected through SQLAlchemy relationships. A `User` model is also present and linked to employees; user authentication is not currently implemented, and the application routes do not require sign-in. Do not expose this app to untrusted networks without adding appropriate authentication and authorization.
