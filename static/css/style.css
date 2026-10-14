@@ -1,0 +1,278 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f5f6fa;
+    color: #252833;
+}
+
+.app {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+/* sidebar */
+.sidebar {
+    width: 245px;
+    background: #20232e;
+    color: #ffffff;
+    padding: 25px 16px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    margin-left: 0;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 10px 30px;
+    border-bottom: 1px solid #363946;
+}
+
+.brand-icon {
+    width: 42px;
+    height: 42px;
+    background: #6478f5;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand h2 {
+    font-size: 17px;
+    letter-spacing: 1px;
+}
+
+.brand p {
+    color: #a5a8b5;
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+.nav-label {
+    color: #858a9a;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    margin: 28px 10px 12px;
+}
+
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nav-links a {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 13px 12px;
+    color: #bfc3d0;
+    text-decoration: none;
+    font-size: 13px;
+    border-radius: 8px;
+    transition: 0.2s;
+}
+
+.nav-links a:hover,
+.nav-links a.active {
+    background: #34394d;
+    color: #ffffff;
+}
+
+.nav-links a.active {
+    border-left: 3px solid #7889ff;
+    padding-left: 9px;
+}
+
+.nav-links i {
+    width: 18px;
+    height: 18px;
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+    padding: 18px 10px 0;
+    border-top: 1px solid #363946;
+    color: #a5a8b5;
+    font-size: 11px;
+    line-height: 1.8;
+}
+
+/* main thingy */
+.main-area {
+    flex: 1;
+    min-width: 0;
+}
+
+.topbar {
+    height: 76px;
+    background: #ffffff;
+    border-bottom: 1px solid #e9eaf0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 32px;
+}
+
+.topbar h2 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.topbar p {
+    font-size: 12px;
+    color: #8b90a0;
+    margin-top: 5px;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #626879;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #42bd87;
+    border-radius: 50%;
+}
+
+.avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #e7eaff;
+    color: #596ce0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.content {
+    padding: 30px 32px;
+}
+
+.page-heading {
+    margin-bottom: 25px;
+}
+
+.page-heading h1 {
+    font-size: 25px;
+    margin-bottom: 8px;
+}
+
+.page-heading p {
+    color: #858a99;
+    font-size: 13px;
+}
+
+.welcome-card {
+    background: #ffffff;
+    border: 1px solid #e9eaf0;
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 24px;
+}
+
+.welcome-card h2 {
+    font-size: 19px;
+    margin-bottom: 10px;
+}
+
+.welcome-card p {
+    color: #777d8c;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.flash-messages {
+    margin-bottom: 20px;
+}
+
+.flash {
+    padding: 13px 16px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #e8f7ef;
+    color: #23794c;
+}
+
+.flash.error {
+    background: #fff0f0;
+    color: #b83d3d;
+}
+
+/* responsh */
+.menu-toggle {
+    display: none;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: #252833;
+}
+
+@media (max-width: 800px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: -260px;
+        z-index: 1000;
+        transition: left 0.25s ease;
+    }
+
+    .sidebar.open {
+        left: 0;
+    }
+
+    .menu-toggle {
+        display: block;
+        margin-right: 12px;
+    }
+
+    .topbar {
+        padding: 0 18px;
+    }
+
+    .content {
+        padding: 22px 18px;
+    }
+
+    .topbar-left {
+        display: flex;
+        align-items: center;
+    }
+
+    .status {
+        display: none;
+    }
+}

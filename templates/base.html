@@ -3,22 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}EMS{% endblock %}</title>
+
+    <title>{% block title %}Dashboard | CMM EMS{% endblock %}</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
+
+    {% block head %}{% endblock %}
 </head>
+
 <body>
-    <h1>this is the base</h1>
+<div class="app">
 
-    <nav>
-    <a href="/">Dashboard</a>
-    <a href="/employees/">Employees</a>
-    <a href="/attendance/">Attendance</a>
-    <a href="/departments/">Departments</a>
-    <a href="/leaves/">Leave Requests</a>
-    <a href="/payroll/">Payroll</a>
-    </nav>
+    <aside class="sidebar" id="sidebar">
 
-    <main>
-        {% block content %}{% endblock %}
-    </main>
+        <div class="brand">
+            <div class="brand-icon">
+                <i data-lucide="users"></i>
+            </div>
+
+            <div>
+                <h2>CMM EMS</h2>
+                <p>EMPLOYEE MANAGEMENT</p>
+            </div>
+        </div>
+
+        <p class="nav-label">MAIN MENU</p>
+
+        <nav class="nav-links">
+
+            <a href="{{ url_for('index') }}"
+               class="{% if request.endpoint == 'index' %}active{% endif %}">
+                <i data-lucide="layout-dashboard"></i>
+                Dashboard
+            </a>
+
+            <a href="{{ url_for('employee.employee_list') }}" class="{% if request.endpoint and request.endpoint.startswith('employee.') %}active{% endif %}">
+                <i data-lucide="users"></i>
+                Employees
+            </a>
+
+            <a href="{{ url_for('attendance.attendance_list') }}" class="{% if request.endpoint and request.endpoint.startswith('attendance.') %}active{% endif %}">
+                <i data-lucide="calendar-check"></i>
+                Attendance
+            </a>
+
+            <a href="{{ url_for('department.department_list') }}" class="{% if request.endpoint and request.endpoint.startswith('department.') %}active{% endif %}">
+                <i data-lucide="building-2"></i>
+                Departments
+            </a>
+
+            <a href="{{ url_for('leave.leave_list') }}" class="{% if request.endpoint and request.endpoint.startswith('leave.') %}active{% endif %}">
+                <i data-lucide="calendar-days"></i>
+                Leave Requests
+            </a>
+
+            <a href="{{ url_for('payroll.payroll_list') }}" class="{% if request.endpoint and request.endpoint.startswith('payroll.') %}active{% endif %}">
+                <i data-lucide="wallet"></i>
+                Payroll
+            </a>
+
+        </nav>
+
+        <div class="sidebar-bottom">
+            <strong>CMM Employee System</strong>
+            <p>Employee records and management</p>
+        </div>
+
+    </aside>
+
+    <div class="main-area">
+
+        <header class="topbar">
+
+            <div class="topbar-left">
+
+                <button class="menu-toggle"
+                        id="menuToggle"
+                        type="button"
+                        aria-label="Toggle navigation">
+                    <i data-lucide="menu"></i>
+                </button>
+
+                <div>
+                    <h2>{% block header_title %}Dashboard{% endblock %}</h2>
+                    <p>Employee Management System</p>
+                </div>
+
+            </div>
+
+            <div class="topbar-right">
+
+                <div class="status">
+                    <span class="status-dot"></span>
+                    System Online
+                </div>
+
+                <div class="avatar">C</div>
+
+            </div>
+
+        </header>
+
+        <main class="content">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash {% if category == 'error' %}error{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}
+            {% endblock %}
+
+        </main>
+
+    </div>
+
+</div>
+
+{% block scripts %}{% endblock %}
+
 </body>
 </html>
