@@ -38,7 +38,7 @@
             <a href="{{ url_for('index') }}"
                class="{% if request.endpoint == 'index' %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i>
-                Dashboard
+                {% if current_user.role == 'employee' %}Employee Home{% elif current_user.role == 'hr' %}HR Home{% else %}Dashboard{% endif %}
             </a>
 
             <a href="{{ url_for('employee.employee_list') }}" class="{% if request.endpoint and request.endpoint.startswith('employee.') %}active{% endif %}">
@@ -65,6 +65,13 @@
                 <i data-lucide="wallet"></i>
                 Payroll
             </a>
+
+            {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('users.user_list') }}" class="{% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}">
+                <i data-lucide="user-cog"></i>
+                Users &amp; Roles
+            </a>
+            {% endif %}
 
         </nav>
 
@@ -102,7 +109,16 @@
                     System Online
                 </div>
 
-                <div class="avatar">C</div>
+                <span class="account-label">
+                    {{ current_user.username }}<br>
+                    <small>{{ current_user.role|capitalize }}</small>
+                </span>
+                <form method="post" action="{{ url_for('auth.logout') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="button button-secondary button-small" type="submit">
+                        Sign out
+                    </button>
+                </form>
 
             </div>
 

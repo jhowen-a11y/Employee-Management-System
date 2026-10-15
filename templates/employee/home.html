@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Home | CMM EMS{% endblock %}
+{% block header_title %}Employee Home{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Welcome, {{ current_user.username }}</h1>
+    <p>This is your employee landing page.</p>
+</div>
+
+<section class="welcome-card">
+    <h2>Employee portal coming soon</h2>
+    <p>
+        This page is a placeholder for employee-specific features. Your
+        personal information, attendance, leave requests, and other tools can
+        be added here later.
+    </p>
+</section>
+{% endblock %}

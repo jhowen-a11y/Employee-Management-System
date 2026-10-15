@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}HR Home | CMM EMS{% endblock %}
+{% block header_title %}HR Home{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Welcome, {{ current_user.username }}</h1>
+    <p>This is your Human Resources landing page.</p>
+</div>
+
+<section class="welcome-card">
+    <h2>HR portal coming soon</h2>
+    <p>
+        This page is a placeholder for HR-specific features. Employee
+        records, leave management, and other HR tools can be organized here
+        later.
+    </p>
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in | CMM EMS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body class="auth-page">
+    <main class="auth-card">
+        <div class="brand-icon auth-brand-icon">
+            <i data-lucide="users"></i>
+        </div>
+        <h1>CMM EMS</h1>
+        <p class="auth-subtitle">Sign in to the Employee Management System</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash {% if category == 'error' %}error{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text"
+                   autocomplete="username" maxlength="50" required autofocus>
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password"
+                   autocomplete="current-password" required>
+
+            <button class="button button-primary auth-submit" type="submit">
+                Sign in
+            </button>
+        </form>
+    </main>
+</body>
+</html>

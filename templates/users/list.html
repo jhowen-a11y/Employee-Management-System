@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Users &amp; Roles | CMM EMS{% endblock %}
+{% block header_title %}Users &amp; Roles{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>Users &amp; Roles</h1>
+        <p>Create accounts and manage access roles.</p>
+    </div>
+    <a class="button button-primary" href="{{ url_for('users.add_user') }}">
+        Add user
+    </a>
+</div>
+
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.id == current_user.id %}
+                            <span class="role-label">{{ user.role|capitalize }} (you)</span>
+                        {% else %}
+                            <form class="role-form" method="post"
+                                  action="{{ url_for('users.update_user_role', user_id=user.id) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <select name="role" aria-label="Role for {{ user.username }}">
+                                    {% for role in roles %}
+                                    <option value="{{ role }}"
+                                            {% if user.role == role %}selected{% endif %}>
+                                        {{ role|capitalize }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button class="button button-secondary button-small"
+                                        type="submit">Save role</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="empty-state">No user accounts found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

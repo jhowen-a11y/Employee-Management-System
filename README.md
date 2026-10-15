@@ -1,13 +1,13 @@
 # Employee Management System
 
-A Flask application for managing employee records, departments, attendance, leave requests, and payroll. It uses Flask-SQLAlchemy with a MySQL database and Jinja templates.
+A Flask application for managing employee records, departments, attendance, leave requests, and payroll. It uses Flask-SQLAlchemy with a PostgreSQL database and Jinja templates.
 
 ## Tech stack
 
 - Python 3
 - Flask
 - Flask-SQLAlchemy and SQLAlchemy
-- MySQL with the PyMySQL driver
+- PostgreSQL with the psycopg driver
 - Jinja templates
 - python-dotenv
 
@@ -29,7 +29,7 @@ A Flask application for managing employee records, departments, attendance, leav
 ### Prerequisites
 
 - Python 3.10 or newer
-- MySQL Server
+- PostgreSQL Server
 
 ### Install dependencies
 
@@ -39,12 +39,9 @@ Create and activate a virtual environment, then install the project dependencies
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-pip install PyMySQL
 ```
 
-The app uses PyMySQL in its MySQL connection URL. Install it if it is not already included in your environment.
-
-### Configure MySQL
+### Configure PostgreSQL
 
 Create a database, for example:
 
@@ -55,16 +52,20 @@ CREATE DATABASE employee_management;
 Create a `.env` file in the project root with credentials for that database:
 
 ```env
-DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_USER=postgres
+DB_PASSWORD=your_postgresql_password
 DB_HOST=localhost
-DB_PORT=3306
+DB_PORT=5432
 DB_NAME=employee_management
 SECRET_KEY=replace_with_a_random_secret
 FLASK_DEBUG=1
 ```
 
-`app.py` builds the SQLAlchemy connection URL from the `DB_*` variables. Set `SECRET_KEY` to a long, random value and keep `.env` private; do not commit real credentials. If it is omitted, the app generates a temporary key, so session data will not survive a restart.
+`app.py` builds a psycopg PostgreSQL connection URL from the `DB_*` variables. Set `SECRET_KEY` to a long, random value and keep `.env` private; do not commit real credentials. The app requires this key and will not start if it is missing.
+
+`python init_db.py` creates missing tables in the configured PostgreSQL
+database; it does not transfer records from the old MySQL database. Export and
+migrate any existing data separately before switching production traffic.
 
 ### Create tables and run
 
@@ -73,6 +74,17 @@ Create the database tables:
 ```powershell
 python init_db.py
 ```
+
+Create the first administrator account from the command line. There is no
+public sign-up page:
+
+```powershell
+flask --app app create-admin
+```
+
+The command prompts for an administrator username, email, and password. After
+the first administrator signs in, they can create accounts and assign the
+`admin`, `hr`, or `employee` role from **Users & Roles**.
 
 Start the development server:
 
@@ -91,5 +103,13 @@ The app is served at <http://127.0.0.1:5000/>.
 | Attendance | `/attendance` | List, view, add, edit, and delete attendance records |
 | Leave | `/leaves` | List, view, submit, update status, and delete leave requests |
 | Payroll | `/payroll` | List, view, add, edit, and delete payroll records |
+| Users & Roles | `/users` | Admin-only account creation and role assignment |
+| Employee Home | `/employee/home` | Employee landing page placeholder |
+| HR Home | `/hr/home` | HR landing page placeholder |
 
-Employee, department, attendance, leave, and payroll models are defined in `models/` and connected through SQLAlchemy relationships. A `User` model is also present and linked to employees; user authentication is not currently implemented, and the application routes do not require sign-in. Do not expose this app to untrusted networks without adding appropriate authentication and authorization.
+All application pages require sign-in. Administrators manage accounts and roles;
+only administrators can add or edit employee accounts. The existing employee,
+HR, and administrator accounts can use the employee-management features.
+Employee users land on the `/employee/home` placeholder and HR users land on
+the `/hr/home` placeholder after signing in; administrators land on the shared
+dashboard. The administrator-only users API is available at `/users/api`.

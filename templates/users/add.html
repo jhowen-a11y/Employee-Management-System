@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Add User | CMM EMS{% endblock %}
+{% block header_title %}Add User{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Create a user account</h1>
+    <p>Only administrators can create accounts and assign roles.</p>
+</div>
+
+<section class="panel form-panel">
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" maxlength="50"
+                   autocomplete="username" required>
+        </div>
+
+        <div class="form-field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" maxlength="120"
+                   autocomplete="email" required>
+        </div>
+
+        <div class="form-field">
+            <label for="password">Temporary password</label>
+            <input id="password" name="password" type="password" minlength="8"
+                   autocomplete="new-password" required>
+            <small>Use at least 8 characters.</small>
+        </div>
+
+        <div class="form-field">
+            <label for="role">Role</label>
+            <select id="role" name="role" required>
+                {% for role in roles %}
+                <option value="{{ role }}"
+                        {% if role == 'employee' %}selected{% endif %}>
+                    {{ role|capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button class="button button-primary" type="submit">Create user</button>
+            <a class="button button-secondary" href="{{ url_for('users.user_list') }}">
+                Cancel
+            </a>
+        </div>
+    </form>
+</section>
+{% endblock %}

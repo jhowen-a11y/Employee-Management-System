@@ -1,0 +1,96 @@
+from functools import wraps
+
+import secrets
+from urllib.parse import urlsplit
+
+from flask import (
+    Blueprint,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import current_user, login_required, login_user, logout_user
+from werkzeug.security import check_password_hash
+
+from models.user import User
+
+
+auth_bp = Blueprint("auth", __name__)
+
+
+def admin_required(view):
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if current_user.role != User.ADMIN:
+            abort(403)
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def landing_url_for(user):
+    if user.role == User.EMPLOYEE:
+        return url_for("auth.employee_home")
+    if user.role == User.HR:
+        return url_for("auth.hr_home")
+    return url_for("index")
+
+
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(landing_url_for(current_user))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        user = User.query.filter_by(username=username).first()
+
+        if user is None or not check_password_hash(user.password_hash, password):
+            flash("Invalid username or password.", "error")
+        else:
+            next_url = request.args.get("next")
+            session.clear()
+            login_user(user)
+            session["_csrf_token"] = secrets.token_urlsafe(32)
+            parsed_next_url = urlsplit(next_url or "")
+            if (
+                next_url
+                and parsed_next_url.scheme == ""
+                and parsed_next_url.netloc == ""
+                and next_url.startswith("/")
+                and not next_url.startswith("//")
+                and "\\" not in next_url
+            ):
+                return redirect(next_url)
+            return redirect(landing_url_for(user))
+
+    return render_template("auth/login.html")
+
+
+@auth_bp.route("/employee/home")
+@login_required
+def employee_home():
+    if current_user.role != User.EMPLOYEE:
+        abort(403)
+    return render_template("employee/home.html")
+
+
+@auth_bp.route("/hr/home")
+@login_required
+def hr_home():
+    if current_user.role != User.HR:
+        abort(403)
+    return render_template("hr/home.html")
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    logout_user()
+    flash("You have been signed out.", "success")
+    return redirect(url_for("auth.login"))

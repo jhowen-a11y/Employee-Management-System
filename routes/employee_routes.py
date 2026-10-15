@@ -8,6 +8,7 @@ from models import db
 from models.department import Department
 from models.employee import Employee
 from models.user import User
+from routes.auth_routes import admin_required
 
 
 employee_bp = Blueprint(
@@ -32,6 +33,7 @@ def employee_list():
 
 
 @employee_bp.route("/add", methods=["GET", "POST"])
+@admin_required
 def add_employee():
     departments = Department.query.order_by(
         Department.department_name.asc()
@@ -101,6 +103,7 @@ def employee_detail(employee_id):
 
 
 @employee_bp.route("/<int:employee_id>/edit", methods=["GET", "POST"])
+@admin_required
 def edit_employee(employee_id):
     employee = Employee.query.get_or_404(employee_id)
     departments = Department.query.order_by(
