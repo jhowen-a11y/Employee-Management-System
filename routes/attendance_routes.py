@@ -1,10 +1,17 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date, time
+from flask_login import current_user
 
 from models import db
 from models.attendance import Attendance
 from models.employee import Employee
+from models.user import User
+from routes.employee_access import (
+    current_employee,
+    employee_scoped_query,
+    management_required,
+)
 
 attendance_bp = Blueprint(
     "attendance",
@@ -33,7 +40,9 @@ def parse_time(value):
 # View all attendance records
 @attendance_bp.route("/")
 def attendance_list():
-    records = Attendance.query.order_by(
+    records = employee_scoped_query(
+        Attendance.query, Attendance.employee_id
+    ).order_by(
         Attendance.attendance_date.desc()
     ).all()
 
@@ -46,7 +55,13 @@ def attendance_list():
 # View one attendance record
 @attendance_bp.route("/<int:attendance_id>")
 def attendance_detail(attendance_id):
-    record = Attendance.query.get_or_404(attendance_id)
+    record_query = Attendance.query.filter_by(id=attendance_id)
+    if current_user.role == User.EMPLOYEE:
+        employee = current_employee()
+        record_query = record_query.filter_by(
+            employee_id=employee.id if employee else None
+        )
+    record = record_query.first_or_404()
 
     return render_template(
         "attendance/detail.html",
@@ -56,6 +71,7 @@ def attendance_detail(attendance_id):
 
 # Add an attendance record
 @attendance_bp.route("/add", methods=["GET", "POST"])
+@management_required
 def add_attendance():
     employees = Employee.query.order_by(Employee.last_name).all()
 
@@ -123,8 +139,9 @@ def add_attendance():
     "/<int:attendance_id>/edit",
     methods=["GET", "POST"]
 )
+@management_required
 def edit_attendance(attendance_id):
-    record = Attendance.query.get_or_404(attendance_id)
+    record = db.get_or_404(Attendance, attendance_id)
     employees = Employee.query.order_by(Employee.last_name).all()
 
     if request.method == "POST":
@@ -190,8 +207,9 @@ def edit_attendance(attendance_id):
     "/<int:attendance_id>/delete",
     methods=["POST"]
 )
+@management_required
 def delete_attendance(attendance_id):
-    record = Attendance.query.get_or_404(attendance_id)
+    record = db.get_or_404(Attendance, attendance_id)
 
     db.session.delete(record)
     db.session.commit()

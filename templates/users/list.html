@@ -22,6 +22,7 @@
                     <th>Username</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -38,10 +39,12 @@
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <select name="role" aria-label="Role for {{ user.username }}">
                                     {% for role in roles %}
+                                    {% if role != 'employee' or user.employee or user.role == 'employee' %}
                                     <option value="{{ role }}"
                                             {% if user.role == role %}selected{% endif %}>
                                         {{ role|capitalize }}
                                     </option>
+                                    {% endif %}
                                     {% endfor %}
                                 </select>
                                 <button class="button button-secondary button-small"
@@ -49,10 +52,22 @@
                             </form>
                         {% endif %}
                     </td>
+                    <td>
+                        <a class="button button-secondary button-small"
+                           href="{{ url_for('users.edit_user', user_id=user.id) }}">
+                            Edit account
+                        </a>
+                        {% if user.employee %}
+                        <a class="button button-secondary button-small"
+                           href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
+                            Edit employee details
+                        </a>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="3" class="empty-state">No user accounts found.</td>
+                    <td colspan="4" class="empty-state">No user accounts found.</td>
                 </tr>
                 {% endfor %}
             </tbody>

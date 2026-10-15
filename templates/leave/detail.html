@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Leave Request Details | CMM EMS{% endblock %}
+{% block header_title %}Leave Request Details{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Leave request</h1><p>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</p></div>
+<section class="panel">
+    <p><strong>Type:</strong> {{ leave.leave_type }}</p>
+    <p><strong>Dates:</strong> {{ leave.start_date }} to {{ leave.end_date }}</p>
+    <p><strong>Reason:</strong> {{ leave.reason or 'No reason provided.' }}</p>
+    <p><strong>Status:</strong> {{ leave.status }}</p>
+    {% if current_user.role != 'employee' %}
+    <form method="post" action="{{ url_for('leave.update_leave_status', leave_id=leave.id) }}" class="role-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label for="status">Update status</label>
+        <select id="status" name="status">
+            {% for status in ('Pending', 'Approved', 'Rejected') %}
+            <option value="{{ status }}" {% if leave.status == status %}selected{% endif %}>{{ status }}</option>
+            {% endfor %}
+        </select>
+        <button class="button button-primary button-small" type="submit">Save status</button>
+    </form>
+    {% endif %}
+    <p><a class="button button-secondary" href="{{ url_for('leave.leave_list') }}">Back to leave requests</a></p>
+</section>
+{% endblock %}

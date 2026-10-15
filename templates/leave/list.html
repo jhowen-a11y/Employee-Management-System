@@ -1,11 +1,42 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    leave to hahahah
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Leave Requests | CMM EMS{% endblock %}
+{% block header_title %}Leave Requests{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>{% if current_user.role == 'employee' %}My Leave Requests{% else %}Leave Requests{% endif %}</h1>
+        <p>Review submitted leave requests and their status.</p>
+    </div>
+    <a class="button button-primary" href="{{ url_for('leave.add_leave') }}">{% if current_user.role == 'employee' %}Submit request{% else %}Add leave request{% endif %}</a>
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th>Employee</th><th>Leave type</th><th>Dates</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for leave in leaves %}
+            <tr>
+                <td>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</td>
+                <td>{{ leave.leave_type }}</td>
+                <td>{{ leave.start_date }} – {{ leave.end_date }}</td>
+                <td>{{ leave.status }}</td>
+                <td>
+                    <a class="button button-secondary button-small" href="{{ url_for('leave.leave_detail', leave_id=leave.id) }}">View</a>
+                    {% if current_user.role != 'employee' %}
+                    <form method="post" action="{{ url_for('leave.delete_leave', leave_id=leave.id) }}" style="display:inline">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button class="button button-secondary button-small" type="submit">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty-state">No leave requests found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

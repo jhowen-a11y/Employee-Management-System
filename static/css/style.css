@@ -280,6 +280,7 @@ body {
 
 .form-field input,
 .form-field select,
+.form-field textarea,
 .role-form select,
 .auth-card input {
     width: 100%;
@@ -290,6 +291,10 @@ body {
     background: #ffffff;
     color: #252833;
     font: inherit;
+}
+
+.form-field textarea {
+    resize: vertical;
 }
 
 .form-field small {
@@ -384,6 +389,38 @@ body {
 .empty-state {
     color: #858a99;
     text-align: center;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px;
+    color: #252833;
+    text-decoration: none;
+    background: #ffffff;
+    border: 1px solid #e9eaf0;
+    border-radius: 12px;
+}
+
+.summary-card:hover {
+    border-color: #6478f5;
+}
+
+.summary-card strong {
+    font-size: 26px;
+}
+
+.summary-card span {
+    color: #777d8c;
+    font-size: 13px;
 }
 
 .auth-page {

@@ -6,7 +6,7 @@
 {% block content %}
 <div class="page-heading">
     <h1>Create a user account</h1>
-    <p>Only administrators can create accounts and assign roles.</p>
+    <p>Create administrator or HR accounts here. Use Add Employee to create an employee account linked to an employee record.</p>
 </div>
 
 <section class="panel form-panel">
@@ -15,13 +15,13 @@
         <div class="form-field">
             <label for="username">Username</label>
             <input id="username" name="username" type="text" maxlength="50"
-                   autocomplete="username" required>
+                   autocomplete="username" value="{{ request.form.get('username', '') }}" required>
         </div>
 
         <div class="form-field">
             <label for="email">Email</label>
             <input id="email" name="email" type="email" maxlength="120"
-                   autocomplete="email" required>
+                   autocomplete="email" value="{{ request.form.get('email', '') }}" required>
         </div>
 
         <div class="form-field">
@@ -34,9 +34,10 @@
         <div class="form-field">
             <label for="role">Role</label>
             <select id="role" name="role" required>
+                <option value="" disabled {% if not request.form.get('role') %}selected{% endif %}>Select a role</option>
                 {% for role in roles %}
                 <option value="{{ role }}"
-                        {% if role == 'employee' %}selected{% endif %}>
+                        {% if request.form.get('role') == role %}selected{% endif %}>
                     {{ role|capitalize }}
                 </option>
                 {% endfor %}

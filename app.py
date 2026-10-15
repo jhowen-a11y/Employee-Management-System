@@ -11,6 +11,11 @@ from sqlalchemy.engine import URL
 from werkzeug.security import generate_password_hash
 
 from models import db
+from models.attendance import Attendance
+from models.department import Department
+from models.employee import Employee
+from models.leave import Leave
+from models.payroll import Payroll
 from models.user import User
 from routes.auth_routes import auth_bp
 from routes.employee_routes import employee_bp
@@ -89,13 +94,7 @@ def create_app(test_config=None):
             return None
         if request.endpoint and not current_user.is_authenticated:
             return login_manager.unauthorized()
-        if request.method == "POST" and request.endpoint in {
-            "auth.logout",
-            "users.add_user",
-            "users.update_user_role",
-            "employee.add_employee",
-            "employee.edit_employee",
-        }:
+        if request.method == "POST":
             return validate_csrf_token()
         return None
 
@@ -133,7 +132,15 @@ def create_app(test_config=None):
             return redirect(url_for("auth.employee_home"))
         if current_user.role == User.HR:
             return redirect(url_for("auth.hr_home"))
-        return render_template("base.html")
+        return render_template(
+            "admin/home.html",
+            employee_count=Employee.query.count(),
+            department_count=Department.query.count(),
+            attendance_count=Attendance.query.count(),
+            pending_leave_count=Leave.query.filter_by(status="Pending").count(),
+            payroll_count=Payroll.query.count(),
+            user_count=User.query.count(),
+        )
 
     @app.cli.command("create-admin")
     def create_admin():

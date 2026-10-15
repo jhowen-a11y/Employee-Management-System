@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | CMM EMS{% endblock %}
+{% block header_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Welcome, {{ current_user.username }}</h1>
+    <p>Organization overview and management shortcuts.</p>
+</div>
+<section class="summary-grid">
+    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ user_count }}</strong><span>Accounts (all roles)</span></a>
+    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ employee_count }}</strong><span>Employee records</span></a>
+    <a class="summary-card" href="{{ url_for('department.department_list') }}"><strong>{{ department_count }}</strong><span>Departments</span></a>
+    <a class="summary-card" href="{{ url_for('attendance.attendance_list') }}"><strong>{{ attendance_count }}</strong><span>Attendance records</span></a>
+    <a class="summary-card" href="{{ url_for('leave.leave_list') }}"><strong>{{ pending_leave_count }}</strong><span>Pending leave requests</span></a>
+    <a class="summary-card" href="{{ url_for('payroll.payroll_list') }}"><strong>{{ payroll_count }}</strong><span>Payroll records</span></a>
+</section>
+<section class="welcome-card">
+    <h2>Quick actions</h2>
+    <p>
+        <a class="button button-primary" href="{{ url_for('employee.add_employee') }}">Add employee</a>
+        <a class="button button-secondary" href="{{ url_for('department.add_department') }}">Add department</a>
+        <a class="button button-secondary" href="{{ url_for('attendance.add_attendance') }}">Record attendance</a>
+        <a class="button button-secondary" href="{{ url_for('payroll.add_payroll') }}">Add payroll</a>
+        <a class="button button-secondary" href="{{ url_for('users.add_user') }}">Add user</a>
+    </p>
+</section>
+{% endblock %}

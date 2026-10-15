@@ -6,15 +6,24 @@
 {% block content %}
 <div class="page-heading">
     <h1>Welcome, {{ current_user.username }}</h1>
-    <p>This is your Human Resources landing page.</p>
+    <p>Human Resources overview and daily work queue.</p>
 </div>
-
+<section class="summary-grid">
+    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ user_count }}</strong><span>Accounts (all roles)</span></a>
+    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ employee_count }}</strong><span>Employee records</span></a>
+    <a class="summary-card" href="{{ url_for('department.department_list') }}"><strong>{{ department_count }}</strong><span>Departments</span></a>
+    <a class="summary-card" href="{{ url_for('attendance.attendance_list') }}"><strong>{{ attendance_count }}</strong><span>Attendance records</span></a>
+    <a class="summary-card" href="{{ url_for('leave.leave_list') }}"><strong>{{ pending_leave_count }}</strong><span>Pending leave requests</span></a>
+    <a class="summary-card" href="{{ url_for('payroll.payroll_list') }}"><strong>{{ payroll_count }}</strong><span>Payroll records</span></a>
+</section>
 <section class="welcome-card">
-    <h2>HR portal coming soon</h2>
+    <h2>HR actions</h2>
+    <p>Review leave requests, maintain attendance, departments, and payroll records.</p>
     <p>
-        This page is a placeholder for HR-specific features. Employee
-        records, leave management, and other HR tools can be organized here
-        later.
+        <a class="button button-primary" href="{{ url_for('leave.leave_list') }}">Review leave requests</a>
+        <a class="button button-secondary" href="{{ url_for('attendance.add_attendance') }}">Record attendance</a>
+        <a class="button button-secondary" href="{{ url_for('department.add_department') }}">Add department</a>
+        <a class="button button-secondary" href="{{ url_for('payroll.add_payroll') }}">Add payroll</a>
     </p>
 </section>
 {% endblock %}

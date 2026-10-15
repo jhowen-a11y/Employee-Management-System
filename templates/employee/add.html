@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Add Employee | CMM EMS{% endblock %}
+{% block header_title %}Add Employee{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Add employee</h1><p>Create an employee record and sign-in account.</p></div>
+<section class="panel form-panel">
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field"><label for="first_name">First name</label><input id="first_name" name="first_name" maxlength="50" value="{{ request.form.get('first_name', '') }}" required></div>
+        <div class="form-field"><label for="last_name">Last name</label><input id="last_name" name="last_name" maxlength="50" value="{{ request.form.get('last_name', '') }}" required></div>
+        <div class="form-field"><label for="position">Position</label><input id="position" name="position" maxlength="100" value="{{ request.form.get('position', '') }}" required></div>
+        <div class="form-field">
+            <label for="department_id">Department</label>
+            <select id="department_id" name="department_id" required>
+                <option value="">Select department</option>
+                {% for department in departments %}
+                <option value="{{ department.id }}" {% if request.form.get('department_id', '0')|int == department.id %}selected{% endif %}>{{ department.department_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field"><label for="salary">Annual salary</label><input id="salary" name="salary" type="number" min="0" step="0.01" value="{{ request.form.get('salary', '') }}" required></div>
+        <div class="form-field"><label for="username">Username</label><input id="username" name="username" maxlength="50" autocomplete="username" value="{{ request.form.get('username', '') }}" required></div>
+        <div class="form-field"><label for="email">Email</label><input id="email" name="email" type="email" maxlength="120" autocomplete="email" value="{{ request.form.get('email', '') }}" required></div>
+        <div class="form-field"><label for="password">Temporary password</label><input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required><small>At least 8 characters.</small></div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit">Create employee</button>
+            <a class="button button-secondary" href="{{ url_for('employee.employee_list') }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

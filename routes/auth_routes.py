@@ -16,6 +16,11 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
 
+from models.employee import Employee
+from models.attendance import Attendance
+from models.department import Department
+from models.leave import Leave
+from models.payroll import Payroll
 from models.user import User
 
 
@@ -78,7 +83,29 @@ def login():
 def employee_home():
     if current_user.role != User.EMPLOYEE:
         abort(403)
-    return render_template("employee/home.html")
+    employee = Employee.query.filter_by(user_id=current_user.id).first()
+    attendance_records = sorted(
+        employee.attendance_records,
+        key=lambda record: record.attendance_date,
+        reverse=True,
+    ) if employee else []
+    leave_requests = sorted(
+        employee.leave_requests,
+        key=lambda leave: leave.created_at,
+        reverse=True,
+    ) if employee else []
+    payroll_records = sorted(
+        employee.payroll_records,
+        key=lambda payroll: payroll.pay_period_start,
+        reverse=True,
+    ) if employee else []
+    return render_template(
+        "employee/home.html",
+        employee=employee,
+        attendance_records=attendance_records,
+        leave_requests=leave_requests,
+        payroll_records=payroll_records,
+    )
 
 
 @auth_bp.route("/hr/home")
@@ -86,7 +113,15 @@ def employee_home():
 def hr_home():
     if current_user.role != User.HR:
         abort(403)
-    return render_template("hr/home.html")
+    return render_template(
+        "hr/home.html",
+        employee_count=Employee.query.count(),
+        user_count=User.query.count(),
+        department_count=Department.query.count(),
+        attendance_count=Attendance.query.count(),
+        pending_leave_count=Leave.query.filter_by(status="Pending").count(),
+        payroll_count=Payroll.query.count(),
+    )
 
 
 @auth_bp.route("/logout", methods=["POST"])

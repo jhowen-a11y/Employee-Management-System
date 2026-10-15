@@ -1,11 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <h1>attendance to hahah</h1>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Attendance | CMM EMS{% endblock %}
+{% block header_title %}Attendance{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>{% if current_user.role == 'employee' %}My Attendance{% else %}Attendance Records{% endif %}</h1>
+        <p>Review attendance records and daily time entries.</p>
+    </div>
+    {% if current_user.role != 'employee' %}
+    <a class="button button-primary" href="{{ url_for('attendance.add_attendance') }}">Add attendance</a>
+    {% endif %}
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th>Employee</th><th>Date</th><th>Time in</th><th>Time out</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for record in records %}
+            <tr>
+                <td>{{ record.employee.first_name }} {{ record.employee.last_name }}</td>
+                <td>{{ record.attendance_date }}</td>
+                <td>{{ record.time_in or '—' }}</td>
+                <td>{{ record.time_out or '—' }}</td>
+                <td>{{ record.status }}</td>
+                <td>
+                    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">View</a>
+                    {% if current_user.role != 'employee' %}
+                    <a class="button button-secondary button-small" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit</a>
+                    <form method="post" action="{{ url_for('attendance.delete_attendance', attendance_id=record.id) }}" style="display:inline">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button class="button button-secondary button-small" type="submit">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty-state">No attendance records found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

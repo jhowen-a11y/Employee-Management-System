@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Department Details | CMM EMS{% endblock %}
+{% block header_title %}Department Details{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div><h1>{{ department.department_name }}</h1><p>Department details</p></div>
+    {% if current_user.role != 'employee' %}
+    <a class="button button-primary" href="{{ url_for('department.edit_department', department_id=department.id) }}">Edit department</a>
+    {% endif %}
+</div>
+<section class="panel">
+    <p><strong>Description:</strong> {{ department.description or 'No description provided.' }}</p>
+    {% if current_user.role != 'employee' %}
+    <h2>Employees</h2>
+    {% if department.employees %}
+    <ul>
+        {% for employee in department.employees %}
+        <li><a href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">{{ employee.first_name }} {{ employee.last_name }}</a> — {{ employee.position }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No employees are assigned to this department.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('department.delete_department', department_id=department.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="button button-secondary" type="submit" {% if department.employees %}disabled{% endif %}>Delete department</button>
+    </form>
+    {% endif %}
+    <p><a class="button button-secondary" href="{{ url_for('department.department_list') }}">Back to departments</a></p>
+</section>
+{% endblock %}

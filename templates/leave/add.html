@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Leave Request | CMM EMS{% endblock %}
+{% block header_title %}Submit Leave Request{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Submit a leave request</h1><p>Enter the requested leave dates and details.</p></div>
+<section class="panel form-panel">
+    {% if current_user.role == 'employee' and not employees %}
+    <p class="flash error">Your account is not linked to an employee record. Contact an administrator before submitting a leave request.</p>
+    {% endif %}
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        {% if current_user.role != 'employee' %}
+        <div class="form-field">
+            <label for="employee_id">Employee</label>
+            <select id="employee_id" name="employee_id" required>
+                <option value="">Select employee</option>
+                {% for employee in employees %}
+                <option value="{{ employee.id }}" {% if request.form.get('employee_id', '0')|int == employee.id %}selected{% endif %}>{{ employee.first_name }} {{ employee.last_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="form-field">
+            <label for="leave_type">Leave type</label>
+            <select id="leave_type" name="leave_type" required>
+                <option value="">Select leave type</option>
+                {% for leave_type in allowed_leave_types %}
+                <option value="{{ leave_type }}" {% if request.form.get('leave_type') == leave_type %}selected{% endif %}>{{ leave_type }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field"><label for="start_date">Start date</label><input id="start_date" name="start_date" type="date" value="{{ request.form.get('start_date', '') }}" required></div>
+        <div class="form-field"><label for="end_date">End date</label><input id="end_date" name="end_date" type="date" value="{{ request.form.get('end_date', '') }}" required></div>
+        <div class="form-field"><label for="reason">Reason</label><textarea id="reason" name="reason" rows="4">{{ request.form.get('reason', '') }}</textarea></div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit"
+                    {% if current_user.role == 'employee' and not employees %}disabled{% endif %}>Submit request</button>
+            <a class="button button-secondary" href="{{ url_for('leave.leave_list') }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

@@ -1,11 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    department to hshshshs
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Departments | CMM EMS{% endblock %}
+{% block header_title %}Departments{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>{% if current_user.role == 'employee' %}My Department{% else %}Departments{% endif %}</h1>
+        <p>View department information.</p>
+    </div>
+    {% if current_user.role != 'employee' %}
+    <a class="button button-primary" href="{{ url_for('department.add_department') }}">Add department</a>
+    {% endif %}
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead><tr><th>Department</th><th>Description</th>{% if current_user.role != 'employee' %}<th>Employees</th>{% endif %}<th>Actions</th></tr></thead>
+            <tbody>
+            {% for department in departments %}
+            <tr>
+                <td>{{ department.department_name }}</td>
+                <td>{{ department.description or '—' }}</td>
+                {% if current_user.role != 'employee' %}<td>{{ department.employees|length }}</td>{% endif %}
+                <td><a class="button button-secondary button-small" href="{{ url_for('department.department_detail', department_id=department.id) }}">View</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="{% if current_user.role == 'employee' %}3{% else %}4{% endif %}" class="empty-state">No departments found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

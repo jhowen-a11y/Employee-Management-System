@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Details | CMM EMS{% endblock %}
+{% block header_title %}Attendance Details{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div><h1>Attendance details</h1><p>{{ record.employee.first_name }} {{ record.employee.last_name }}</p></div>
+    {% if current_user.role != 'employee' %}
+    <a class="button button-primary" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit record</a>
+    {% endif %}
+</div>
+<section class="panel">
+    <p><strong>Date:</strong> {{ record.attendance_date }}</p>
+    <p><strong>Time in:</strong> {{ record.time_in or '—' }}</p>
+    <p><strong>Time out:</strong> {{ record.time_out or '—' }}</p>
+    <p><strong>Status:</strong> {{ record.status }}</p>
+    <p><a class="button button-secondary" href="{{ url_for('attendance.attendance_list') }}">Back to attendance</a></p>
+</section>
+{% endblock %}

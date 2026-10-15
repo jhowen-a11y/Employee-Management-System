@@ -35,42 +35,98 @@
 
         <nav class="nav-links">
 
+            {% if current_user.role == 'employee' %}
             <a href="{{ url_for('index') }}"
-               class="{% if request.endpoint == 'index' %}active{% endif %}">
+               class="{% if request.endpoint in ('index', 'auth.employee_home') %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i>
-                {% if current_user.role == 'employee' %}Employee Home{% elif current_user.role == 'hr' %}HR Home{% else %}Dashboard{% endif %}
+                My Home
             </a>
-
-            <a href="{{ url_for('employee.employee_list') }}" class="{% if request.endpoint and request.endpoint.startswith('employee.') %}active{% endif %}">
+            <a href="{{ url_for('employee.employee_list') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('employee.') %}active{% endif %}">
+                <i data-lucide="user"></i>
+                My Information
+            </a>
+            <a href="{{ url_for('department.department_list') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('department.') %}active{% endif %}">
+                <i data-lucide="building-2"></i>
+                My Department
+            </a>
+            <a href="{{ url_for('attendance.attendance_list') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('attendance.') %}active{% endif %}">
+                <i data-lucide="calendar-check"></i>
+                My Attendance
+            </a>
+            <a href="{{ url_for('leave.leave_list') }}"
+               class="{% if request.endpoint in ('leave.leave_list', 'leave.leave_detail') %}active{% endif %}">
+                <i data-lucide="calendar-days"></i>
+                My Leave
+            </a>
+            <a href="{{ url_for('leave.add_leave') }}"
+               class="{% if request.endpoint == 'leave.add_leave' %}active{% endif %}">
+                <i data-lucide="calendar-plus"></i>
+                Submit Leave
+            </a>
+            <a href="{{ url_for('payroll.payroll_list') }}"
+               class="{% if request.endpoint in ('payroll.payroll_list', 'payroll.payroll_detail') %}active{% endif %}">
+                <i data-lucide="wallet"></i>
+                My Payroll
+            </a>
+            <a href="{{ url_for('users.edit_profile') }}"
+               class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
+                <i data-lucide="user-round-pen"></i>
+                Edit Profile
+            </a>
+            {% else %}
+            <a href="{{ url_for('index') }}"
+               class="{% if request.endpoint == 'index' or (current_user.role == 'hr' and request.endpoint == 'auth.hr_home') %}active{% endif %}">
+                <i data-lucide="layout-dashboard"></i>
+                {% if current_user.role == 'hr' %}HR Home{% else %}Dashboard{% endif %}
+            </a>
+            <a href="{{ url_for('employee.employee_list') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('employee.') %}active{% endif %}">
                 <i data-lucide="users"></i>
                 Employees
             </a>
-
-            <a href="{{ url_for('attendance.attendance_list') }}" class="{% if request.endpoint and request.endpoint.startswith('attendance.') %}active{% endif %}">
+            <a href="{{ url_for('attendance.attendance_list') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('attendance.') %}active{% endif %}">
                 <i data-lucide="calendar-check"></i>
                 Attendance
             </a>
-
-            <a href="{{ url_for('department.department_list') }}" class="{% if request.endpoint and request.endpoint.startswith('department.') %}active{% endif %}">
+            <a href="{{ url_for('department.department_list') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('department.') %}active{% endif %}">
                 <i data-lucide="building-2"></i>
                 Departments
             </a>
-
-            <a href="{{ url_for('leave.leave_list') }}" class="{% if request.endpoint and request.endpoint.startswith('leave.') %}active{% endif %}">
+            <a href="{{ url_for('leave.leave_list') }}"
+               class="{% if request.endpoint in ('leave.leave_list', 'leave.leave_detail', 'leave.update_leave_status') %}active{% endif %}">
                 <i data-lucide="calendar-days"></i>
                 Leave Requests
             </a>
-
-            <a href="{{ url_for('payroll.payroll_list') }}" class="{% if request.endpoint and request.endpoint.startswith('payroll.') %}active{% endif %}">
+            <a href="{{ url_for('payroll.payroll_list') }}"
+               class="{% if request.endpoint in ('payroll.payroll_list', 'payroll.payroll_detail') %}active{% endif %}">
                 <i data-lucide="wallet"></i>
                 Payroll
             </a>
 
             {% if current_user.role == 'admin' %}
-            <a href="{{ url_for('users.user_list') }}" class="{% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}">
+            <a href="{{ url_for('users.user_list') }}"
+               class="{% if request.endpoint in ('users.user_list', 'users.add_user', 'users.update_user_role', 'users.edit_user') %}active{% endif %}">
                 <i data-lucide="user-cog"></i>
                 Users &amp; Roles
             </a>
+            <a href="{{ url_for('users.edit_profile') }}"
+               class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
+                <i data-lucide="user-round-pen"></i>
+                Edit Profile
+            </a>
+            {% endif %}
+            {% if current_user.role == 'hr' %}
+            <a href="{{ url_for('users.edit_profile') }}"
+               class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
+                <i data-lucide="user-round-pen"></i>
+                Edit Profile
+            </a>
+            {% endif %}
             {% endif %}
 
         </nav>

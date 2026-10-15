@@ -83,8 +83,9 @@ flask --app app create-admin
 ```
 
 The command prompts for an administrator username, email, and password. After
-the first administrator signs in, they can create accounts and assign the
-`admin`, `hr`, or `employee` role from **Users & Roles**.
+the first administrator signs in, they can create administrator and HR
+accounts from **Users & Roles**, add employees from **Add Employee**, or
+associate an existing account with a department from the **Employees** list.
 
 Start the development server:
 
@@ -98,18 +99,30 @@ The app is served at <http://127.0.0.1:5000/>.
 
 | Feature | URL prefix | Description |
 | --- | --- | --- |
-| Employees | `/employees` | List and view employee records |
+| Employees | `/employees` | List and view records; administrators can add employee accounts or assign existing users to a department by creating their employee record |
 | Departments | `/departments` | List, view, add, edit, and delete departments |
 | Attendance | `/attendance` | List, view, add, edit, and delete attendance records |
 | Leave | `/leaves` | List, view, submit, update status, and delete leave requests |
 | Payroll | `/payroll` | List, view, add, edit, and delete payroll records |
-| Users & Roles | `/users` | Admin-only account creation and role assignment |
-| Employee Home | `/employee/home` | Employee landing page placeholder |
-| HR Home | `/hr/home` | HR landing page placeholder |
+| Users & Roles | `/users` | Admin-only account creation, account editing, and role assignment; `/users/profile` is available to all signed-in users |
+| Employee Home | `/employee/home` | Employee portal with personal record summaries |
+| HR Home | `/hr/home` | HR dashboard with management counts and shortcuts |
+| Admin Dashboard | `/` | Organization counts and management shortcuts |
 
 All application pages require sign-in. Administrators manage accounts and roles;
-only administrators can add or edit employee accounts. The existing employee,
-HR, and administrator accounts can use the employee-management features.
-Employee users land on the `/employee/home` placeholder and HR users land on
-the `/hr/home` placeholder after signing in; administrators land on the shared
-dashboard. The administrator-only users API is available at `/users/api`.
+only administrators can add or edit employee accounts. Employee users can view
+only their own employee information, department, attendance, leave requests, and
+payroll; they can submit leave requests for themselves but cannot manage
+employee records. HR can manage attendance, departments, leave, and payroll but
+cannot create employee accounts or manage users and roles. Administrators can
+manage user account details and roles, employee profiles (including salary,
+department, position, and names), and payroll. HR and administrators can add,
+edit, and delete payroll records; employees have read-only access to their own
+pay statements and cannot view another employee's records. Employee accounts
+are created through
+**Add Employee** so every employee login is linked to an employee record. All
+signed-in users can update their username, email, and password from **Edit
+profile**. Every POST form requires a valid CSRF token. Employee users land on
+the `/employee/home` portal and HR users land on the `/hr/home` dashboard after
+signing in; administrators land on the organization dashboard. The
+administrator-only users API is available at `/users/api`.

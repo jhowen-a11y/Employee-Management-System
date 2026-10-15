@@ -1,8 +1,11 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_login import current_user
 
 from models import db
 from models.department import Department
+from models.user import User
+from routes.employee_access import current_employee, management_required
 
 department_bp = Blueprint(
     "department",
@@ -14,7 +17,13 @@ department_bp = Blueprint(
 # View all departments
 @department_bp.route("/")
 def department_list():
-    departments = Department.query.order_by(
+    department_query = Department.query
+    if current_user.role == User.EMPLOYEE:
+        employee = current_employee()
+        department_query = department_query.filter_by(
+            id=employee.department_id if employee else None
+        )
+    departments = department_query.order_by(
         Department.department_name.asc()
     ).all()
 
@@ -27,7 +36,13 @@ def department_list():
 # View one department
 @department_bp.route("/<int:department_id>")
 def department_detail(department_id):
-    department = Department.query.get_or_404(department_id)
+    department_query = Department.query.filter_by(id=department_id)
+    if current_user.role == User.EMPLOYEE:
+        employee = current_employee()
+        department_query = department_query.filter_by(
+            id=employee.department_id if employee else None
+        )
+    department = department_query.first_or_404()
 
     return render_template(
         "departments/detail.html",
@@ -37,6 +52,7 @@ def department_detail(department_id):
 
 # Add a department
 @department_bp.route("/add", methods=["GET", "POST"])
+@management_required
 def add_department():
     if request.method == "POST":
         department_name = request.form.get(
@@ -47,9 +63,12 @@ def add_department():
             "description", ""
         ).strip()
 
-        if not department_name:
-            flash("Department name is required.", "error")
-            return redirect(url_for("department.add_department"))
+        if not department_name or len(department_name) > 100:
+            flash("Department name must be between 1 and 100 characters.", "error")
+            return render_template("departments/add.html")
+        if len(description) > 255:
+            flash("Department description cannot exceed 255 characters.", "error")
+            return render_template("departments/add.html")
 
         # Prevent duplicate department names
         existing_department = Department.query.filter_by(
@@ -58,7 +77,7 @@ def add_department():
 
         if existing_department:
             flash("This department already exists.", "error")
-            return redirect(url_for("department.add_department"))
+            return render_template("departments/add.html")
 
         department = Department(
             department_name=department_name,
@@ -76,8 +95,9 @@ def add_department():
 
 # Edit a department
 @department_bp.route("/<int:department_id>/edit", methods=["GET", "POST"])
+@management_required
 def edit_department(department_id):
-    department = Department.query.get_or_404(department_id)
+    department = db.get_or_404(Department, department_id)
 
     if request.method == "POST":
         department_name = request.form.get(
@@ -88,11 +108,15 @@ def edit_department(department_id):
             "description", ""
         ).strip()
 
-        if not department_name:
-            flash("Department name is required.", "error")
-            return redirect(
-                url_for("department.edit_department",
-                        department_id=department.id)
+        if not department_name or len(department_name) > 100:
+            flash("Department name must be between 1 and 100 characters.", "error")
+            return render_template(
+                "departments/edit.html", department=department
+            )
+        if len(description) > 255:
+            flash("Department description cannot exceed 255 characters.", "error")
+            return render_template(
+                "departments/edit.html", department=department
             )
 
         existing_department = Department.query.filter(
@@ -102,9 +126,8 @@ def edit_department(department_id):
 
         if existing_department:
             flash("This department name is already in use.", "error")
-            return redirect(
-                url_for("department.edit_department",
-                        department_id=department.id)
+            return render_template(
+                "departments/edit.html", department=department
             )
 
         department.department_name = department_name
@@ -123,8 +146,9 @@ def edit_department(department_id):
 
 # Delete a department
 @department_bp.route("/<int:department_id>/delete", methods=["POST"])
+@management_required
 def delete_department(department_id):
-    department = Department.query.get_or_404(department_id)
+    department = db.get_or_404(Department, department_id)
 
     # Don't delete a department that still has employees
     if department.employees:

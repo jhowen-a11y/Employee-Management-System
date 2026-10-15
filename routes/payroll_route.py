@@ -2,10 +2,17 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from flask_login import current_user
 
 from models import db
 from models.payroll import Payroll
 from models.employee import Employee
+from models.user import User
+from routes.employee_access import (
+    current_employee,
+    employee_scoped_query,
+    management_required,
+)
 
 payroll_bp = Blueprint(
     "payroll",
@@ -13,17 +20,26 @@ payroll_bp = Blueprint(
     url_prefix="/payroll"
 )
 
-# AYUSIN MO TO NATANGGAP NG NEGATIVE YN pag sa deductions and sh
+MAX_PAYROLL_AMOUNT = Decimal("99999999.99")
+
+
 def read_money(value, default=None):
-    """Convert a form value into a non-negative Decimal."""
-    if value is None :
+    """Convert a form value into a non-negative, two-decimal amount."""
+    if value is None or value == "":
         return default
 
     try:
         amount = Decimal(value.strip())
-        if not amount.is_finite() or amount < 0:
+        if (
+            not amount.is_finite()
+            or amount < 0
+            or amount > MAX_PAYROLL_AMOUNT
+        ):
             return None
-        return amount.quantize(Decimal("0.01"))
+        rounded_amount = amount.quantize(Decimal("0.01"))
+        if rounded_amount != amount:
+            return None
+        return rounded_amount
     except InvalidOperation:
         return None
 
@@ -38,7 +54,9 @@ def read_date(value):
 # View all payroll records
 @payroll_bp.route("/")
 def payroll_list():
-    payroll_records = Payroll.query.order_by(
+    payroll_records = employee_scoped_query(
+        Payroll.query, Payroll.employee_id
+    ).order_by(
         Payroll.pay_period_start.desc()
     ).all()
 
@@ -51,7 +69,13 @@ def payroll_list():
 # View one payroll record
 @payroll_bp.route("/<int:payroll_id>")
 def payroll_detail(payroll_id):
-    payroll = Payroll.query.get_or_404(payroll_id)
+    payroll_query = Payroll.query.filter_by(id=payroll_id)
+    if current_user.role == User.EMPLOYEE:
+        employee = current_employee()
+        payroll_query = payroll_query.filter_by(
+            employee_id=employee.id if employee else None
+        )
+    payroll = payroll_query.first_or_404()
 
     return render_template(
         "payroll/detail.html",
@@ -61,6 +85,7 @@ def payroll_detail(payroll_id):
 
 # Add a payroll record
 @payroll_bp.route("/add", methods=["GET", "POST"])
+@management_required
 def add_payroll():
     employees = Employee.query.order_by(Employee.last_name).all()
 
@@ -89,7 +114,11 @@ def add_payroll():
         elif payment_date_value and not payment_date:
             flash("Please enter a valid payment date.", "error")
         elif basic_salary is None or allowances is None or deductions is None:
-            flash("Enter valid, non-negative payroll amounts.", "error")
+            flash("Enter valid payroll amounts with at most two decimals.", "error")
+        elif deductions > basic_salary + allowances:
+            flash("Deductions cannot exceed salary plus allowances.", "error")
+        elif basic_salary + allowances > MAX_PAYROLL_AMOUNT:
+            flash("Salary plus allowances exceeds the supported amount.", "error")
         else:
             net_pay = basic_salary + allowances - deductions
 
@@ -123,8 +152,9 @@ def add_payroll():
 
 # Edit a payroll record
 @payroll_bp.route("/<int:payroll_id>/edit", methods=["GET", "POST"])
+@management_required
 def edit_payroll(payroll_id):
-    payroll = Payroll.query.get_or_404(payroll_id)
+    payroll = db.get_or_404(Payroll, payroll_id)
     employees = Employee.query.order_by(Employee.last_name).all()
 
     if request.method == "POST":
@@ -152,7 +182,11 @@ def edit_payroll(payroll_id):
         elif payment_date_value and not payment_date:
             flash("Please enter a valid payment date.", "error")
         elif basic_salary is None or allowances is None or deductions is None:
-            flash("Enter valid, non-negative payroll amounts.", "error")
+            flash("Enter valid payroll amounts with at most two decimals.", "error")
+        elif deductions > basic_salary + allowances:
+            flash("Deductions cannot exceed salary plus allowances.", "error")
+        elif basic_salary + allowances > MAX_PAYROLL_AMOUNT:
+            flash("Salary plus allowances exceeds the supported amount.", "error")
         else:
             payroll.employee_id = employee.id
             payroll.pay_period_start = period_start
@@ -183,8 +217,9 @@ def edit_payroll(payroll_id):
 
 # Delete a payroll record
 @payroll_bp.route("/<int:payroll_id>/delete", methods=["POST"])
+@management_required
 def delete_payroll(payroll_id):
-    payroll = Payroll.query.get_or_404(payroll_id)
+    payroll = db.get_or_404(Payroll, payroll_id)
 
     db.session.delete(payroll)
     db.session.commit()

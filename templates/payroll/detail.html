@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Payroll Details | CMM EMS{% endblock %}
+{% block header_title %}Payroll Details{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div><h1>Payroll details</h1><p>{{ payroll.employee.first_name }} {{ payroll.employee.last_name }}</p></div>
+    {% if current_user.role != 'employee' %}
+    <a class="button button-primary" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit payroll</a>
+    {% endif %}
+</div>
+<section class="panel">
+    <p><strong>Pay period:</strong> {{ payroll.pay_period_start }} to {{ payroll.pay_period_end }}</p>
+    <p><strong>Basic salary:</strong> {{ payroll.basic_salary }}</p>
+    <p><strong>Allowances:</strong> {{ payroll.allowances }}</p>
+    <p><strong>Deductions:</strong> {{ payroll.deductions }}</p>
+    <p><strong>Net pay:</strong> {{ payroll.net_pay }}</p>
+    <p><strong>Payment status:</strong> {% if payroll.payment_date %}Paid on {{ payroll.payment_date }}{% else %}Pending payment{% endif %}</p>
+    <p><a class="button button-secondary" href="{{ url_for('payroll.payroll_list') }}">Back to payroll</a></p>
+</section>
+{% endblock %}

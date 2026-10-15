@@ -6,15 +6,72 @@
 {% block content %}
 <div class="page-heading">
     <h1>Welcome, {{ current_user.username }}</h1>
-    <p>This is your employee landing page.</p>
+    <p>View your personal employee information and records.</p>
 </div>
 
 <section class="welcome-card">
-    <h2>Employee portal coming soon</h2>
+    <h2>Your employee portal</h2>
     <p>
-        This page is a placeholder for employee-specific features. Your
-        personal information, attendance, leave requests, and other tools can
-        be added here later.
+        Your employee portal shows only information linked to your account.
     </p>
 </section>
+
+{% if employee %}
+<section class="welcome-card">
+    <h2>My employee information</h2>
+    <p>{{ employee.first_name }} {{ employee.last_name }} ·
+       {{ employee.position }} · {{ employee.department.department_name }}</p>
+    <p>Salary: {{ employee.salary }}</p>
+</section>
+
+<section class="welcome-card">
+    <h2>My attendance</h2>
+    {% if attendance_records %}
+    <ul>
+        {% for record in attendance_records %}
+        <li>{{ record.attendance_date }} — {{ record.status }}
+            {% if record.time_in %} · In: {{ record.time_in }}{% endif %}
+            {% if record.time_out %} · Out: {{ record.time_out }}{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No attendance records yet.</p>
+    {% endif %}
+</section>
+
+<section class="welcome-card">
+    <h2>My leave requests</h2>
+    {% if leave_requests %}
+    <ul>
+        {% for leave in leave_requests %}
+        <li>{{ leave.leave_type }} · {{ leave.start_date }} to
+            {{ leave.end_date }} — {{ leave.status }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No leave requests yet.</p>
+    {% endif %}
+    <p><a href="{{ url_for('leave.add_leave') }}">Submit a leave request</a></p>
+</section>
+
+<section class="welcome-card">
+    <h2>My payroll</h2>
+    {% if payroll_records %}
+    <ul>
+        {% for payroll in payroll_records %}
+        <li>{{ payroll.pay_period_start }} to {{ payroll.pay_period_end }} —
+            Net pay: {{ payroll.net_pay }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No payroll records yet.</p>
+    {% endif %}
+</section>
+{% else %}
+<section class="welcome-card">
+    <h2>No employee record linked</h2>
+    <p>Contact an administrator to link an employee record to your account.</p>
+</section>
+{% endif %}
 {% endblock %}

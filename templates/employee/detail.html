@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Details | CMM EMS{% endblock %}
+{% block header_title %}Employee Details{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div><h1>{{ employee.first_name }} {{ employee.last_name }}</h1><p>{{ employee.position }}</p></div>
+    {% if current_user.role == 'admin' %}
+    <a class="button button-primary" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit employee</a>
+    {% endif %}
+</div>
+<section class="panel">
+    <p><strong>Department:</strong> <a href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">{{ employee.department.department_name }}</a></p>
+    <p><strong>Email:</strong> {{ employee.user.email }}</p>
+    <p><strong>Username:</strong> {{ employee.user.username }}</p>
+    <p><strong>Salary:</strong> {{ employee.salary }}</p>
+    <p><a class="button button-secondary" href="{{ url_for('employee.employee_list') }}">Back to employees</a></p>
+</section>
+{% endblock %}

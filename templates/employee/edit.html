@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Employee | CMM EMS{% endblock %}
+{% block header_title %}Edit Employee{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Edit employee</h1><p>Update this employee record and account details.</p></div>
+<section class="panel form-panel">
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field"><label for="first_name">First name</label><input id="first_name" name="first_name" maxlength="50" value="{{ request.form.get('first_name', employee.first_name) }}" required></div>
+        <div class="form-field"><label for="last_name">Last name</label><input id="last_name" name="last_name" maxlength="50" value="{{ request.form.get('last_name', employee.last_name) }}" required></div>
+        <div class="form-field"><label for="position">Position</label><input id="position" name="position" maxlength="100" value="{{ request.form.get('position', employee.position) }}" required></div>
+        <div class="form-field">
+            <label for="department_id">Department</label>
+            <select id="department_id" name="department_id" required>
+                {% for department in departments %}
+                <option value="{{ department.id }}" {% if request.form.get('department_id', '0')|int == department.id or (not request.form and employee.department_id == department.id) %}selected{% endif %}>{{ department.department_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field"><label for="salary">Annual salary</label><input id="salary" name="salary" type="number" min="0" step="0.01" value="{{ request.form.get('salary', employee.salary) }}" required></div>
+        <div class="form-field"><label for="username">Username</label><input id="username" name="username" maxlength="50" value="{{ request.form.get('username', employee.user.username) }}" required></div>
+        <div class="form-field"><label for="email">Email</label><input id="email" name="email" type="email" maxlength="120" value="{{ request.form.get('email', employee.user.email) }}" required></div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit">Save changes</button>
+            <a class="button button-secondary" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

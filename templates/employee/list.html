@@ -1,11 +1,80 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    employee to hahahaha
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Employees | CMM EMS{% endblock %}
+{% block header_title %}Employees{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>{% if current_user.role == 'employee' %}My Information{% elif current_user.role == 'admin' %}Users and Employees{% elif current_user.role == 'hr' %}HR Employee Directory{% else %}Employees{% endif %}</h1>
+        <p>{% if current_user.role == 'employee' %}Your employee record.{% elif current_user.role in ('admin', 'hr') %}User accounts and linked employee records.{% else %}Employee directory and records.{% endif %}</p>
+    </div>
+    {% if current_user.role == 'admin' %}
+    <a class="button button-primary" href="{{ url_for('employee.add_employee') }}">Add employee</a>
+    {% endif %}
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        {% if current_user.role in ('admin', 'hr') %}
+        <table class="data-table">
+            <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Employee</th><th>Position</th><th>Department</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.username }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.role|capitalize }}</td>
+                <td>
+                    {% if user.employee %}
+                    {{ user.employee.first_name }} {{ user.employee.last_name }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>{{ user.employee.position if user.employee else '—' }}</td>
+                <td>{{ user.employee.department.department_name if user.employee else '—' }}</td>
+                <td>
+                    <a class="button button-secondary button-small" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
+                    {% if user.employee %}
+                    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
+                    {% if current_user.role == 'admin' %}
+                    <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">Edit</a>
+                    {% endif %}
+                    {% elif current_user.role == 'admin' %}
+                    <a class="button button-secondary button-small" href="{{ url_for('employee.link_user_to_employee', user_id=user.id) }}">Assign department</a>
+                    {% else %}
+                    <span class="role-label">No employee record</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty-state">No user accounts found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <table class="data-table">
+            <thead><tr><th>Name</th><th>Position</th><th>Department</th><th>Email</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for employee in employees %}
+            <tr>
+                <td>{{ employee.first_name }} {{ employee.last_name }}</td>
+                <td>{{ employee.position }}</td>
+                <td>{{ employee.department.department_name }}</td>
+                <td>{{ employee.user.email }}</td>
+                <td>
+                    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">View</a>
+                    {% if current_user.role == 'admin' %}
+                    <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty-state">No employee records found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

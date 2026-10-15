@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Add Payroll | CMM EMS{% endblock %}
+{% block header_title %}Add Payroll{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Add payroll record</h1><p>Enter employee pay period and payment amounts.</p></div>
+<section class="panel form-panel">
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field">
+            <label for="employee_id">Employee</label>
+            <select id="employee_id" name="employee_id" required>
+                <option value="">Select employee</option>
+                {% for employee in employees %}
+                <option value="{{ employee.id }}" {% if request.form.get('employee_id', '0')|int == employee.id %}selected{% endif %}>{{ employee.first_name }} {{ employee.last_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field"><label for="pay_period_start">Pay period start</label><input id="pay_period_start" name="pay_period_start" type="date" value="{{ request.form.get('pay_period_start', '') }}" required></div>
+        <div class="form-field"><label for="pay_period_end">Pay period end</label><input id="pay_period_end" name="pay_period_end" type="date" value="{{ request.form.get('pay_period_end', '') }}" required></div>
+        <div class="form-field"><label for="payment_date">Payment date</label><input id="payment_date" name="payment_date" type="date" value="{{ request.form.get('payment_date', '') }}"></div>
+        <div class="form-field"><label for="basic_salary">Basic salary</label><input id="basic_salary" name="basic_salary" type="number" min="0" step="0.01" value="{{ request.form.get('basic_salary', '') }}" required></div>
+        <div class="form-field"><label for="allowances">Allowances</label><input id="allowances" name="allowances" type="number" min="0" step="0.01" value="{{ request.form.get('allowances', '0.00') }}"></div>
+        <div class="form-field"><label for="deductions">Deductions</label><input id="deductions" name="deductions" type="number" min="0" step="0.01" value="{{ request.form.get('deductions', '0.00') }}"></div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit">Save payroll</button>
+            <a class="button button-secondary" href="{{ url_for('payroll.payroll_list') }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

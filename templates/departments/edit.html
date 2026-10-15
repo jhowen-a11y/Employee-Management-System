@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Department | CMM EMS{% endblock %}
+{% block header_title %}Edit Department{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Edit department</h1><p>Update department information.</p></div>
+<section class="panel form-panel">
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field"><label for="department_name">Department name</label><input id="department_name" name="department_name" type="text" maxlength="100" value="{{ request.form.get('department_name', department.department_name) }}" required></div>
+        <div class="form-field"><label for="description">Description</label><input id="description" name="description" type="text" maxlength="255" value="{{ request.form.get('description', department.description or '') }}"></div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit">Save changes</button>
+            <a class="button button-secondary" href="{{ url_for('department.department_detail', department_id=department.id) }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}
