@@ -7,7 +7,6 @@ import click
 from flask import Flask, abort, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
 from flask_login import LoginManager, current_user
-from sqlalchemy.engine import URL
 from werkzeug.security import generate_password_hash
 
 from models import db
@@ -36,40 +35,20 @@ def create_app(test_config=None):
     if not secret_key:
         raise RuntimeError("SECRET_KEY must be set in the environment or .env file.")
 
-    required_settings = ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_NAME")
-    missing_settings = [
-        name for name in required_settings if not os.getenv(name)
-    ]
-    if missing_settings:
-        raise RuntimeError(
-            "Missing required database settings: "
-            + ", ".join(missing_settings)
-        )
-
-    try:
-        database_port = int(os.getenv("DB_PORT", "5432"))
-    except ValueError as error:
-        raise RuntimeError("DB_PORT must be a valid port number.") from error
-    if not 1 <= database_port <= 65535:
-        raise RuntimeError("DB_PORT must be between 1 and 65535.")
-
     app.config.update(
         SECRET_KEY=secret_key,
         DEBUG=os.getenv("FLASK_DEBUG", "0").strip() == "1",
-        SQLALCHEMY_DATABASE_URI=URL.create(
-            drivername="postgresql+psycopg",
-            username=os.environ["DB_USER"],
-            password=os.environ["DB_PASSWORD"],
-            host=os.environ["DB_HOST"],
-            port=database_port,
-            database=os.environ["DB_NAME"],
-        ),
+        SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL"),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
     )
     if test_config:
         app.config.update(test_config)
+    if not app.config["SQLALCHEMY_DATABASE_URI"]:
+        raise RuntimeError(
+            "DATABASE_URL must be set in the environment or .env file."
+        )
 
     db.init_app(app)
     login_manager.init_app(app)
