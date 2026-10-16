@@ -1,53 +1,293 @@
+
 {% extends "base.html" %}
 
-{% block title %}Edit Profile | CMM EMS{% endblock %}
-{% block header_title %}Edit Profile{% endblock %}
+{% block title %}My Profile | CMM EMS{% endblock %}
+{% block header_title %}My Profile{% endblock %}
 
 {% block content %}
-<div class="page-heading">
-    <h1>Edit your profile</h1>
-    <p>Update your account details or change your password.</p>
+
+<div class="page-heading profile-heading">
+    <div>
+        <h1>My Profile</h1>
+        <p>View your personal and employment information.</p>
+    </div>
 </div>
 
-<section class="panel form-panel">
-    <form method="post" class="form-grid">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div class="form-field">
-            <label for="username">Username</label>
-            <input id="username" name="username" type="text" maxlength="50"
-                   autocomplete="username" value="{{ request.form.get('username', current_user.username) }}"
-                   required>
+<section class="panel profile-panel">
+
+    <!-- profile -->
+    <div class="profile-header">
+        <div class="profile-avatar">
+            {% if current_user.profile_picture %}
+                <img
+                    src="{{ url_for('static', filename='uploads/profile_pictures/' ~ current_user.profile_picture) }}"
+                    alt="Profile picture"
+                    class="profile-photo">
+            {% else %}
+                <i data-lucide="user-round"></i>
+            {% endif %}
         </div>
 
-        <div class="form-field">
-            <label for="email">Email</label>
-            <input id="email" name="email" type="email" maxlength="120"
-                   autocomplete="email" value="{{ request.form.get('email', current_user.email) }}"
-                   required>
+        <div class="profile-identity">
+            <h2>
+                {% if current_user.employee %}
+                    {{ current_user.employee.first_name }}
+                    {{ current_user.employee.last_name }}
+                {% else %}
+                    {{ current_user.username }}
+                {% endif %}
+            </h2>
+
+            <p>{{ current_user.email }}</p>
+
+            <span class="profile-role">
+                <span class="profile-status-dot"></span>
+                {{ current_user.role|capitalize }}
+            </span>
+        </div>
+    </div>
+
+    <div class="profile-divider"></div>
+
+    <!-- emp details -->
+    <section class="profile-section">
+        <div class="profile-section-heading">
+            <i data-lucide="contact-round"></i>
+            <div>
+                <h3>Employee Details</h3>
+                <p>Your registered employment information</p>
+            </div>
+            <span class="view-only-label">View only</span>
         </div>
 
-        <div class="form-field">
-            <label for="current_password">Current password</label>
-            <input id="current_password" name="current_password"
-                   type="password" autocomplete="current-password">
-            <small>Required only when changing your password.</small>
-        </div>
+        {% if current_user.employee %}
+            {% set employee = current_user.employee %}
 
-        <div class="form-field">
-            <label for="new_password">New password</label>
-            <input id="new_password" name="new_password" type="password"
-                   minlength="8" autocomplete="new-password">
-            <small>Leave blank to keep your current password.</small>
-        </div>
+            <div class="profile-info-grid">
 
-        <div class="form-actions">
-            <button class="button button-primary" type="submit">
-                Save profile
-            </button>
-            <a class="button button-secondary" href="{{ url_for('index') }}">
-                Cancel
-            </a>
+                <div class="profile-info-item">
+                    <span>Employee ID</span>
+                    <strong>EMP-{{ "%04d"|format(employee.id) }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Full Name</span>
+                    <strong>{{ employee.first_name }} {{ employee.last_name }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>First Name</span>
+                    <strong>{{ employee.first_name }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Last Name</span>
+                    <strong>{{ employee.last_name }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Position</span>
+                    <strong>{{ employee.position }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Department</span>
+                    <strong>
+                        {{ employee.department.department_name
+                           if employee.department else 'Not assigned' }}
+                    </strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Email Address</span>
+                    <strong>{{ current_user.email }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Username</span>
+                    <strong>{{ current_user.username }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Employment Record Created</span>
+                    <strong>
+                        {{ employee.created_at.strftime('%B %d, %Y')
+                           if employee.created_at else 'Not available' }}
+                    </strong>
+                </div>
+
+            </div>
+
+        {% else %}
+
+            <div class="profile-empty">
+                <i data-lucide="info"></i>
+                <div>
+                    <strong>No employee record found</strong>
+                    <p>
+                        Your account is not linked to an employee record.
+                        Please contact your HR administrator.
+                    </p>
+                </div>
+            </div>
+
+            <div class="profile-info-grid">
+                <div class="profile-info-item">
+                    <span>Username</span>
+                    <strong>{{ current_user.username }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Email Address</span>
+                    <strong>{{ current_user.email }}</strong>
+                </div>
+
+                <div class="profile-info-item">
+                    <span>Account Role</span>
+                    <strong>{{ current_user.role|capitalize }}</strong>
+                </div>
+            </div>
+
+        {% endif %}
+    </section>
+
+    <div class="profile-divider"></div>
+
+    <!-- acc set sa baba -->
+    <button type="button"
+            class="account-settings-trigger"
+            id="accountSettingsTrigger"
+            aria-expanded="false"
+            aria-controls="accountSettings"
+            onclick="toggleAccountSettings()">
+
+        <span class="account-settings-icon">
+            <i data-lucide="shield-check"></i>
+        </span>
+
+        <span class="account-settings-text">
+            <strong>Change Username or Password</strong>
+            <small>Update your account sign-in information</small>
+        </span>
+
+        <i data-lucide="chevron-down"
+           class="settings-chevron"
+           id="settingsChevron"></i>
+    </button>
+
+    <!-- acc set -->
+    <div id="accountSettings" hidden>
+
+        <div class="account-settings-content">
+            <h3>Account Settings</h3>
+            <p>Enter your new username or choose a new password.</p>
+
+            <form method="POST"
+                  action="{{ url_for('users.edit_profile') }}"
+                  class="form-grid account-settings-form">
+
+                <input type="hidden"
+                       name="_csrf_token"
+                       value="{{ csrf_token() }}">
+
+                <div class="form-field">
+                    <label for="username">Username</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        maxlength="50"
+                        autocomplete="username"
+                        value="{{ current_user.username }}"
+                        required>
+                </div>
+
+                <input type="hidden"
+                       name="email"
+                       value="{{ current_user.email }}">
+
+                <div class="form-field">
+                    <label for="current_password">Current Password</label>
+                    <input
+                        type="password"
+                        id="current_password"
+                        name="current_password"
+                        autocomplete="current-password">
+
+                    <small>Required when changing your password.</small>
+                </div>
+
+                <div class="form-field">
+                    <label for="new_password">New Password</label>
+                    <input
+                        type="password"
+                        id="new_password"
+                        name="new_password"
+                        minlength="8"
+                        autocomplete="new-password">
+
+                    <small>
+                        Leave blank if you only want to change your username.
+                    </small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit"
+                            class="button button-primary">
+                        <i data-lucide="save"></i>
+                        Save Changes
+                    </button>
+
+                    <button type="button"
+                            class="button button-secondary"
+                            onclick="cancelAccountSettings()">
+                        Cancel
+                    </button>
+                </div>
+
+            </form>
         </div>
-    </form>
+    </div>
+
 </section>
+
+<script>
+function toggleAccountSettings(forceOpen) {
+    const panel = document.getElementById('accountSettings');
+    const trigger = document.getElementById('accountSettingsTrigger');
+    const chevron = document.getElementById('settingsChevron');
+
+    const shouldOpen = typeof forceOpen === 'boolean'
+        ? forceOpen
+        : panel.hidden;
+
+    panel.hidden = !shouldOpen;
+    trigger.setAttribute('aria-expanded', String(shouldOpen));
+
+    if (chevron) {
+        chevron.style.transform = shouldOpen
+            ? 'rotate(180deg)'
+            : 'rotate(0deg)';
+    }
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function cancelAccountSettings() {
+    document.getElementById('username').value =
+        {{ current_user.username|tojson }};
+
+    document.getElementById('current_password').value = '';
+    document.getElementById('new_password').value = '';
+
+    toggleAccountSettings(false);
+}
+
+if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+}
+</script>
+
 {% endblock %}
