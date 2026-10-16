@@ -45,6 +45,7 @@ def read_money(value, default=None):
 
 
 def read_date(value):
+    # Convert a form value to a date, returning None when it is invalid.
     try:
         return date.fromisoformat(value)
     except (ValueError, TypeError):

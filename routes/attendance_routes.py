@@ -21,6 +21,7 @@ attendance_bp = Blueprint(
 
 
 def parse_date(value):
+    # Convert a form value to a date, returning None when it is invalid.
     try:
         return date.fromisoformat(value)
     except (ValueError, TypeError):
@@ -28,6 +29,7 @@ def parse_date(value):
 
 
 def parse_time(value):
+    # Convert a form value to a time, returning None when it is invalid.
     if not value:
         return None
 

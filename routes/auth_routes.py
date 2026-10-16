@@ -28,9 +28,11 @@ auth_bp = Blueprint("auth", __name__)
 
 
 def admin_required(view):
+    # Restrict a view to signed-in administrators.
     @wraps(view)
     @login_required
     def wrapped(*args, **kwargs):
+        # Reject non-admin users before running the protected view.
         if current_user.role != User.ADMIN:
             abort(403)
         return view(*args, **kwargs)
@@ -39,6 +41,7 @@ def admin_required(view):
 
 
 def landing_url_for(user):
+    # Choose the home page appropriate for the user's role.
     if user.role == User.EMPLOYEE:
         return url_for("auth.employee_home")
     if user.role == User.HR:
@@ -48,6 +51,7 @@ def landing_url_for(user):
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    # Authenticate a user and redirect them to a safe destination.
     if current_user.is_authenticated:
         return redirect(landing_url_for(current_user))
 
@@ -81,6 +85,7 @@ def login():
 @auth_bp.route("/employee/home")
 @login_required
 def employee_home():
+    # Show the signed-in employee's attendance, leave, and payroll records.
     if current_user.role != User.EMPLOYEE:
         abort(403)
     employee = Employee.query.filter_by(user_id=current_user.id).first()
@@ -111,6 +116,7 @@ def employee_home():
 @auth_bp.route("/hr/home")
 @login_required
 def hr_home():
+    # Show HR dashboard counts for the organization's records.
     if current_user.role != User.HR:
         abort(403)
     return render_template(
@@ -126,6 +132,7 @@ def hr_home():
 
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
+    # Sign out the current user.
     logout_user()
     flash("You have been signed out.", "success")
     return redirect(url_for("auth.login"))

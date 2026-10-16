@@ -52,6 +52,7 @@ def employee_list():
 @employee_bp.route("/add", methods=["GET", "POST"])
 @admin_required
 def add_employee():
+    # Create an employee and its associated user account.
     departments = Department.query.order_by(
         Department.department_name.asc()
     ).all()
@@ -124,6 +125,7 @@ def add_employee():
 @employee_bp.route("/link-user/<int:user_id>", methods=["GET", "POST"])
 @admin_required
 def link_user_to_employee(user_id):
+    # Create an employee record linked to an existing user account.
     user = db.get_or_404(User, user_id)
     if user.employee:
         return redirect(
@@ -214,6 +216,7 @@ def employee_detail(employee_id):
 @employee_bp.route("/<int:employee_id>/edit", methods=["GET", "POST"])
 @admin_required
 def edit_employee(employee_id):
+    # Update an employee's details and associated user account.
     employee = db.get_or_404(Employee, employee_id)
     departments = Department.query.order_by(
         Department.department_name.asc()

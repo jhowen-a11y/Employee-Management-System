@@ -22,6 +22,7 @@ ACCOUNT_CREATION_ROLES = (User.ADMIN, User.HR)
 
 @user_bp.before_request
 def require_admin():
+    # Allow only administrators, except when users edit their own profile.
     if (
         current_user.role != User.ADMIN
         and request.endpoint != "users.edit_profile"
@@ -31,12 +32,14 @@ def require_admin():
 
 @user_bp.route("/")
 def user_list():
+    # Show all user accounts.
     users = User.query.order_by(User.username.asc()).all()
     return render_template("users/list.html", users=users, roles=User.ROLES)
 
 
 @user_bp.route("/profile", methods=["GET", "POST"])
 def edit_profile():
+    # Update the signed-in user's profile and optionally their password.
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip()
@@ -81,6 +84,7 @@ def edit_profile():
 
 @user_bp.route("/<int:user_id>/edit", methods=["GET", "POST"])
 def edit_user(user_id):
+    # Update a user's account details, role, or password.
     user = db.get_or_404(User, user_id)
 
     if request.method == "POST":
@@ -143,6 +147,7 @@ def edit_user(user_id):
 
 @user_bp.route("/add", methods=["GET", "POST"])
 def add_user():
+    # Create a new administrator or HR user account.
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip()
@@ -185,6 +190,7 @@ def add_user():
 
 @user_bp.route("/<int:user_id>/role", methods=["POST"])
 def update_user_role(user_id):
+    # Change a user's role while protecting administrator access.
     user = db.get_or_404(User, user_id)
     role = request.form.get("role", "").strip()
 
@@ -220,6 +226,7 @@ def update_user_role(user_id):
 
 @user_bp.route("/api")
 def get_all_users():
+    # Return all user accounts as JSON.
     users = User.query.order_by(User.username.asc()).all()
     return jsonify(
         users=[
