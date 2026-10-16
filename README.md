@@ -43,25 +43,26 @@ pip install -r requirements.txt
 
 ### Configure PostgreSQL
 
-Create a database, for example:
-
-```sql
-CREATE DATABASE employee_management;
-```
-
-Create a `.env` file in the project root with credentials for that database:
+Create a `.env` file in the project root. Set `DATABASE_URL` to the PostgreSQL
+connection string provided by your database host (for Supabase, find it under
+**Project Settings > Database** or **Connect**):
 
 ```env
-DB_USER=postgres
-DB_PASSWORD=your_postgresql_password
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=employee_management
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 SECRET_KEY=replace_with_a_random_secret
 FLASK_DEBUG=1
 ```
 
-`app.py` builds a psycopg PostgreSQL connection URL from the `DB_*` variables. Set `SECRET_KEY` to a long, random value and keep `.env` private; do not commit real credentials. The app requires this key and will not start if it is missing.
+Use the complete connection string from your provider, including any required
+SSL query parameters. If the password contains URL-reserved characters, use the
+URL-encoded password in the connection string. Do not add spaces around `=`.
+Keep `.env` private; it is ignored by Git. The app requires both `DATABASE_URL`
+and `SECRET_KEY` and will not start if either is missing.
+
+For Vercel, add `DATABASE_URL` and `SECRET_KEY` under **Project Settings >
+Environment Variables** for each deployment environment you use, then redeploy.
+Vercel does not use your local `.env` file. Keep `FLASK_DEBUG` disabled in
+production.
 
 `python init_db.py` creates missing tables in the configured PostgreSQL
 database; it does not transfer records from the old MySQL database. Export and
