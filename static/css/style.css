@@ -458,6 +458,39 @@ body {
     gap: 10px;
 }
 
+.auth-password-field {
+    position: relative;
+}
+
+.auth-card .auth-password-field input {
+    padding-right: 44px;
+}
+
+.auth-password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+    padding: 2px;
+    border: 0;
+    background: transparent;
+    color: #596bd8;
+    cursor: pointer;
+}
+
+.auth-password-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+.auth-password-toggle:focus-visible {
+    outline: 2px solid #6478f5;
+    outline-offset: 2px;
+}
+
 .auth-card label:not(:first-child) {
     margin-top: 8px;
 }

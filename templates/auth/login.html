@@ -6,6 +6,7 @@
     <title>Sign in | MCM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://unpkg.com/lucide@latest" defer></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 </head>
 <body class="auth-page">
     <main class="auth-card">
@@ -34,8 +35,15 @@
                    autocomplete="username" maxlength="50" required autofocus>
 
             <label for="password">Password</label>
-            <input id="password" name="password" type="password"
-                   autocomplete="current-password" required>
+            <div class="auth-password-field">
+                <input id="password" name="password" type="password"
+                       autocomplete="current-password" required>
+                <button class="auth-password-toggle" type="button"
+                        data-password-toggle aria-controls="password"
+                        aria-label="Show password" aria-pressed="false">
+                    <i data-lucide="eye-off" aria-hidden="true"></i>
+                </button>
+            </div>
 
             <button class="button button-primary auth-submit" type="submit">
                 Sign in
