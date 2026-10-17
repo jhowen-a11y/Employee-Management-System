@@ -15,28 +15,20 @@
 
 <section class="panel profile-panel">
 
-    <!-- profile -->
     <div class="profile-header">
-        <div class="profile-avatar">
-            {% if current_user.profile_picture %}
-                <img
-                    src="{{ url_for('static', filename='uploads/profile_pictures/' ~ current_user.profile_picture) }}"
-                    alt="Profile picture"
-                    class="profile-photo">
-            {% else %}
-                <i data-lucide="user-round"></i>
-            {% endif %}
+        {% if current_user.employee %}
+            {% set profile_name = current_user.employee.first_name ~ ' ' ~ current_user.employee.last_name %}
+        {% else %}
+            {% set profile_name = current_user.username %}
+        {% endif %}
+        <div class="profile-avatar" aria-hidden="true">
+            <span class="profile-initials">
+                {{ profile_name.split() | map('first') | join('') | upper }}
+            </span>
         </div>
 
         <div class="profile-identity">
-            <h2>
-                {% if current_user.employee %}
-                    {{ current_user.employee.first_name }}
-                    {{ current_user.employee.last_name }}
-                {% else %}
-                    {{ current_user.username }}
-                {% endif %}
-            </h2>
+            <h2>{{ profile_name }}</h2>
 
             <p>{{ current_user.email }}</p>
 
@@ -49,7 +41,6 @@
 
     <div class="profile-divider"></div>
 
-    <!-- emp details -->
     <section class="profile-section">
         <div class="profile-section-heading">
             <i data-lucide="contact-round"></i>
@@ -153,11 +144,10 @@
 
     <div class="profile-divider"></div>
 
-    <!-- acc set sa baba -->
     <button type="button"
             class="account-settings-trigger"
             id="accountSettingsTrigger"
-            aria-expanded="false"
+            aria-expanded="{{ 'true' if request.method == 'POST' else 'false' }}"
             aria-controls="accountSettings"
             onclick="toggleAccountSettings()">
 
@@ -166,21 +156,21 @@
         </span>
 
         <span class="account-settings-text">
-            <strong>Change Username or Password</strong>
-            <small>Update your account sign-in information</small>
+            <strong>Update Account Details</strong>
+            <small>Change your username, email address, or password</small>
         </span>
 
         <i data-lucide="chevron-down"
            class="settings-chevron"
-           id="settingsChevron"></i>
+           id="settingsChevron"
+           style="transform: rotate({{ '180deg' if request.method == 'POST' else '0deg' }});"></i>
     </button>
 
-    <!-- acc set -->
-    <div id="accountSettings" hidden>
+    <div id="accountSettings"{% if request.method != 'POST' %} hidden{% endif %}>
 
         <div class="account-settings-content">
             <h3>Account Settings</h3>
-            <p>Enter your new username or choose a new password.</p>
+            <p>Update your sign-in details. Your current password is only required when changing your password.</p>
 
             <form method="POST"
                   action="{{ url_for('users.edit_profile') }}"
@@ -198,13 +188,21 @@
                         name="username"
                         maxlength="50"
                         autocomplete="username"
-                        value="{{ current_user.username }}"
+                        value="{{ request.form.get('username', current_user.username) }}"
                         required>
                 </div>
 
-                <input type="hidden"
-                       name="email"
-                       value="{{ current_user.email }}">
+                <div class="form-field">
+                    <label for="email">Email Address</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        maxlength="120"
+                        autocomplete="email"
+                        value="{{ request.form.get('email', current_user.email) }}"
+                        required>
+                </div>
 
                 <div class="form-field">
                     <label for="current_password">Current Password</label>
@@ -278,6 +276,8 @@ function toggleAccountSettings(forceOpen) {
 function cancelAccountSettings() {
     document.getElementById('username').value =
         {{ current_user.username|tojson }};
+    document.getElementById('email').value =
+        {{ current_user.email|tojson }};
 
     document.getElementById('current_password').value = '';
     document.getElementById('new_password').value = '';

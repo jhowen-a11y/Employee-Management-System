@@ -985,10 +985,25 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         profile = self.client.get("/users/profile")
         self.assertEqual(profile.status_code, 200)
+        self.assertIn(b'name="email"', profile.get_data())
+        self.assertIn(b'class="profile-initials"', profile.get_data())
         response = self.client.post(
             "/users/profile",
             data={
                 "_csrf_token": self.csrf_token(profile),
+                "username": "admin",
+                "email": "duplicate@example.test",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'value="admin"', response.get_data())
+        self.assertIn(b'value="duplicate@example.test"', response.get_data())
+        self.assertIn(b'<div id="accountSettings">', response.get_data())
+
+        response = self.client.post(
+            "/users/profile",
+            data={
+                "_csrf_token": self.csrf_token(response),
                 "username": "staff-updated",
                 "email": "staff-updated@example.test",
                 "current_password": "StaffPass123",

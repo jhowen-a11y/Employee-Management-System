@@ -117,7 +117,7 @@
             <a href="{{ url_for('users.edit_profile') }}"
                class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
                 <i data-lucide="user-round-pen"></i>
-                Profile
+                Edit Profile
             </a>
             {% endif %}
             {% if current_user.role == 'hr' %}
