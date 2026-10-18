@@ -3,6 +3,8 @@ import os
 import secrets
 from pathlib import Path
 
+from flask_migrate import Migrate
+
 import click
 from flask import Flask, abort, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
@@ -51,6 +53,7 @@ def create_app(test_config=None):
         )
 
     db.init_app(app)
+    Migrate(app, db)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Please sign in to continue."
