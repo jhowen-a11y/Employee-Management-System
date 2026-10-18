@@ -47,4 +47,15 @@
         </table>
     </div>
 </section>
+{% if payroll_records.pages > 1 %}
+<nav class="pagination" aria-label="Payroll pages">
+    {% if payroll_records.has_prev %}
+    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list', page=payroll_records.prev_num) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ payroll_records.page }} of {{ payroll_records.pages }} ({{ payroll_records.total }} records)</span>
+    {% if payroll_records.has_next %}
+    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list', page=payroll_records.next_num) }}">Next</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

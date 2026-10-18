@@ -10,6 +10,7 @@ from flask import (
 )
 from flask_login import current_user
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from models import db
@@ -33,7 +34,13 @@ def require_admin():
 @user_bp.route("/")
 def user_list():
     # Show all user accounts.
-    users = User.query.order_by(User.username.asc()).all()
+    users = User.query.options(
+        selectinload(User.employee)
+    ).order_by(User.username.asc()).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
+    )
     return render_template("users/list.html", users=users, roles=User.ROLES)
 
 

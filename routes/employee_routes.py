@@ -27,7 +27,11 @@ def employee_list():
     if current_user.role in (User.ADMIN, User.HR):
         users = User.query.options(
             selectinload(User.employee).selectinload(Employee.department)
-        ).order_by(User.username.asc()).all()
+        ).order_by(User.username.asc()).paginate(
+            page=request.args.get("page", 1, type=int),
+            per_page=50,
+            error_out=False,
+        )
         return render_template(
             "employee/list.html",
             employees=[],
@@ -39,8 +43,16 @@ def employee_list():
         employee_query = employee_query.filter_by(user_id=current_user.id)
     employees = employee_query.order_by(
         Employee.last_name.asc(),
-        Employee.first_name.asc()
-    ).all()
+        Employee.first_name.asc(),
+        Employee.id.asc(),
+    ).options(
+        selectinload(Employee.department),
+        selectinload(Employee.user),
+    ).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
+    )
 
     return render_template(
         "employee/list.html",

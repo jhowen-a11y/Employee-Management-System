@@ -74,4 +74,15 @@
         </table>
     </div>
 </section>
+{% if users.pages > 1 %}
+<nav class="pagination" aria-label="User pages">
+    {% if users.has_prev %}
+    <a class="button button-secondary button-small" href="{{ url_for('users.user_list', page=users.prev_num) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ users.page }} of {{ users.pages }} ({{ users.total }} accounts)</span>
+    {% if users.has_next %}
+    <a class="button button-secondary button-small" href="{{ url_for('users.user_list', page=users.next_num) }}">Next</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date, time
 from flask_login import current_user
+from sqlalchemy.orm import selectinload
 
 from models import db
 from models.attendance import Attendance
@@ -45,8 +46,15 @@ def attendance_list():
     records = employee_scoped_query(
         Attendance.query, Attendance.employee_id
     ).order_by(
-        Attendance.attendance_date.desc()
-    ).all()
+        Attendance.attendance_date.desc(),
+        Attendance.id.desc(),
+    ).options(
+        selectinload(Attendance.employee)
+    ).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
+    )
 
     return render_template(
         "attendance/list.html",

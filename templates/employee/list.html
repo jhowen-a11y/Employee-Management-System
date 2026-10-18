@@ -77,4 +77,25 @@
         {% endif %}
     </div>
 </section>
+{% if users and users.pages > 1 %}
+<nav class="pagination" aria-label="Employee directory pages">
+    {% if users.has_prev %}
+    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list', page=users.prev_num) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ users.page }} of {{ users.pages }} ({{ users.total }} accounts)</span>
+    {% if users.has_next %}
+    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list', page=users.next_num) }}">Next</a>
+    {% endif %}
+</nav>
+{% elif employees and employees.pages > 1 %}
+<nav class="pagination" aria-label="Employee pages">
+    {% if employees.has_prev %}
+    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list', page=employees.prev_num) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ employees.page }} of {{ employees.pages }} ({{ employees.total }} employees)</span>
+    {% if employees.has_next %}
+    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list', page=employees.next_num) }}">Next</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

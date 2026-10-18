@@ -500,6 +500,16 @@ body {
     margin-top: 12px;
 }
 
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 20px;
+    color: #777d8c;
+    font-size: 13px;
+}
+
 /* responsh */
 .menu-toggle {
     display: none;

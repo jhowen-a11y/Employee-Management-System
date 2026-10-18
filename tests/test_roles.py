@@ -103,6 +103,51 @@ class RoleManagementTests(unittest.TestCase):
             },
         )
 
+    def test_attendance_pages_and_employee_dashboard_limit_records(self):
+        from datetime import date, timedelta
+
+        with self.app.app_context():
+            department = self.Department(department_name="Performance")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=60000,
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            self.db.session.add_all(
+                [
+                    self.Attendance(
+                        employee_id=employee.id,
+                        attendance_date=date(2026, 1, 1) + timedelta(days=day),
+                        status="Present",
+                    )
+                    for day in range(51)
+                ]
+            )
+            self.db.session.commit()
+
+        self.login(self.client, "admin", "AdminPass123")
+        page = self.client.get("/attendance/?page=2")
+        self.assertEqual(page.status_code, 200)
+        page_content = page.get_data(as_text=True)
+        self.assertIn("Page 2 of 2 (51 records)", page_content)
+        self.assertIn("2026-01-01", page_content)
+        self.assertNotIn("2026-01-02", page_content)
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        dashboard = employee_client.get("/employee/home")
+        self.assertEqual(dashboard.status_code, 200)
+        dashboard_content = dashboard.get_data(as_text=True)
+        self.assertIn("2026-02-20", dashboard_content)
+        self.assertNotIn("2026-01-01", dashboard_content)
+
     def test_login_required_and_admin_can_manage_accounts(self):
         self.assertEqual(self.client.get("/users/").status_code, 302)
         self.assertEqual(

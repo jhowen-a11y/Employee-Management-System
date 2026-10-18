@@ -89,21 +89,30 @@ def employee_home():
     if current_user.role != User.EMPLOYEE:
         abort(403)
     employee = Employee.query.filter_by(user_id=current_user.id).first()
-    attendance_records = sorted(
-        employee.attendance_records,
-        key=lambda record: record.attendance_date,
-        reverse=True,
-    ) if employee else []
-    leave_requests = sorted(
-        employee.leave_requests,
-        key=lambda leave: leave.created_at,
-        reverse=True,
-    ) if employee else []
-    payroll_records = sorted(
-        employee.payroll_records,
-        key=lambda payroll: payroll.pay_period_start,
-        reverse=True,
-    ) if employee else []
+    attendance_records = (
+        Attendance.query.filter_by(employee_id=employee.id)
+        .order_by(Attendance.attendance_date.desc(), Attendance.id.desc())
+        .limit(5)
+        .all()
+        if employee
+        else []
+    )
+    leave_requests = (
+        Leave.query.filter_by(employee_id=employee.id)
+        .order_by(Leave.created_at.desc(), Leave.id.desc())
+        .limit(5)
+        .all()
+        if employee
+        else []
+    )
+    payroll_records = (
+        Payroll.query.filter_by(employee_id=employee.id)
+        .order_by(Payroll.pay_period_start.desc(), Payroll.id.desc())
+        .limit(5)
+        .all()
+        if employee
+        else []
+    )
     return render_template(
         "employee/home.html",
         employee=employee,

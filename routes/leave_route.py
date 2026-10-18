@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from flask_login import current_user
+from sqlalchemy.orm import selectinload
 
 from models import db
 from models.employee import Employee
@@ -26,8 +27,15 @@ def leave_list():
     leaves = employee_scoped_query(
         Leave.query, Leave.employee_id
     ).order_by(
-        Leave.created_at.desc()
-    ).all()
+        Leave.created_at.desc(),
+        Leave.id.desc(),
+    ).options(
+        selectinload(Leave.employee)
+    ).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
+    )
 
     return render_template(
         "leave/list.html",

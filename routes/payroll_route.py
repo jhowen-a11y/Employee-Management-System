@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from flask_login import current_user
+from sqlalchemy.orm import selectinload
 
 from models import db
 from models.payroll import Payroll
@@ -58,8 +59,15 @@ def payroll_list():
     payroll_records = employee_scoped_query(
         Payroll.query, Payroll.employee_id
     ).order_by(
-        Payroll.pay_period_start.desc()
-    ).all()
+        Payroll.pay_period_start.desc(),
+        Payroll.id.desc(),
+    ).options(
+        selectinload(Payroll.employee)
+    ).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
+    )
 
     return render_template(
         "payroll/list.html",

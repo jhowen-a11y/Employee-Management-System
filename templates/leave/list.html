@@ -39,4 +39,15 @@
         </table>
     </div>
 </section>
+{% if leaves.pages > 1 %}
+<nav class="pagination" aria-label="Leave request pages">
+    {% if leaves.has_prev %}
+    <a class="button button-secondary button-small" href="{{ url_for('leave.leave_list', page=leaves.prev_num) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ leaves.page }} of {{ leaves.pages }} ({{ leaves.total }} records)</span>
+    {% if leaves.has_next %}
+    <a class="button button-secondary button-small" href="{{ url_for('leave.leave_list', page=leaves.next_num) }}">Next</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}
