@@ -1,145 +1,199 @@
 # Employee Management System
 
-A Flask application for managing employee records, departments, attendance, leave requests, and payroll. It uses Flask-SQLAlchemy with a PostgreSQL database and Jinja templates.
+A role-based employee management web application built with Flask and PostgreSQL. Manage employee records, departments, attendance, leave requests, and payroll from one place.
 
-## Tech stack
+## Contents
 
-- Python 3
-- Flask
-- Flask-SQLAlchemy and SQLAlchemy
-- PostgreSQL with the psycopg driver
-- Jinja templates
-- python-dotenv
+- [Features](#features)
+- [Technology](#technology)
+- [Getting started](#getting-started)
+- [Database setup](#database-setup)
+- [Create the first administrator](#create-the-first-administrator)
+- [Run the application](#run-the-application)
+- [Roles and access](#roles-and-access)
+- [Main pages](#main-pages)
+- [Run tests](#run-tests)
+- [Production notes](#production-notes)
+- [Project structure](#project-structure)
 
-## Project structure
+## Features
 
-```text
-.
-├── app.py                  # Flask application factory and entry point
-├── init_db.py              # Creates database tables
-├── requirements.txt        # Python dependencies
-├── models/                 # SQLAlchemy models and relationships
-├── routes/                 # Flask blueprints for application features
-├── static/                 # CSS and JavaScript assets
-└── templates/              # Jinja templates grouped by feature
-```
+- Employee profiles and department management
+- Attendance records and leave-request review
+- Payroll records and employee self-service
+- Separate administrator, HR, and employee experiences
+- Sign-in required for application pages, with CSRF protection on forms
+- PostgreSQL schema migrations for query-performance indexes
 
-## Setup
+## Technology
+
+- Python 3.10+
+- Flask, Flask-Login, Flask-SQLAlchemy, and Flask-Migrate
+- PostgreSQL with Psycopg 3
+- Jinja templates, HTML, CSS, and JavaScript
+
+## Getting started
 
 ### Prerequisites
 
 - Python 3.10 or newer
-- PostgreSQL Server
+- A running PostgreSQL server and an empty database for a new installation
+- Git
 
-### Install dependencies
+### Get the code and install dependencies
 
-Create and activate a virtual environment, then install the project dependencies:
+Clone the repository and move into the project directory:
+
+```powershell
+git clone https://github.com/jhowen-a11y/Employee-Management-System.git
+cd Employee-Management-System
+```
+
+Create and activate a virtual environment, then install the pinned dependencies:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-### Configure PostgreSQL
+On macOS or Linux, activate the environment with:
 
-Create a `.env` file in the project root. Set `DATABASE_URL` to the PostgreSQL
-connection string provided by your database host (for Supabase, find it under
-**Project Settings > Database** or **Connect**):
+```bash
+source .venv/bin/activate
+```
+
+### Configure environment variables
+
+Create a `.env` file in the project root:
 
 ```env
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DATABASE
 SECRET_KEY=replace_with_a_random_secret
 FLASK_DEBUG=1
 ```
 
-Use the complete connection string from your provider, including any required
-SSL query parameters. If the password contains URL-reserved characters, use the
-URL-encoded password in the connection string. Do not add spaces around `=`.
-Keep `.env` private; it is ignored by Git. The app requires both `DATABASE_URL`
-and `SECRET_KEY` and will not start if either is missing.
+Replace the database placeholders with your PostgreSQL connection details. Generate a strong secret key with:
 
-For Vercel, add `DATABASE_URL` and `SECRET_KEY` under **Project Settings >
-Environment Variables** for each deployment environment you use, then redeploy.
-Vercel does not use your local `.env` file. Keep `FLASK_DEBUG` disabled in
-production.
+```powershell
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
-`python init_db.py` creates missing tables in the configured PostgreSQL
-database; it does not transfer records from the old MySQL database. Export and
-migrate any existing data separately before switching production traffic.
+Copy the generated value into `SECRET_KEY`. Use the full connection string provided by your database host, including any required SSL parameters. URL-encode special characters in the database username or password. Do not put spaces around `=` in `.env`.
 
-For an existing database, apply schema migrations before deploying application
-changes:
+The app will not start unless both `DATABASE_URL` and `SECRET_KEY` are set. Keep `.env` private; it is excluded from Git.
+
+## Database setup
+
+The migration history starts with a baseline for an **existing schema**. That baseline does not create the core tables. Choose the setup path that matches your database.
+
+### New, empty database
+
+Create the tables from the current SQLAlchemy models once:
+
+```powershell
+flask --app app shell
+```
+
+At the Python prompt, run:
+
+```python
+from models import db
+db.create_all()
+exit()
+```
+
+`db.create_all()` also creates the indexes defined by the models. Mark the current migration version as applied so the index migration does not try to create those indexes again:
+
+```powershell
+flask --app app db stamp head
+```
+
+### Existing database
+
+Back up the database, then apply pending migrations:
 
 ```powershell
 flask --app app db upgrade
 ```
 
-This adds indexes used by attendance, leave, and payroll lists and dashboard
-queries. Back up the production database before applying schema changes.
+The current migration adds indexes for attendance, leave, and payroll queries. The baseline migration assumes the core tables are already present; it does not migrate records from another database engine. If you are moving data from MySQL or another database, export and migrate that data separately.
 
-### Create tables and run
+> **Note:** Use migrations to change an established database schema. Do not run `db.create_all()` against an existing production database.
 
-Create the database tables:
+## Create the first administrator
 
-```powershell
-python init_db.py
-```
-
-Create the first administrator account from the command line. There is no
-public sign-up page:
+There is no public sign-up page. Create the initial administrator interactively:
 
 ```powershell
 flask --app app create-admin
 ```
 
-The command prompts for an administrator username, email, and password. After
-the first administrator signs in, they can create administrator and HR
-accounts from **Users & Roles**, add employee accounts from **Add Employee**,
-or assign an existing account the employee role in **Users & Roles** and
-complete its linked employee profile, including position and department.
+Enter an administrator username, email, and password when prompted. Passwords must be at least 8 characters. After signing in, administrators can manage accounts and roles from **Users & Roles**. Employees should be created through **Add Employee** so each employee account is linked to an employee record.
 
-Start the development server:
+## Run the application
+
+Start the local development server:
 
 ```powershell
 python app.py
 ```
 
-The app is served at <http://127.0.0.1:5000/>.
+Open <http://127.0.0.1:5000/> in your browser. Press `Ctrl+C` in the terminal to stop the server.
 
-## Features and routes
+## Roles and access
 
-| Feature | URL prefix | Description |
+| Role | Typical access |
+| --- | --- |
+| **Administrator** | Manage user accounts and roles, employee profiles, departments, attendance, leave, and payroll. |
+| **HR** | Manage employee employment details and departments, manage attendance, and review leave requests. HR cannot manage administrator/HR accounts or employee login credentials. |
+| **Employee** | View their own employee details, attendance, leave, and payroll; submit their own leave requests; update their profile. |
+
+All application pages require sign-in. Users are redirected to a role-specific home page after signing in. Payroll history cannot be deleted.
+
+## Main pages
+
+| Page | URL | Access |
 | --- | --- | --- |
-| Employees | `/employees` | List, view, and edit employee records; administrators and HR can add employee accounts and assign employees to departments; only administrators can link existing accounts or delete employee accounts |
-| Departments | `/departments` | List, view, add, edit, and delete departments without assigned employees |
-| Attendance | `/attendance` | List, view, add, edit, and delete attendance records |
-| Leave | `/leaves` | List, view, submit, update status, and delete leave requests |
-| Payroll | `/payroll` | List, view, add, and edit payroll records; payroll history cannot be deleted |
-| Users & Roles | `/users` | Admin-only account creation, account editing, role assignment, and account deletion when no payroll history exists; `/users/profile` is available to all signed-in users |
-| Employee Home | `/employee/home` | Employee portal with personal record summaries |
-| HR Home | `/hr/home` | HR dashboard with management counts and shortcuts |
-| Admin Dashboard | `/` | Organization counts and management shortcuts |
+| Sign in | `/login` | Public |
+| Admin dashboard | `/` | Administrator |
+| Employee portal | `/employee/home` | Employee |
+| HR dashboard | `/hr/home` | HR |
+| Employees | `/employees/` | Role-dependent |
+| Departments | `/departments/` | Administrator and HR |
+| Attendance | `/attendance/` | Role-dependent |
+| Leave requests | `/leaves/` | Role-dependent |
+| Payroll | `/payroll/` | Role-dependent |
+| Users & Roles | `/users/` | Administrator |
+| Edit profile | `/users/profile` | Signed-in users |
+| Users API | `/users/api` | Administrator |
 
-All application pages require sign-in. Administrators manage user accounts and
-roles. Administrators and HR can add employees; this creates only an
-employee-role account linked to the new employee record. HR can view and edit
-employee employment details, assign employees to departments, manage
-departments, and review, approve, or reject leave requests. HR can view all
-accounts in the employee directory but can only view or edit records linked to
-employee-role accounts. HR cannot create or manage administrator or HR
-accounts, edit employee login credentials, link existing user accounts to
-employee records, or delete employees. Administrators can manage user account
-details and roles, employee profiles (including salary,
-department, position, names, and login credentials), and payroll. Employee users
-can view only their own employee information, department, attendance, leave
-requests, and payroll; they can submit leave requests for themselves but cannot
-manage employee records. HR and administrators can manage attendance and add
-and edit payroll records; payroll history is not deletable. Employee accounts
-are created through
-**Add Employee** so every employee login is linked to an employee record. All
-signed-in users can update their username, email, and password from **Edit
-profile**. Every POST form requires a valid CSRF token. Employee users land on
-the `/employee/home` portal and HR users land on the `/hr/home` dashboard after
-signing in; administrators land on the organization dashboard. The
-administrator-only users API is available at `/users/api`.
+## Run tests
+
+Run the test suite from the project root:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+## Production notes
+
+- Set `DATABASE_URL` and a strong `SECRET_KEY` in your hosting provider's environment settings. Do not rely on a local `.env` file in production.
+- Disable debug mode in production by setting `FLASK_DEBUG=0` or leaving it unset.
+- Back up the database before applying migrations.
+- If deploying on Vercel, configure the environment variables for each deployment environment and redeploy after changing them.
+
+## Project structure
+
+```text
+.
+├── app.py                 # Flask app setup, authentication checks, and CLI commands
+├── models/                # SQLAlchemy models
+├── routes/                # Feature blueprints and access-control helpers
+├── templates/             # Jinja pages, organized by feature
+├── static/                # CSS and JavaScript
+├── migrations/            # Alembic/Flask-Migrate schema history
+├── tests/                 # Unit and schema tests
+├── requirements.txt       # Python dependencies
+└── .gitignore
+```
