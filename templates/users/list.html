@@ -39,12 +39,10 @@
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <select name="role" aria-label="Role for {{ user.username }}">
                                     {% for role in roles %}
-                                    {% if role != 'employee' or user.employee or user.role == 'employee' %}
                                     <option value="{{ role }}"
                                             {% if user.role == role %}selected{% endif %}>
                                         {{ role|capitalize }}
                                     </option>
-                                    {% endif %}
                                     {% endfor %}
                                 </select>
                                 <button class="button button-secondary button-small"

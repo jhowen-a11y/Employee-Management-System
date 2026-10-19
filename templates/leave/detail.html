@@ -22,16 +22,13 @@
     <p><strong>Dates:</strong> {{ leave.start_date }} to {{ leave.end_date }}</p>
     <p><strong>Reason:</strong> {{ leave.reason or 'No reason provided.' }}</p>
     <p><strong>Status:</strong> {{ leave.status }}</p>
-    {% if current_user.role != 'employee' %}
+    {% if current_user.role != 'employee' and leave.status == 'Pending' %}
     <form method="post" action="{{ url_for('leave.update_leave_status', leave_id=leave.id) }}" class="role-form">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <label for="status">Update status</label>
-        <select id="status" name="status">
-            {% for status in ('Pending', 'Approved', 'Rejected') %}
-            <option value="{{ status }}" {% if leave.status == status %}selected{% endif %}>{{ status }}</option>
-            {% endfor %}
-        </select>
-        <button class="button button-primary button-small" type="submit">Save status</button>
+        <button class="button button-primary button-small" type="submit"
+                name="status" value="Approved">Approve</button>
+        <button class="button button-danger button-small" type="submit"
+                name="status" value="Rejected">Reject</button>
     </form>
     {% endif %}
     <p><a class="button button-secondary" href="{{ url_for('leave.leave_list') }}">Back to leave requests</a></p>

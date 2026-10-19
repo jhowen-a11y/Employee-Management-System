@@ -27,12 +27,10 @@
             <label for="role">Role</label>
             <select id="role" name="role" required>
                 {% for role in roles %}
-                {% if role != 'employee' or user.employee or user.role == 'employee' %}
                 <option value="{{ role }}"
-                        {% if request.form.get('role', user.role) == role %}selected{% endif %}>
+                        {% if request.form.get('role', selected_role) == role %}selected{% endif %}>
                     {{ role|capitalize }}
                 </option>
-                {% endif %}
                 {% endfor %}
             </select>
         </div>
@@ -42,11 +40,46 @@
                    minlength="8" autocomplete="new-password">
             <small>Leave blank to keep the current password. At least 8 characters if set.</small>
         </div>
+        <div class="employee-fields form-grid" id="employeeFields">
+            <h2 class="form-section-heading">Employee profile</h2>
+            <div class="form-field">
+                <label for="first_name">First name</label>
+                <input id="first_name" name="first_name" maxlength="50"
+                       value="{{ request.form.get('first_name', user.employee.first_name if user.employee else '') }}">
+            </div>
+            <div class="form-field">
+                <label for="last_name">Last name</label>
+                <input id="last_name" name="last_name" maxlength="50"
+                       value="{{ request.form.get('last_name', user.employee.last_name if user.employee else '') }}">
+            </div>
+            <div class="form-field">
+                <label for="position">Position</label>
+                <input id="position" name="position" maxlength="100"
+                       value="{{ request.form.get('position', user.employee.position if user.employee else '') }}">
+            </div>
+            <div class="form-field">
+                <label for="department_id">Department</label>
+                <select id="department_id" name="department_id">
+                    <option value="">Select department</option>
+                    {% for department in departments %}
+                    <option value="{{ department.id }}"
+                            {% if request.form.get('department_id', user.employee.department_id if user.employee else 0)|int == department.id %}selected{% endif %}>
+                        {{ department.department_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="salary">Annual salary</label>
+                <input id="salary" name="salary" type="number" min="0" step="0.01"
+                       value="{{ request.form.get('salary', user.employee.salary if user.employee else '') }}">
+            </div>
+        </div>
         {% if user.employee %}
         <div class="form-field">
             <span>Employee record</span>
             <a href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
-                Edit salary, department, and employee details
+                Edit employee details
             </a>
         </div>
         {% endif %}
@@ -56,4 +89,22 @@
         </div>
     </form>
 </section>
+<script>
+    const roleSelect = document.getElementById("role");
+    const employeeFields = document.getElementById("employeeFields");
+    const employeeInputs = employeeFields.querySelectorAll(
+        "input, select"
+    );
+
+    function updateEmployeeFields() {
+        const isEmployee = roleSelect.value === "employee";
+        employeeFields.hidden = !isEmployee;
+        employeeInputs.forEach((input) => {
+            input.required = isEmployee;
+        });
+    }
+
+    roleSelect.addEventListener("change", updateEmployeeFields);
+    updateEmployeeFields();
+</script>
 {% endblock %}

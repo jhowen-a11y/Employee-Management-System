@@ -6,16 +6,16 @@
 {% block content %}
 <div class="page-heading page-heading-row">
     <div>
-        <h1>{% if current_user.role == 'employee' %}My Information{% elif current_user.role == 'admin' %}Users and Employees{% elif current_user.role == 'hr' %}HR Employee Directory{% else %}Employees{% endif %}</h1>
-        <p>{% if current_user.role == 'employee' %}Your employee record.{% elif current_user.role in ('admin', 'hr') %}User accounts and linked employee records.{% else %}Employee directory and records.{% endif %}</p>
+            <h1>{% if current_user.role == 'employee' %}My Information{% elif current_user.role == 'admin' %}Users and Employees{% elif current_user.role == 'hr' %}HR Employee Directory{% else %}Employees{% endif %}</h1>
+            <p>{% if current_user.role == 'employee' %}Your employee record.{% elif current_user.role in ('admin', 'hr') %}User accounts and linked employee records.{% else %}Employee directory and records.{% endif %}</p>
     </div>
-    {% if current_user.role == 'admin' %}
+        {% if current_user.role in ('admin', 'hr') %}
     <a class="button button-primary" href="{{ url_for('employee.add_employee') }}">Add employee</a>
     {% endif %}
 </div>
 <section class="panel table-panel">
     <div class="table-scroll">
-        {% if current_user.role in ('admin', 'hr') %}
+            {% if current_user.role in ('admin', 'hr') %}
         <table class="data-table">
             <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Employee</th><th>Position</th><th>Department</th><th>Actions</th></tr></thead>
             <tbody>
@@ -35,11 +35,17 @@
                 <td>{{ user.employee.department.department_name if user.employee else '—' }}</td>
                 <td>
                     <div class="table-actions">
-                        <a class="button button-secondary button-small" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
-                        {% if user.employee %}
-                        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
                         {% if current_user.role == 'admin' %}
+                        <a class="button button-secondary button-small" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
+                        {% endif %}
+                        {% if user.employee %}
+                        {% if current_user.role == 'admin' or user.role == 'employee' %}
+                        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
+                        {% endif %}
+                        {% if current_user.role == 'admin' or (current_user.role == 'hr' and user.role == 'employee') %}
                         <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">Edit</a>
+                        {% endif %}
+                        {% if current_user.role == 'admin' %}
                         <form method="post" action="{{ url_for('employee.delete_employee', employee_id=user.employee.id) }}"
                               class="inline-form" data-confirm-delete
                               data-delete-title="Delete employee and account?"
@@ -54,7 +60,7 @@
                         {% elif current_user.role == 'admin' %}
                         <a class="button button-secondary button-small" href="{{ url_for('employee.link_user_to_employee', user_id=user.id) }}">Assign department</a>
                         {% else %}
-                        <span class="role-label">No employee record</span>
+                        <span class="role-label">{% if user.role == 'employee' %}No employee record{% else %}{{ user.role|capitalize }} account{% endif %}</span>
                         {% endif %}
                     </div>
                 </td>
@@ -77,8 +83,10 @@
                 <td>
                     <div class="table-actions">
                         <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">View</a>
-                        {% if current_user.role == 'admin' %}
+                        {% if current_user.role in ('admin', 'hr') %}
                         <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit</a>
+                        {% endif %}
+                        {% if current_user.role == 'admin' %}
                         <form method="post" action="{{ url_for('employee.delete_employee', employee_id=employee.id) }}"
                               class="inline-form" data-confirm-delete
                               data-delete-title="Delete employee and account?"

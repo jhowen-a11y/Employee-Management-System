@@ -85,8 +85,9 @@ flask --app app create-admin
 
 The command prompts for an administrator username, email, and password. After
 the first administrator signs in, they can create administrator and HR
-accounts from **Users & Roles**, add employees from **Add Employee**, or
-associate an existing account with a department from the **Employees** list.
+accounts from **Users & Roles**, add employee accounts from **Add Employee**,
+or assign an existing account the employee role in **Users & Roles** and
+complete its linked employee profile, including position and department.
 
 Start the development server:
 
@@ -100,7 +101,7 @@ The app is served at <http://127.0.0.1:5000/>.
 
 | Feature | URL prefix | Description |
 | --- | --- | --- |
-| Employees | `/employees` | List and view records; administrators can add employee accounts, assign existing users to a department, and delete employee accounts when no payroll history exists |
+| Employees | `/employees` | List, view, and edit employee records; administrators and HR can add employee accounts and assign employees to departments; only administrators can link existing accounts or delete employee accounts |
 | Departments | `/departments` | List, view, add, edit, and delete departments without assigned employees |
 | Attendance | `/attendance` | List, view, add, edit, and delete attendance records |
 | Leave | `/leaves` | List, view, submit, update status, and delete leave requests |
@@ -110,14 +111,20 @@ The app is served at <http://127.0.0.1:5000/>.
 | HR Home | `/hr/home` | HR dashboard with management counts and shortcuts |
 | Admin Dashboard | `/` | Organization counts and management shortcuts |
 
-All application pages require sign-in. Administrators manage accounts and roles;
-only administrators can add or edit employee accounts. Employee users can view
-only their own employee information, department, attendance, leave requests, and
-payroll; they can submit leave requests for themselves but cannot manage
-employee records. HR can manage attendance, departments, leave, and payroll but
-cannot create employee accounts or manage users and roles. Administrators can
-manage user account details and roles, employee profiles (including salary,
-department, position, and names), and payroll. HR and administrators can add
+All application pages require sign-in. Administrators manage user accounts and
+roles. Administrators and HR can add employees; this creates only an
+employee-role account linked to the new employee record. HR can view and edit
+employee employment details, assign employees to departments, manage
+departments, and review, approve, or reject leave requests. HR can view all
+accounts in the employee directory but can only view or edit records linked to
+employee-role accounts. HR cannot create or manage administrator or HR
+accounts, edit employee login credentials, link existing user accounts to
+employee records, or delete employees. Administrators can manage user account
+details and roles, employee profiles (including salary,
+department, position, names, and login credentials), and payroll. Employee users
+can view only their own employee information, department, attendance, leave
+requests, and payroll; they can submit leave requests for themselves but cannot
+manage employee records. HR and administrators can manage attendance and add
 and edit payroll records; payroll history is not deletable. Employee accounts
 are created through
 **Add Employee** so every employee login is linked to an employee record. All

@@ -4,26 +4,125 @@
 {% block header_title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="page-heading">
-    <h1>Welcome, {{ current_user.username }}</h1>
-    <p>Organization overview and management shortcuts.</p>
-</div>
-<section class="summary-grid">
-    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ user_count }}</strong><span>Accounts (all roles)</span></a>
-    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ employee_count }}</strong><span>Employee records</span></a>
-    <a class="summary-card" href="{{ url_for('department.department_list') }}"><strong>{{ department_count }}</strong><span>Departments</span></a>
-    <a class="summary-card" href="{{ url_for('attendance.attendance_list') }}"><strong>{{ attendance_count }}</strong><span>Attendance records</span></a>
-    <a class="summary-card" href="{{ url_for('leave.leave_list') }}"><strong>{{ pending_leave_count }}</strong><span>Pending leave requests</span></a>
-    <a class="summary-card" href="{{ url_for('payroll.payroll_list') }}"><strong>{{ payroll_count }}</strong><span>Payroll records</span></a>
+<section class="hr-welcome">
+    <div class="hr-welcome-copy">
+        <span class="hr-eyebrow">ADMINISTRATION · ORGANIZATION OVERVIEW</span>
+        <h1>Welcome back, {{ current_user.username }}.</h1>
+        <p>Your organization dashboard. Review operations and manage the employee system from one place.</p>
+    </div>
+    <div class="hr-attention">
+        <span class="hr-attention-icon" aria-hidden="true">
+            <i data-lucide="inbox"></i>
+        </span>
+        <div class="hr-attention-copy">
+            <strong>{{ pending_leave_count }} leave {{ 'request' if pending_leave_count == 1 else 'requests' }} need review</strong>
+            <span>{{ user_count }} accounts across all roles</span>
+        </div>
+        <a href="{{ url_for('leave.leave_list') }}">
+            Review leave <i data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+    </div>
+    <div class="hr-welcome-art" aria-hidden="true">
+        <i data-lucide="layout-dashboard"></i>
+    </div>
 </section>
-<section class="welcome-card">
-    <h2>Quick actions</h2>
-    <p>
-        <a class="button button-primary" href="{{ url_for('employee.add_employee') }}">Add employee</a>
-        <a class="button button-secondary" href="{{ url_for('department.add_department') }}">Add department</a>
-        <a class="button button-secondary" href="{{ url_for('attendance.add_attendance') }}">Record attendance</a>
-        <a class="button button-secondary" href="{{ url_for('payroll.add_payroll') }}">Add payroll</a>
-        <a class="button button-secondary" href="{{ url_for('users.add_user') }}">Add user</a>
-    </p>
+
+<section class="hr-overview" aria-labelledby="admin-overview-title">
+    <div class="hr-section-heading">
+        <div>
+            <span class="hr-eyebrow">AT A GLANCE</span>
+            <h2 id="admin-overview-title">Organization overview</h2>
+        </div>
+    </div>
+    <div class="hr-stat-grid">
+        <a class="hr-stat-card hr-stat-employees" href="{{ url_for('employee.employee_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="users-round" aria-hidden="true"></i></span>
+            <strong>{{ employee_count }}</strong>
+            <span class="hr-stat-label">Employee records</span>
+            <small>People in your directory</small>
+        </a>
+        <a class="hr-stat-card hr-stat-accounts" href="{{ url_for('employee.employee_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="contact-round" aria-hidden="true"></i></span>
+            <strong>{{ user_count }}</strong>
+            <span>Accounts (all roles)</span>
+            <small>Employee, HR, and admin logins</small>
+        </a>
+        <a class="hr-stat-card" href="{{ url_for('department.department_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+            <strong>{{ department_count }}</strong>
+            <span class="hr-stat-label">Departments</span>
+            <small>Organization groups</small>
+        </a>
+        <a class="hr-stat-card" href="{{ url_for('attendance.attendance_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="calendar-check" aria-hidden="true"></i></span>
+            <strong>{{ attendance_count }}</strong>
+            <span class="hr-stat-label">Attendance records</span>
+            <small>Employee time entries</small>
+        </a>
+        <a class="hr-stat-card hr-stat-leave" href="{{ url_for('leave.leave_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="calendar-clock" aria-hidden="true"></i></span>
+            <strong>{{ pending_leave_count }}</strong>
+            <span class="hr-stat-label">Pending leave</span>
+            <small>Applications to review</small>
+        </a>
+        <a class="hr-stat-card hr-stat-payroll" href="{{ url_for('payroll.payroll_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="wallet-cards" aria-hidden="true"></i></span>
+            <strong>{{ payroll_count }}</strong>
+            <span class="hr-stat-label">Payroll records</span>
+            <small>Employee pay history</small>
+        </a>
+    </div>
+</section>
+
+<section class="hr-tasks" aria-labelledby="admin-tasks-title">
+    <div class="hr-section-heading">
+        <div>
+            <span class="hr-eyebrow">MANAGEMENT</span>
+            <h2 id="admin-tasks-title">Quick actions</h2>
+        </div>
+        <p>Common tools for organization administration.</p>
+    </div>
+    <div class="hr-task-grid">
+        <a class="hr-task-card" href="{{ url_for('employee.employee_list') }}">
+            <span class="hr-task-icon"><i data-lucide="contact-round" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Employee directory</strong><small>View accounts and employee records</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('users.user_list') }}">
+            <span class="hr-task-icon"><i data-lucide="user-cog" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Users &amp; roles</strong><small>Manage accounts and access roles</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('department.department_list') }}">
+            <span class="hr-task-icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Manage departments</strong><small>Maintain teams and organization groups</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('attendance.attendance_list') }}">
+            <span class="hr-task-icon"><i data-lucide="clipboard-check" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Attendance</strong><small>Review employee time entries</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('leave.leave_list') }}">
+            <span class="hr-task-icon"><i data-lucide="calendar-heart" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Review leave requests</strong><small>Approve or reject employee requests</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('payroll.payroll_list') }}">
+            <span class="hr-task-icon"><i data-lucide="wallet-cards" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Payroll operations</strong><small>Review payroll and payment status</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card hr-task-primary" href="{{ url_for('employee.add_employee') }}">
+            <span class="hr-task-icon"><i data-lucide="user-round-plus" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Add employee</strong><small>Create an employee record and account</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('users.add_user') }}">
+            <span class="hr-task-icon"><i data-lucide="user-plus" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Add account</strong><small>Create an account with its role</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+    </div>
 </section>
 {% endblock %}

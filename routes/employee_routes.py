@@ -11,7 +11,11 @@ from models.department import Department
 from models.employee import Employee
 from models.user import User
 from routes.auth_routes import admin_required
-from routes.employee_access import current_employee, delete_employee_account
+from routes.employee_access import (
+    current_employee,
+    delete_employee_account,
+    management_required,
+)
 
 
 employee_bp = Blueprint(
@@ -41,6 +45,10 @@ def employee_list():
     employee_query = Employee.query
     if current_user.role == User.EMPLOYEE:
         employee_query = employee_query.filter_by(user_id=current_user.id)
+    elif current_user.role == User.HR:
+        employee_query = employee_query.join(Employee.user).filter(
+            User.role == User.EMPLOYEE
+        )
     employees = employee_query.order_by(
         Employee.last_name.asc(),
         Employee.first_name.asc(),
@@ -62,7 +70,7 @@ def employee_list():
 
 
 @employee_bp.route("/add", methods=["GET", "POST"])
-@admin_required
+@management_required
 def add_employee():
     # Create an employee and its associated user account.
     departments = Department.query.order_by(
@@ -115,7 +123,8 @@ def add_employee():
             user = User(
                 username=username,
                 email=email,
-                password_hash=generate_password_hash(password)
+                password_hash=generate_password_hash(password),
+                role=User.EMPLOYEE,
             )
             employee = Employee(
                 user=user,
@@ -217,6 +226,10 @@ def employee_detail(employee_id):
         employee_query = employee_query.filter_by(
             id=own_employee.id if own_employee else None
         )
+    elif current_user.role == User.HR:
+        employee_query = employee_query.join(Employee.user).filter(
+            User.role == User.EMPLOYEE
+        )
     employee = employee_query.first_or_404()
 
     return render_template(
@@ -226,17 +239,31 @@ def employee_detail(employee_id):
 
 
 @employee_bp.route("/<int:employee_id>/edit", methods=["GET", "POST"])
-@admin_required
+@management_required
 def edit_employee(employee_id):
     # Update an employee's details and associated user account.
-    employee = db.get_or_404(Employee, employee_id)
+    employee_query = Employee.query.filter_by(id=employee_id)
+    if current_user.role == User.HR:
+        employee_query = employee_query.join(Employee.user).filter(
+            User.role == User.EMPLOYEE
+        )
+    employee = employee_query.first_or_404()
     departments = Department.query.order_by(
         Department.department_name.asc()
     ).all()
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        email = request.form.get("email", "").strip()
+        is_admin = current_user.role == User.ADMIN
+        username = (
+            request.form.get("username", "").strip()
+            if is_admin
+            else employee.user.username
+        )
+        email = (
+            request.form.get("email", "").strip()
+            if is_admin
+            else employee.user.email
+        )
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         position = request.form.get("position", "").strip()
@@ -255,20 +282,29 @@ def edit_employee(employee_id):
         except (InvalidOperation, ValueError):
             salary = None
 
-        duplicate_username = User.query.filter(
-            User.username == username,
-            User.id != employee.user_id
-        ).first()
-        duplicate_email = User.query.filter(
-            User.email == email,
-            User.id != employee.user_id
-        ).first()
+        duplicate_username = (
+            User.query.filter(
+                User.username == username,
+                User.id != employee.user_id
+            ).first()
+            if is_admin
+            else None
+        )
+        duplicate_email = (
+            User.query.filter(
+                User.email == email,
+                User.id != employee.user_id
+            ).first()
+            if is_admin
+            else None
+        )
 
-        if not all((username, email, first_name, last_name, position)):
+        if not all((first_name, last_name, position)) or (
+            is_admin and not all((username, email))
+        ):
             flash("Complete all required fields.", "error")
         elif (
-            len(username) > 50
-            or len(email) > 120
+            (is_admin and (len(username) > 50 or len(email) > 120))
             or len(first_name) > 50
             or len(last_name) > 50
             or len(position) > 100
@@ -283,8 +319,9 @@ def edit_employee(employee_id):
         elif duplicate_email:
             flash("That email address is already in use.", "error")
         else:
-            employee.user.username = username
-            employee.user.email = email
+            if is_admin:
+                employee.user.username = username
+                employee.user.email = email
             employee.first_name = first_name
             employee.last_name = last_name
             employee.position = position

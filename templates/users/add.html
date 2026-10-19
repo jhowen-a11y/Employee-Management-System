@@ -6,7 +6,7 @@
 {% block content %}
 <div class="page-heading">
     <h1>Create a user account</h1>
-    <p>Create administrator or HR accounts here. Use Add Employee to create an employee account linked to an employee record.</p>
+    <p>Create an account and choose its role. Employee accounts include a linked employee profile.</p>
 </div>
 
 <section class="panel form-panel">
@@ -44,12 +44,66 @@
             </select>
         </div>
 
+        <div class="employee-fields form-grid" id="employeeFields">
+            <h2 class="form-section-heading">Employee profile</h2>
+            <div class="form-field">
+                <label for="first_name">First name</label>
+                <input id="first_name" name="first_name" maxlength="50"
+                       value="{{ request.form.get('first_name', '') }}">
+            </div>
+            <div class="form-field">
+                <label for="last_name">Last name</label>
+                <input id="last_name" name="last_name" maxlength="50"
+                       value="{{ request.form.get('last_name', '') }}">
+            </div>
+            <div class="form-field">
+                <label for="position">Position</label>
+                <input id="position" name="position" maxlength="100"
+                       value="{{ request.form.get('position', '') }}">
+            </div>
+            <div class="form-field">
+                <label for="department_id">Department</label>
+                <select id="department_id" name="department_id">
+                    <option value="">Select department</option>
+                    {% for department in departments %}
+                    <option value="{{ department.id }}"
+                            {% if request.form.get('department_id', '0')|int == department.id %}selected{% endif %}>
+                        {{ department.department_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="salary">Annual salary</label>
+                <input id="salary" name="salary" type="number" min="0" step="0.01"
+                       value="{{ request.form.get('salary', '') }}">
+            </div>
+        </div>
+
         <div class="form-actions">
-            <button class="button button-primary" type="submit">Create user</button>
+            <button class="button button-primary" type="submit">Create account</button>
             <a class="button button-secondary" href="{{ url_for('users.user_list') }}">
                 Cancel
             </a>
         </div>
     </form>
 </section>
+<script>
+    const roleSelect = document.getElementById("role");
+    const employeeFields = document.getElementById("employeeFields");
+    const employeeInputs = employeeFields.querySelectorAll(
+        "input, select"
+    );
+
+    function updateEmployeeFields() {
+        const isEmployee = roleSelect.value === "employee";
+        employeeFields.hidden = !isEmployee;
+        employeeInputs.forEach((input) => {
+            input.required = isEmployee;
+        });
+    }
+
+    roleSelect.addEventListener("change", updateEmployeeFields);
+    updateEmployeeFields();
+</script>
 {% endblock %}

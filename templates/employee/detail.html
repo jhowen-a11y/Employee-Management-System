@@ -9,9 +9,10 @@
         <h1>Employee Profile</h1>
         <p>Employment information and account details.</p>
     </div>
-    {% if current_user.role == 'admin' %}
+    {% if current_user.role in ('admin', 'hr') %}
     <div class="page-heading-actions">
         <a class="button button-primary" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit employee</a>
+        {% if current_user.role == 'admin' %}
         <form method="post" action="{{ url_for('employee.delete_employee', employee_id=employee.id) }}"
               data-confirm-delete data-delete-title="Delete employee and account?"
               data-delete-message="The employee record, login account, attendance, and leave requests will be permanently removed. Payroll history prevents deletion.">
@@ -20,6 +21,7 @@
                 <i data-lucide="trash-2" aria-hidden="true"></i>Delete employee
             </button>
         </form>
+        {% endif %}
     </div>
     {% endif %}
 </div>

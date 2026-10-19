@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from flask import (
     Blueprint,
     abort,
@@ -14,12 +16,13 @@ from sqlalchemy.orm import selectinload
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from models import db
+from models.department import Department
 from models.employee import Employee
 from models.user import User
 from routes.employee_access import delete_employee_account
 
 user_bp = Blueprint("users", __name__, url_prefix="/users")
-ACCOUNT_CREATION_ROLES = (User.ADMIN, User.HR)
+ACCOUNT_CREATION_ROLES = User.ROLES
 
 
 @user_bp.before_request
@@ -105,6 +108,11 @@ def edit_user(user_id):
         email = request.form.get("email", "").strip()
         role = request.form.get("role", "").strip()
         new_password = request.form.get("new_password", "")
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+        position = request.form.get("position", "").strip()
+        department_id = request.form.get("department_id", type=int)
+        salary_value = request.form.get("salary", "").strip()
         duplicate_username = User.query.filter(
             User.username == username,
             User.id != user.id,
@@ -113,6 +121,22 @@ def edit_user(user_id):
             User.email == email,
             User.id != user.id,
         ).first()
+        try:
+            salary = Decimal(salary_value)
+            if (
+                not salary.is_finite()
+                or salary < 0
+                or salary > Decimal("99999999.99")
+                or salary.quantize(Decimal("0.01")) != salary
+            ):
+                raise InvalidOperation
+        except (InvalidOperation, ValueError):
+            salary = None
+        department = (
+            db.session.get(Department, department_id)
+            if department_id
+            else None
+        )
 
         if not username or not email:
             flash("Username and email are required.", "error")
@@ -126,12 +150,22 @@ def edit_user(user_id):
             flash("That email address is already in use.", "error")
         elif new_password and len(new_password) < 8:
             flash("The new password must be at least 8 characters.", "error")
-        elif role == User.EMPLOYEE and user.employee is None:
-            flash(
-                "Assign an employee record before setting this account "
-                "to the employee role.",
-                "error",
-            )
+        elif role == User.EMPLOYEE and not all(
+            (first_name, last_name, position)
+        ):
+            flash("Complete all required employee fields.", "error")
+        elif role == User.EMPLOYEE and (
+            len(first_name) > 50
+            or len(last_name) > 50
+            or len(position) > 100
+        ):
+            flash("One or more employee fields exceed their maximum length.", "error")
+        elif role == User.EMPLOYEE and department is None:
+            flash("Select a valid department.", "error")
+        elif role == User.EMPLOYEE and salary is None:
+            flash("Enter a valid, non-negative salary.", "error")
+        elif role not in User.ROLES:
+            flash("Select a valid role.", "error")
         elif user.id == current_user.id and role != user.role:
             flash("You cannot change your own role.", "error")
         elif user.role == User.ADMIN and role != User.ADMIN and (
@@ -147,6 +181,21 @@ def edit_user(user_id):
             user.role = role
             if new_password:
                 user.password_hash = generate_password_hash(new_password)
+            if role == User.EMPLOYEE:
+                if user.employee is None:
+                    user.employee = Employee(
+                        first_name=first_name,
+                        last_name=last_name,
+                        position=position,
+                        salary=salary,
+                        department=department,
+                    )
+                else:
+                    user.employee.first_name = first_name
+                    user.employee.last_name = last_name
+                    user.employee.position = position
+                    user.employee.salary = salary
+                    user.employee.department = department
             db.session.commit()
             flash("User account updated successfully.", "success")
             return redirect(url_for("users.user_list"))
@@ -155,17 +204,44 @@ def edit_user(user_id):
         "users/edit.html",
         user=user,
         roles=User.ROLES,
+        departments=Department.query.order_by(
+            Department.department_name.asc()
+        ).all(),
+        selected_role=request.args.get("role", user.role),
     )
 
 
 @user_bp.route("/add", methods=["GET", "POST"])
 def add_user():
-    # Create a new administrator or HR user account.
+    # Create a management account or an employee account with its profile.
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "").strip()
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+        position = request.form.get("position", "").strip()
+        department_id = request.form.get("department_id", type=int)
+        salary_value = request.form.get("salary", "").strip()
+
+        try:
+            salary = Decimal(salary_value)
+            if (
+                not salary.is_finite()
+                or salary < 0
+                or salary > Decimal("99999999.99")
+                or salary.quantize(Decimal("0.01")) != salary
+            ):
+                raise InvalidOperation
+        except (InvalidOperation, ValueError):
+            salary = None
+
+        department = (
+            db.session.get(Department, department_id)
+            if department_id
+            else None
+        )
 
         if not username or not email or not password:
             flash("Complete all required fields.", "error")
@@ -174,11 +250,21 @@ def add_user():
         elif len(password) < 8:
             flash("The account password must be at least 8 characters.", "error")
         elif role not in ACCOUNT_CREATION_ROLES:
-            flash(
-                "Create employee accounts from Add Employee so they are "
-                "linked to an employee record.",
-                "error",
-            )
+            flash("Select a valid role.", "error")
+        elif role == User.EMPLOYEE and not all(
+            (first_name, last_name, position)
+        ):
+            flash("Complete all required employee fields.", "error")
+        elif role == User.EMPLOYEE and (
+            len(first_name) > 50
+            or len(last_name) > 50
+            or len(position) > 100
+        ):
+            flash("One or more employee fields exceed their maximum length.", "error")
+        elif role == User.EMPLOYEE and department is None:
+            flash("Select a valid department.", "error")
+        elif role == User.EMPLOYEE and salary is None:
+            flash("Enter a valid, non-negative salary.", "error")
         elif User.query.filter_by(username=username).first():
             flash("That username is already in use.", "error")
         elif User.query.filter_by(email=email).first():
@@ -190,14 +276,30 @@ def add_user():
                 password_hash=generate_password_hash(password),
                 role=role,
             )
+            if role == User.EMPLOYEE:
+                user.employee = Employee(
+                    first_name=first_name,
+                    last_name=last_name,
+                    position=position,
+                    department=department,
+                    salary=salary,
+                )
             db.session.add(user)
             db.session.commit()
-            flash("User added successfully.", "success")
+            flash(
+                "Employee account added successfully."
+                if role == User.EMPLOYEE
+                else "User added successfully.",
+                "success",
+            )
             return redirect(url_for("users.user_list"))
 
     return render_template(
         "users/add.html",
         roles=ACCOUNT_CREATION_ROLES,
+        departments=Department.query.order_by(
+            Department.department_name.asc()
+        ).all(),
     )
 
 
@@ -209,13 +311,9 @@ def update_user_role(user_id):
 
     if role not in User.ROLES:
         flash("Select a valid role.", "error")
-    elif role == User.EMPLOYEE and Employee.query.filter_by(
-        user_id=user.id
-    ).first() is None:
-        flash(
-            "This account has no employee record. Create or link an employee "
-            "record before assigning the employee role.",
-            "error",
+    elif role == User.EMPLOYEE and user.employee is None:
+        return redirect(
+            url_for("users.edit_user", user_id=user.id, role=User.EMPLOYEE)
         )
     elif user.id == current_user.id:
         flash("You cannot change your own role.", "error")

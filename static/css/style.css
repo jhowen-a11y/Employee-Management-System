@@ -302,6 +302,20 @@ body {
     font-size: 12px;
 }
 
+.employee-fields {
+    grid-column: 1 / -1;
+}
+
+.employee-fields[hidden] {
+    display: none;
+}
+
+.form-section-heading {
+    grid-column: 1 / -1;
+    color: #34394d;
+    font-size: 16px;
+}
+
 .form-actions {
     display: flex;
     align-items: center;

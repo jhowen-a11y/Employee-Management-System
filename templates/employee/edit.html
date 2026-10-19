@@ -4,7 +4,7 @@
 {% block header_title %}Edit Employee{% endblock %}
 
 {% block content %}
-<div class="page-heading"><h1>Edit employee</h1><p>Update this employee record and account details.</p></div>
+<div class="page-heading"><h1>Edit employee</h1><p>Update this employee's employment details{% if current_user.role == 'admin' %} and account details{% endif %}.</p></div>
 <section class="panel form-panel">
     <form method="post" class="form-grid">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -20,8 +20,10 @@
             </select>
         </div>
         <div class="form-field"><label for="salary">Annual salary</label><input id="salary" name="salary" type="number" min="0" step="0.01" value="{{ request.form.get('salary', employee.salary) }}" required></div>
+        {% if current_user.role == 'admin' %}
         <div class="form-field"><label for="username">Username</label><input id="username" name="username" maxlength="50" value="{{ request.form.get('username', employee.user.username) }}" required></div>
         <div class="form-field"><label for="email">Email</label><input id="email" name="email" type="email" maxlength="120" value="{{ request.form.get('email', employee.user.email) }}" required></div>
+        {% endif %}
         <div class="form-actions">
             <button class="button button-primary" type="submit">Save changes</button>
             <a class="button button-secondary" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">Cancel</a>
