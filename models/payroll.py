@@ -1,6 +1,6 @@
 
 from . import db
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import date, datetime
@@ -9,6 +9,15 @@ from decimal import Decimal
 
 class Payroll(db.Model):
     __tablename__ = "payroll"
+    __table_args__ = (
+        Index("ix_payroll_period_id", "pay_period_start", "id"),
+        Index(
+            "ix_payroll_employee_period_id",
+            "employee_id",
+            "pay_period_start",
+            "id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 

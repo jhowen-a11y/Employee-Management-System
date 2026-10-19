@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import os
 import secrets
@@ -5,6 +6,7 @@ from pathlib import Path
 
 
 import click
+from sqlalchemy import func, select
 from flask import Flask, abort, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
 from flask_login import LoginManager, current_user
@@ -41,6 +43,7 @@ def create_app(test_config=None):
         DEBUG=os.getenv("FLASK_DEBUG", "0").strip() == "1",
         SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL"),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SEND_FILE_MAX_AGE_DEFAULT=0,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
     )
@@ -50,6 +53,33 @@ def create_app(test_config=None):
         raise RuntimeError(
             "DATABASE_URL must be set in the environment or .env file."
         )
+
+    static_assets = ("css/style.css", "js/script.js")
+    static_asset_versions = {
+        filename: hashlib.sha256(
+            (Path(app.static_folder) / filename).read_bytes()
+        ).hexdigest()
+        for filename in static_assets
+    }
+
+    @app.context_processor
+    def static_asset_context():
+        return {"static_asset_version": static_asset_versions.__getitem__}
+
+    @app.after_request
+    def cache_versioned_static_assets(response):
+        if request.endpoint == "static" and response.status_code == 200:
+            filename = (request.view_args or {}).get("filename")
+            expected_version = static_asset_versions.get(filename)
+            if (
+                expected_version
+                and request.args.get("v") == expected_version
+            ):
+                response.cache_control.no_cache = None
+                response.cache_control.public = True
+                response.cache_control.max_age = 31536000
+                response.cache_control.immutable = True
+        return response
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -113,14 +143,37 @@ def create_app(test_config=None):
             return redirect(url_for("auth.employee_home"))
         if current_user.role == User.HR:
             return redirect(url_for("auth.hr_home"))
+        counts = db.session.execute(
+            select(
+                select(func.count(Employee.id))
+                .scalar_subquery()
+                .label("employee_count"),
+                select(func.count(Department.id))
+                .scalar_subquery()
+                .label("department_count"),
+                select(func.count(Attendance.id))
+                .scalar_subquery()
+                .label("attendance_count"),
+                select(func.count(Leave.id))
+                .where(Leave.status == "Pending")
+                .scalar_subquery()
+                .label("pending_leave_count"),
+                select(func.count(Payroll.id))
+                .scalar_subquery()
+                .label("payroll_count"),
+                select(func.count(User.id))
+                .scalar_subquery()
+                .label("user_count"),
+            )
+        ).one()
         return render_template(
             "admin/home.html",
-            employee_count=Employee.query.count(),
-            department_count=Department.query.count(),
-            attendance_count=Attendance.query.count(),
-            pending_leave_count=Leave.query.filter_by(status="Pending").count(),
-            payroll_count=Payroll.query.count(),
-            user_count=User.query.count(),
+            employee_count=counts.employee_count,
+            department_count=counts.department_count,
+            attendance_count=counts.attendance_count,
+            pending_leave_count=counts.pending_leave_count,
+            payroll_count=counts.payroll_count,
+            user_count=counts.user_count,
         )
 
     @app.cli.command("create-admin")

@@ -15,7 +15,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import func
+from sqlalchemy import func, select
 from werkzeug.security import check_password_hash
 
 from models import db
@@ -132,36 +132,54 @@ def hr_home():
     if current_user.role != User.HR:
         abort(403)
     today = date.today()
-    present_today_count = (
-        db.session.query(func.count(func.distinct(Attendance.employee_id)))
-        .filter(
-            Attendance.attendance_date == today,
-            Attendance.status == "Present",
+    counts = db.session.execute(
+        select(
+            select(func.count(Employee.id))
+            .scalar_subquery()
+            .label("employee_count"),
+            select(func.count(User.id))
+            .scalar_subquery()
+            .label("user_count"),
+            select(func.count(Department.id))
+            .scalar_subquery()
+            .label("department_count"),
+            select(func.count(func.distinct(Attendance.employee_id)))
+            .where(
+                Attendance.attendance_date == today,
+                Attendance.status == "Present",
+            )
+            .scalar_subquery()
+            .label("present_today_count"),
+            select(func.count(func.distinct(Attendance.employee_id)))
+            .where(
+                Attendance.attendance_date == today,
+                Attendance.status == "Absent",
+            )
+            .scalar_subquery()
+            .label("absent_today_count"),
+            select(func.count(Leave.id))
+            .where(Leave.status == "Pending")
+            .scalar_subquery()
+            .label("pending_leave_count"),
+            select(func.count(Payroll.id))
+            .scalar_subquery()
+            .label("payroll_count"),
+            select(func.count(Payroll.id))
+            .where(Payroll.payment_date.is_(None))
+            .scalar_subquery()
+            .label("pending_payroll_count"),
         )
-        .scalar()
-        or 0
-    )
-    absent_today_count = (
-        db.session.query(func.count(func.distinct(Attendance.employee_id)))
-        .filter(
-            Attendance.attendance_date == today,
-            Attendance.status == "Absent",
-        )
-        .scalar()
-        or 0
-    )
+    ).one()
     return render_template(
         "hr/home.html",
-        employee_count=Employee.query.count(),
-        user_count=User.query.count(),
-        department_count=Department.query.count(),
-        present_today_count=present_today_count,
-        absent_today_count=absent_today_count,
-        pending_leave_count=Leave.query.filter_by(status="Pending").count(),
-        payroll_count=Payroll.query.count(),
-        pending_payroll_count=Payroll.query.filter(
-            Payroll.payment_date.is_(None)
-        ).count(),
+        employee_count=counts.employee_count,
+        user_count=counts.user_count,
+        department_count=counts.department_count,
+        present_today_count=counts.present_today_count,
+        absent_today_count=counts.absent_today_count,
+        pending_leave_count=counts.pending_leave_count,
+        payroll_count=counts.payroll_count,
+        pending_payroll_count=counts.pending_payroll_count,
         today=today,
     )
 

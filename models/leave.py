@@ -1,6 +1,6 @@
 
 from . import db
-from sqlalchemy import String, Date, DateTime, ForeignKey, Text
+from sqlalchemy import String, Date, DateTime, ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import date, datetime
@@ -8,6 +8,16 @@ from datetime import date, datetime
 
 class Leave(db.Model):
     __tablename__ = "leaves"
+    __table_args__ = (
+        Index("ix_leaves_created_id", "created_at", "id"),
+        Index(
+            "ix_leaves_employee_created_id",
+            "employee_id",
+            "created_at",
+            "id",
+        ),
+        Index("ix_leaves_status", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 

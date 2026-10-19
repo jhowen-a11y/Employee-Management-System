@@ -29,6 +29,19 @@ class PostgreSQLSchemaTests(unittest.TestCase):
             with self.subTest(table=table):
                 self.assertIn(f"CREATE TABLE {table}", create_statements)
 
+        for index in (
+            "ix_attendance_date_id",
+            "ix_attendance_employee_date_id",
+            "ix_attendance_date_status",
+            "ix_leaves_created_id",
+            "ix_leaves_employee_created_id",
+            "ix_leaves_status",
+            "ix_payroll_period_id",
+            "ix_payroll_employee_period_id",
+        ):
+            with self.subTest(index=index):
+                self.assertIn(f"CREATE INDEX {index}", create_statements)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -68,6 +68,16 @@ production.
 database; it does not transfer records from the old MySQL database. Export and
 migrate any existing data separately before switching production traffic.
 
+For an existing database, apply schema migrations before deploying application
+changes:
+
+```powershell
+flask --app app db upgrade
+```
+
+This adds indexes used by attendance, leave, and payroll lists and dashboard
+queries. Back up the production database before applying schema changes.
+
 ### Create tables and run
 
 Create the database tables:

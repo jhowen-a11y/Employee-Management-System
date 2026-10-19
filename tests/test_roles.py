@@ -1659,6 +1659,38 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.location, "/")
 
+    def test_static_assets_use_content_versioned_cache_headers(self):
+        response = self.client.get("/login")
+        self.assertEqual(response.status_code, 200)
+
+        for filename in ("css/style.css", "js/script.js"):
+            with self.subTest(filename=filename):
+                escaped_filename = re.escape(filename).encode()
+                match = re.search(
+                    rb"/static/"
+                    + escaped_filename
+                    + rb"\?v=([a-f0-9]{64})",
+                    response.data,
+                )
+                self.assertIsNotNone(match)
+                asset_response = self.client.get(
+                    f"/static/{filename}?v={match.group(1).decode()}"
+                )
+                self.assertEqual(asset_response.status_code, 200)
+                self.assertIn(
+                    "max-age=31536000",
+                    asset_response.headers["Cache-Control"],
+                )
+                self.assertIn(
+                    "immutable",
+                    asset_response.headers["Cache-Control"],
+                )
+                self.assertNotIn(
+                    "no-cache",
+                    asset_response.headers["Cache-Control"],
+                )
+                asset_response.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Date, Time, DateTime, ForeignKey, String
+from sqlalchemy import Date, Time, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import date, time, datetime
@@ -7,6 +7,16 @@ from datetime import date, time, datetime
 
 class Attendance(db.Model):
     __tablename__ = "attendance"
+    __table_args__ = (
+        Index("ix_attendance_date_id", "attendance_date", "id"),
+        Index(
+            "ix_attendance_employee_date_id",
+            "employee_id",
+            "attendance_date",
+            "id",
+        ),
+        Index("ix_attendance_date_status", "attendance_date", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
