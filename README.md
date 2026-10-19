@@ -100,12 +100,12 @@ The app is served at <http://127.0.0.1:5000/>.
 
 | Feature | URL prefix | Description |
 | --- | --- | --- |
-| Employees | `/employees` | List and view records; administrators can add employee accounts or assign existing users to a department by creating their employee record |
-| Departments | `/departments` | List, view, add, edit, and delete departments |
+| Employees | `/employees` | List and view records; administrators can add employee accounts, assign existing users to a department, and delete employee accounts when no payroll history exists |
+| Departments | `/departments` | List, view, add, edit, and delete departments without assigned employees |
 | Attendance | `/attendance` | List, view, add, edit, and delete attendance records |
 | Leave | `/leaves` | List, view, submit, update status, and delete leave requests |
-| Payroll | `/payroll` | List, view, add, edit, and delete payroll records |
-| Users & Roles | `/users` | Admin-only account creation, account editing, and role assignment; `/users/profile` is available to all signed-in users |
+| Payroll | `/payroll` | List, view, add, and edit payroll records; payroll history cannot be deleted |
+| Users & Roles | `/users` | Admin-only account creation, account editing, role assignment, and account deletion when no payroll history exists; `/users/profile` is available to all signed-in users |
 | Employee Home | `/employee/home` | Employee portal with personal record summaries |
 | HR Home | `/hr/home` | HR dashboard with management counts and shortcuts |
 | Admin Dashboard | `/` | Organization counts and management shortcuts |
@@ -117,9 +117,8 @@ payroll; they can submit leave requests for themselves but cannot manage
 employee records. HR can manage attendance, departments, leave, and payroll but
 cannot create employee accounts or manage users and roles. Administrators can
 manage user account details and roles, employee profiles (including salary,
-department, position, and names), and payroll. HR and administrators can add,
-edit, and delete payroll records; employees have read-only access to their own
-pay statements and cannot view another employee's records. Employee accounts
+department, position, and names), and payroll. HR and administrators can add
+and edit payroll records; payroll history is not deletable. Employee accounts
 are created through
 **Add Employee** so every employee login is linked to an employee record. All
 signed-in users can update their username, email, and password from **Edit

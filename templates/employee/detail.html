@@ -4,17 +4,94 @@
 {% block header_title %}Employee Details{% endblock %}
 
 {% block content %}
-<div class="page-heading page-heading-row">
-    <div><h1>{{ employee.first_name }} {{ employee.last_name }}</h1><p>{{ employee.position }}</p></div>
+<div class="page-heading page-heading-row profile-heading">
+    <div>
+        <h1>Employee Profile</h1>
+        <p>Employment information and account details.</p>
+    </div>
     {% if current_user.role == 'admin' %}
-    <a class="button button-primary" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit employee</a>
+    <div class="page-heading-actions">
+        <a class="button button-primary" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit employee</a>
+        <form method="post" action="{{ url_for('employee.delete_employee', employee_id=employee.id) }}"
+              data-confirm-delete data-delete-title="Delete employee and account?"
+              data-delete-message="The employee record, login account, attendance, and leave requests will be permanently removed. Payroll history prevents deletion.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="button button-danger" type="submit">
+                <i data-lucide="trash-2" aria-hidden="true"></i>Delete employee
+            </button>
+        </form>
+    </div>
     {% endif %}
 </div>
-<section class="panel">
-    <p><strong>Department:</strong> <a href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">{{ employee.department.department_name }}</a></p>
-    <p><strong>Email:</strong> {{ employee.user.email }}</p>
-    <p><strong>Username:</strong> {{ employee.user.username }}</p>
-    <p><strong>Salary:</strong> {{ employee.salary }}</p>
-    <p><a class="button button-secondary" href="{{ url_for('employee.employee_list') }}">Back to employees</a></p>
+<section class="panel profile-panel">
+    <div class="profile-header">
+        <div class="profile-avatar" aria-hidden="true">
+            <span class="profile-initials">
+                {{ (employee.first_name[:1] ~ employee.last_name[:1])|upper }}
+            </span>
+        </div>
+        <div class="profile-identity">
+            <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
+            <p>{{ employee.position }}</p>
+            <a class="profile-role"
+               href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                <span class="profile-status-dot"></span>
+                {{ employee.department.department_name }}
+            </a>
+        </div>
+    </div>
+
+    <div class="profile-divider"></div>
+
+    <section class="profile-section">
+        <div class="profile-section-heading">
+            <i data-lucide="contact-round" aria-hidden="true"></i>
+            <div>
+                <h3>Employee Details</h3>
+                <p>Registered employment and account information</p>
+            </div>
+            <span class="view-only-label">EMP-{{ "%04d"|format(employee.id) }}</span>
+        </div>
+
+        <div class="profile-info-grid">
+            <div class="profile-info-item">
+                <span>Position</span>
+                <strong>{{ employee.position }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Department</span>
+                <strong>
+                    <a href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                        {{ employee.department.department_name }}
+                    </a>
+                </strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Email Address</span>
+                <strong>{{ employee.user.email }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Username</span>
+                <strong>{{ employee.user.username }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Salary</span>
+                <strong>{{ "%.2f"|format(employee.salary) }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Record Created</span>
+                <strong>
+                    {{ employee.created_at.strftime('%B %d, %Y')
+                       if employee.created_at else 'Not available' }}
+                </strong>
+            </div>
+        </div>
+    </section>
+
+    <div class="profile-divider"></div>
+    <a class="button button-secondary" href="{{ url_for('employee.employee_list') }}">
+        <i data-lucide="arrow-left" aria-hidden="true"></i>
+        Back to employees
+    </a>
 </section>
 {% endblock %}

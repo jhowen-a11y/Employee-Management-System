@@ -53,16 +53,29 @@
                         {% endif %}
                     </td>
                     <td>
-                        <a class="button button-secondary button-small"
-                           href="{{ url_for('users.edit_user', user_id=user.id) }}">
-                            Edit account
-                        </a>
-                        {% if user.employee %}
-                        <a class="button button-secondary button-small"
-                           href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
-                            Edit employee details
-                        </a>
-                        {% endif %}
+                        <div class="table-actions">
+                            <a class="button button-secondary button-small"
+                               href="{{ url_for('users.edit_user', user_id=user.id) }}">
+                                Edit account
+                            </a>
+                            {% if user.employee %}
+                            <a class="button button-secondary button-small"
+                               href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
+                                Edit employee details
+                            </a>
+                            {% endif %}
+                            <form method="post" action="{{ url_for('users.delete_user', user_id=user.id) }}"
+                                  class="inline-form" data-confirm-delete
+                                  data-delete-title="Delete user account?"
+                                  data-delete-message="The {{ user.username }} account{% if user.employee %}, employee record, attendance, and leave requests{% endif %} will be permanently removed. Payroll history prevents deletion.">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button class="button button-danger button-small" type="submit"
+                                        {% if user.id == current_user.id or (user.role == 'admin' and admin_count <= 1) %}disabled title="You cannot delete your own account or the last administrator."{% endif %}>
+                                    <i data-lucide="trash-2" aria-hidden="true"></i>
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% else %}

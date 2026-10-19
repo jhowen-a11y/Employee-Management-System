@@ -1,77 +1,240 @@
 {% extends "base.html" %}
 
 {% block title %}Employee Home | MCM EMS{% endblock %}
-{% block header_title %}Employee Home{% endblock %}
+{% block header_title %}My Home{% endblock %}
 
 {% block content %}
-<div class="page-heading">
-    <h1>Welcome, {{ current_user.username }}</h1>
-    <p>View your personal employee information and records.</p>
+<div class="employee-home-heading">
+    <div>
+        <span class="employee-home-eyebrow">EMPLOYEE PORTAL</span>
+        <h1>Welcome back, {{ employee.first_name if employee else current_user.username }}</h1>
+        <p>Your employee portal shows information linked to your account, plus your latest updates.</p>
+    </div>
+    <a class="button button-secondary" href="{{ url_for('users.edit_profile') }}">
+        <i data-lucide="settings-2" aria-hidden="true"></i>
+        Account settings
+    </a>
 </div>
 
-<section class="welcome-card">
-    <h2>Your employee portal</h2>
-    <p>
-        Your employee portal shows only information linked to your account.
-    </p>
-</section>
-
 {% if employee %}
-<section class="welcome-card">
-    <h2>My employee information</h2>
-    <p>{{ employee.first_name }} {{ employee.last_name }} ·
-       {{ employee.position }} · {{ employee.department.department_name }}</p>
-    <p>Salary: {{ employee.salary }}</p>
+<section class="employee-overview">
+    <div class="employee-overview-main">
+        <div class="employee-home-avatar" aria-hidden="true">
+            {{ (employee.first_name[:1] ~ employee.last_name[:1])|upper }}
+        </div>
+        <div class="employee-overview-identity">
+            <span class="employee-overview-label">YOUR PROFILE</span>
+            <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
+            <p>{{ employee.position }}</p>
+            <a class="employee-department-chip"
+               href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                <i data-lucide="building-2" aria-hidden="true"></i>
+                {{ employee.department.department_name }}
+                <i data-lucide="arrow-up-right" aria-hidden="true"></i>
+            </a>
+        </div>
+    </div>
+    <div class="employee-overview-side">
+        <div class="employee-id-block">
+            <span>BASE SALARY</span>
+            <strong>{{ "%.2f"|format(employee.salary) }}</strong>
+        </div>
+        <div class="employee-id-block">
+            <span>EMPLOYEE ID</span>
+            <strong>EMP-{{ "%04d"|format(employee.id) }}</strong>
+        </div>
+        <a class="button button-primary"
+           href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">
+            View my information
+            <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </a>
+    </div>
 </section>
 
-<section class="welcome-card">
-    <h2>My attendance</h2>
-    {% if attendance_records %}
-    <ul>
-        {% for record in attendance_records %}
-        <li>{{ record.attendance_date }} — {{ record.status }}
-            {% if record.time_in %} · In: {{ record.time_in }}{% endif %}
-            {% if record.time_out %} · Out: {{ record.time_out }}{% endif %}
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No attendance records yet.</p>
-    {% endif %}
+<section class="employee-quick-stats" aria-label="Personal summary">
+    <a class="employee-stat-card" href="{{ url_for('attendance.attendance_list') }}">
+        <span class="employee-stat-icon attendance">
+            <i data-lucide="calendar-check" aria-hidden="true"></i>
+        </span>
+        <span class="employee-stat-copy">
+            <span>Recent attendance</span>
+            <strong>{{ attendance_records|length }} <small>recent</small></strong>
+        </span>
+        <i class="employee-stat-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+    </a>
+    <a class="employee-stat-card" href="{{ url_for('leave.leave_list') }}">
+        <span class="employee-stat-icon leave">
+            <i data-lucide="calendar-days" aria-hidden="true"></i>
+        </span>
+        <span class="employee-stat-copy">
+            <span>Leave requests</span>
+            <strong>{{ leave_requests|length }} <small>recent</small></strong>
+        </span>
+        <i class="employee-stat-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+    </a>
+    <a class="employee-stat-card" href="{{ url_for('payroll.payroll_list') }}">
+        <span class="employee-stat-icon payroll">
+            <i data-lucide="wallet" aria-hidden="true"></i>
+        </span>
+        <span class="employee-stat-copy">
+            <span>Pay statements</span>
+            <strong>{{ payroll_records|length }} <small>recent</small></strong>
+        </span>
+        <i class="employee-stat-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+    </a>
 </section>
 
-<section class="welcome-card">
-    <h2>My leave requests</h2>
-    {% if leave_requests %}
-    <ul>
-        {% for leave in leave_requests %}
-        <li>{{ leave.leave_type }} · {{ leave.start_date }} to
-            {{ leave.end_date }} — {{ leave.status }}</li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No leave requests yet.</p>
-    {% endif %}
-    <p><a href="{{ url_for('leave.add_leave') }}">Submit a leave request</a></p>
-</section>
+<section class="employee-activity-grid" aria-label="Recent activity">
+    <article class="employee-activity-card">
+        <header class="employee-activity-header">
+            <span class="employee-activity-icon attendance">
+                <i data-lucide="calendar-check" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2>Attendance</h2>
+                <p>Your latest time entries</p>
+            </div>
+            <a href="{{ url_for('attendance.attendance_list') }}" aria-label="View all attendance">
+                <i data-lucide="arrow-right" aria-hidden="true"></i>
+            </a>
+        </header>
+        {% if attendance_records %}
+        <ul class="employee-activity-list">
+            {% for record in attendance_records[:5] %}
+            <li>
+                <a class="employee-activity-row"
+                   href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">
+                    <time class="employee-activity-date"
+                          datetime="{{ record.attendance_date.isoformat() }}"
+                          aria-label="{{ record.attendance_date.strftime('%B %d, %Y') }}">
+                        <strong>{{ record.attendance_date.strftime('%d') }}</strong>
+                        <small>{{ record.attendance_date.strftime('%b') }}</small>
+                    </time>
+                    <span class="employee-activity-copy">
+                        <strong>{{ record.attendance_date.strftime('%A, %B %d') }}</strong>
+                        <small>
+                            {% if record.time_in %}{{ record.time_in.strftime('%H:%M') }}{% else %}No time in{% endif %}
+                            <span aria-hidden="true">·</span>
+                            {% if record.time_out %}{{ record.time_out.strftime('%H:%M') }}{% else %}No time out{% endif %}
+                        </small>
+                    </span>
+                    <span class="employee-status-badge {{ record.status|lower|replace(' ', '-') }}">
+                        {{ record.status }}
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="employee-empty-state">
+            <i data-lucide="calendar-x-2" aria-hidden="true"></i>
+            <strong>No attendance yet</strong>
+            <p>Your attendance entries will appear here.</p>
+        </div>
+        {% endif %}
+        <a class="employee-card-footer" href="{{ url_for('attendance.attendance_list') }}">
+            Go to attendance <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </a>
+    </article>
 
-<section class="welcome-card">
-    <h2>My payroll</h2>
-    {% if payroll_records %}
-    <ul>
-        {% for payroll in payroll_records %}
-        <li>{{ payroll.pay_period_start }} to {{ payroll.pay_period_end }} —
-            Net pay: {{ payroll.net_pay }}</li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No payroll records yet.</p>
-    {% endif %}
+    <article class="employee-activity-card">
+        <header class="employee-activity-header">
+            <span class="employee-activity-icon leave">
+                <i data-lucide="calendar-days" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2>Leave requests</h2>
+                <p>Requests and their status</p>
+            </div>
+            <a href="{{ url_for('leave.leave_list') }}" aria-label="View all leave requests">
+                <i data-lucide="arrow-right" aria-hidden="true"></i>
+            </a>
+        </header>
+        {% if leave_requests %}
+        <ul class="employee-activity-list">
+            {% for leave in leave_requests[:5] %}
+            <li>
+                <a class="employee-activity-row"
+                   href="{{ url_for('leave.leave_detail', leave_id=leave.id) }}">
+                    <span class="employee-activity-date leave-date">
+                        <strong>{{ leave.start_date.strftime('%d') }}</strong>
+                        <small>{{ leave.start_date.strftime('%b') }}</small>
+                    </span>
+                    <span class="employee-activity-copy">
+                        <strong>{{ leave.leave_type }} leave</strong>
+                        <small>{{ leave.start_date.strftime('%b %d') }} – {{ leave.end_date.strftime('%b %d, %Y') }}</small>
+                    </span>
+                    <span class="employee-status-badge {{ leave.status|lower }}">
+                        {{ leave.status }}
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="employee-empty-state">
+            <i data-lucide="calendar-plus-2" aria-hidden="true"></i>
+            <strong>No leave requests yet</strong>
+            <p>Need time off? Submit a request when you’re ready.</p>
+        </div>
+        {% endif %}
+        <a class="employee-card-footer" href="{{ url_for('leave.add_leave') }}">
+            Submit a leave request <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </a>
+    </article>
+
+    <article class="employee-activity-card">
+        <header class="employee-activity-header">
+            <span class="employee-activity-icon payroll">
+                <i data-lucide="wallet" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2>Pay statements</h2>
+                <p>Your latest payroll records</p>
+            </div>
+            <a href="{{ url_for('payroll.payroll_list') }}" aria-label="View all pay statements">
+                <i data-lucide="arrow-right" aria-hidden="true"></i>
+            </a>
+        </header>
+        {% if payroll_records %}
+        <ul class="employee-activity-list">
+            {% for payroll in payroll_records[:5] %}
+            <li>
+                <a class="employee-activity-row"
+                   href="{{ url_for('payroll.payroll_detail', payroll_id=payroll.id) }}">
+                    <span class="employee-activity-date payroll-date">
+                        <i data-lucide="receipt" aria-hidden="true"></i>
+                    </span>
+                    <span class="employee-activity-copy">
+                        <strong>{{ payroll.pay_period_start.strftime('%b %d') }} – {{ payroll.pay_period_end.strftime('%b %d, %Y') }}</strong>
+                        <small>{% if payroll.payment_date %}Paid {{ payroll.payment_date.strftime('%b %d, %Y') }}{% else %}Awaiting payment{% endif %}</small>
+                    </span>
+                    <span class="employee-pay-amount">{{ "%.2f"|format(payroll.net_pay) }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="employee-empty-state">
+            <i data-lucide="wallet-cards" aria-hidden="true"></i>
+            <strong>No pay statements yet</strong>
+            <p>Your payroll records will appear here.</p>
+        </div>
+        {% endif %}
+        <a class="employee-card-footer" href="{{ url_for('payroll.payroll_list') }}">
+            View payroll <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </a>
+    </article>
 </section>
 {% else %}
-<section class="welcome-card">
-    <h2>No employee record linked</h2>
-    <p>Contact an administrator to link an employee record to your account.</p>
+<section class="employee-unlinked-card">
+    <span class="employee-stat-icon">
+        <i data-lucide="user-round-x" aria-hidden="true"></i>
+    </span>
+    <div>
+        <h2>No employee record linked</h2>
+        <p>Your account isn’t connected to an employee record yet. Contact your administrator to get access to your employee portal.</p>
+    </div>
 </section>
 {% endif %}
 {% endblock %}

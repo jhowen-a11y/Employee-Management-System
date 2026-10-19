@@ -11,7 +11,7 @@ from models.department import Department
 from models.employee import Employee
 from models.user import User
 from routes.auth_routes import admin_required
-from routes.employee_access import current_employee
+from routes.employee_access import current_employee, delete_employee_account
 
 
 employee_bp = Blueprint(
@@ -302,3 +302,31 @@ def edit_employee(employee_id):
         employee=employee,
         departments=departments
     )
+
+
+@employee_bp.route("/<int:employee_id>/delete", methods=["POST"])
+@admin_required
+def delete_employee(employee_id):
+    employee = db.get_or_404(Employee, employee_id)
+    user = employee.user
+
+    if user.id == current_user.id:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("employee.employee_list"))
+    if user.role == User.ADMIN and User.query.filter_by(
+        role=User.ADMIN
+    ).count() <= 1:
+        flash("The last administrator cannot be deleted.", "error")
+        return redirect(url_for("employee.employee_list"))
+    if employee.payroll_records:
+        flash(
+            "This employee cannot be deleted while payroll records exist. "
+            "Payroll history is preserved.",
+            "error",
+        )
+        return redirect(url_for("employee.employee_list"))
+
+    delete_employee_account(employee)
+    db.session.commit()
+    flash("Employee and linked account deleted successfully.", "success")
+    return redirect(url_for("employee.employee_list"))

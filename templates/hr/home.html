@@ -4,26 +4,129 @@
 {% block header_title %}HR Home{% endblock %}
 
 {% block content %}
-<div class="page-heading">
-    <h1>Welcome, {{ current_user.username }}</h1>
-    <p>Human Resources overview and daily work queue.</p>
-</div>
-<section class="summary-grid">
-    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ user_count }}</strong><span>Accounts (all roles)</span></a>
-    <a class="summary-card" href="{{ url_for('employee.employee_list') }}"><strong>{{ employee_count }}</strong><span>Employee records</span></a>
-    <a class="summary-card" href="{{ url_for('department.department_list') }}"><strong>{{ department_count }}</strong><span>Departments</span></a>
-    <a class="summary-card" href="{{ url_for('attendance.attendance_list') }}"><strong>{{ attendance_count }}</strong><span>Attendance records</span></a>
-    <a class="summary-card" href="{{ url_for('leave.leave_list') }}"><strong>{{ pending_leave_count }}</strong><span>Pending leave requests</span></a>
-    <a class="summary-card" href="{{ url_for('payroll.payroll_list') }}"><strong>{{ payroll_count }}</strong><span>Payroll records</span></a>
+<section class="hr-welcome">
+    <div class="hr-welcome-copy">
+        <span class="hr-eyebrow">HUMAN RESOURCES · {{ today.strftime('%A, %B %d') }}</span>
+        <h1>Good to see you, {{ current_user.username }}.</h1>
+        <p>Your daily HR workspace. Keep people, time off, and payroll moving smoothly.</p>
+    </div>
+    <div class="hr-attention">
+        <span class="hr-attention-icon" aria-hidden="true">
+            <i data-lucide="inbox"></i>
+        </span>
+        <div class="hr-attention-copy">
+            <strong>{{ pending_leave_count }} leave {{ 'request' if pending_leave_count == 1 else 'requests' }} need review</strong>
+            <span>{{ pending_payroll_count }} payroll {{ 'record' if pending_payroll_count == 1 else 'records' }} awaiting payment</span>
+        </div>
+        <a href="{{ url_for('leave.leave_list') }}">
+            Review leave <i data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+    </div>
+    <div class="hr-welcome-art" aria-hidden="true">
+        <i data-lucide="users-round"></i>
+    </div>
 </section>
-<section class="welcome-card">
-    <h2>HR actions</h2>
-    <p>Review leave requests, maintain attendance, departments, and payroll records.</p>
-    <p>
-        <a class="button button-primary" href="{{ url_for('leave.leave_list') }}">Review leave requests</a>
-        <a class="button button-secondary" href="{{ url_for('attendance.add_attendance') }}">Record attendance</a>
-        <a class="button button-secondary" href="{{ url_for('department.add_department') }}">Add department</a>
-        <a class="button button-secondary" href="{{ url_for('payroll.add_payroll') }}">Add payroll</a>
-    </p>
+
+<section class="hr-overview" aria-labelledby="hr-overview-title">
+    <div class="hr-section-heading">
+        <div>
+            <span class="hr-eyebrow">AT A GLANCE</span>
+            <h2 id="hr-overview-title">Today's people overview</h2>
+        </div>
+        <span class="hr-date-chip">
+            <i data-lucide="calendar-days" aria-hidden="true"></i>
+            {{ today.strftime('%b %d, %Y') }}
+        </span>
+    </div>
+    <div class="hr-stat-grid">
+        <a class="hr-stat-card hr-stat-employees" href="{{ url_for('employee.employee_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="users-round" aria-hidden="true"></i></span>
+            <strong data-stat="employees">{{ employee_count }}</strong>
+            <span class="hr-stat-label">Total employees</span>
+            <small>People in your directory</small>
+        </a>
+        <a class="hr-stat-card hr-stat-accounts" href="{{ url_for('employee.employee_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="contact-round" aria-hidden="true"></i></span>
+            <strong>{{ user_count }}</strong><span>Accounts (all roles)</span>
+            <small>Employee and management logins</small>
+        </a>
+        <a class="hr-stat-card" href="{{ url_for('attendance.attendance_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="user-check" aria-hidden="true"></i></span>
+            <strong data-stat="present">{{ present_today_count }}</strong>
+            <span class="hr-stat-label">Present today</span>
+            <small>Marked present today</small>
+        </a>
+        <a class="hr-stat-card" href="{{ url_for('attendance.attendance_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="user-round-x" aria-hidden="true"></i></span>
+            <strong data-stat="absent">{{ absent_today_count }}</strong>
+            <span class="hr-stat-label">Absent today</span>
+            <small>Marked absent today</small>
+        </a>
+        <a class="hr-stat-card hr-stat-leave" href="{{ url_for('leave.leave_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="calendar-clock" aria-hidden="true"></i></span>
+            <strong data-stat="leave">{{ pending_leave_count }}</strong>
+            <span class="hr-stat-label">Pending leave</span>
+            <small>Applications to review</small>
+        </a>
+        <a class="hr-stat-card" href="{{ url_for('department.department_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+            <strong data-stat="departments">{{ department_count }}</strong>
+            <span class="hr-stat-label">Departments</span>
+            <small>Organization groups</small>
+        </a>
+        <a class="hr-stat-card hr-stat-payroll" href="{{ url_for('payroll.payroll_list') }}">
+            <span class="hr-stat-icon"><i data-lucide="wallet-cards" aria-hidden="true"></i></span>
+            <strong data-stat="payroll">{{ payroll_count }}</strong>
+            <span class="hr-stat-label">Payroll records</span>
+            <small>{{ pending_payroll_count }} awaiting payment</small>
+        </a>
+    </div>
+</section>
+
+<section class="hr-tasks" aria-labelledby="hr-tasks-title">
+    <div class="hr-section-heading">
+        <div>
+            <span class="hr-eyebrow">YOUR WORKFLOW</span>
+            <h2 id="hr-tasks-title">Daily HR tasks</h2>
+        </div>
+        <p>Common actions to keep your people operations on track.</p>
+    </div>
+    <div class="hr-task-grid">
+        <a class="hr-task-card" href="{{ url_for('employee.employee_list') }}">
+            <span class="hr-task-icon"><i data-lucide="contact-round" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Employee directory</strong><small>View employee and account records</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('attendance.attendance_list') }}">
+            <span class="hr-task-icon"><i data-lucide="clipboard-check" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Review attendance</strong><small>Check daily time and attendance entries</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('attendance.add_attendance') }}">
+            <span class="hr-task-icon"><i data-lucide="calendar-plus" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Record attendance</strong><small>Add an employee's daily attendance</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('leave.leave_list') }}">
+            <span class="hr-task-icon"><i data-lucide="calendar-heart" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Review leave requests</strong><small>Approve or reject employee requests</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('department.department_list') }}">
+            <span class="hr-task-icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Manage departments</strong><small>Maintain teams and organization groups</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('payroll.payroll_list') }}">
+            <span class="hr-task-icon"><i data-lucide="wallet-cards" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Payroll operations</strong><small>Review records and payment status</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card hr-task-primary" href="{{ url_for('payroll.add_payroll') }}">
+            <span class="hr-task-icon"><i data-lucide="circle-dollar-sign" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Create payroll record</strong><small>Prepare a pay period record</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+    </div>
 </section>
 {% endblock %}

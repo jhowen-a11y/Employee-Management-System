@@ -16,6 +16,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from models import db
 from models.employee import Employee
 from models.user import User
+from routes.employee_access import delete_employee_account
 
 user_bp = Blueprint("users", __name__, url_prefix="/users")
 ACCOUNT_CREATION_ROLES = (User.ADMIN, User.HR)
@@ -41,7 +42,12 @@ def user_list():
         per_page=50,
         error_out=False,
     )
-    return render_template("users/list.html", users=users, roles=User.ROLES)
+    return render_template(
+        "users/list.html",
+        users=users,
+        roles=User.ROLES,
+        admin_count=User.query.filter_by(role=User.ADMIN).count(),
+    )
 
 
 @user_bp.route("/profile", methods=["GET", "POST"])
@@ -228,6 +234,37 @@ def update_user_role(user_id):
         db.session.commit()
         flash("User role updated successfully.", "success")
 
+    return redirect(url_for("users.user_list"))
+
+
+@user_bp.route("/<int:user_id>/delete", methods=["POST"])
+def delete_user(user_id):
+    user = db.get_or_404(User, user_id)
+
+    if user.id == current_user.id:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("users.user_list"))
+    if user.role == User.ADMIN and User.query.filter_by(
+        role=User.ADMIN
+    ).count() <= 1:
+        flash("The last administrator cannot be deleted.", "error")
+        return redirect(url_for("users.user_list"))
+
+    employee = user.employee
+    if employee and employee.payroll_records:
+        flash(
+            "This account cannot be deleted while payroll records exist. "
+            "Payroll history is preserved.",
+            "error",
+        )
+        return redirect(url_for("users.user_list"))
+
+    if employee:
+        delete_employee_account(employee)
+    else:
+        db.session.delete(user)
+    db.session.commit()
+    flash("User account deleted successfully.", "success")
     return redirect(url_for("users.user_list"))
 
 

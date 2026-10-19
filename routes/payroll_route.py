@@ -222,16 +222,3 @@ def edit_payroll(payroll_id):
         payroll=payroll,
         employees=employees
     )
-
-
-# Delete a payroll record
-@payroll_bp.route("/<int:payroll_id>/delete", methods=["POST"])
-@management_required
-def delete_payroll(payroll_id):
-    payroll = db.get_or_404(Payroll, payroll_id)
-
-    db.session.delete(payroll)
-    db.session.commit()
-
-    flash("Payroll record deleted successfully!", "success")
-    return redirect(url_for("payroll.payroll_list"))

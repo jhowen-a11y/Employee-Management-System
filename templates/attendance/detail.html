@@ -7,7 +7,17 @@
 <div class="page-heading page-heading-row">
     <div><h1>Attendance details</h1><p>{{ record.employee.first_name }} {{ record.employee.last_name }}</p></div>
     {% if current_user.role != 'employee' %}
-    <a class="button button-primary" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit record</a>
+    <div class="page-heading-actions">
+        <a class="button button-primary" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit record</a>
+        <form method="post" action="{{ url_for('attendance.delete_attendance', attendance_id=record.id) }}"
+              data-confirm-delete data-delete-title="Delete attendance record?"
+              data-delete-message="This attendance entry will be permanently removed.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="button button-danger" type="submit">
+                <i data-lucide="trash-2" aria-hidden="true"></i>Delete
+            </button>
+        </form>
+    </div>
     {% endif %}
 </div>
 <section class="panel">

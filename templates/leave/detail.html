@@ -4,7 +4,19 @@
 {% block header_title %}Leave Request Details{% endblock %}
 
 {% block content %}
-<div class="page-heading"><h1>Leave request</h1><p>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</p></div>
+<div class="page-heading page-heading-row">
+    <div><h1>Leave request</h1><p>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</p></div>
+    {% if current_user.role != 'employee' %}
+    <form method="post" action="{{ url_for('leave.delete_leave', leave_id=leave.id) }}"
+          data-confirm-delete data-delete-title="Delete leave request?"
+          data-delete-message="This leave request will be permanently removed.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="button button-danger" type="submit">
+            <i data-lucide="trash-2" aria-hidden="true"></i>Delete request
+        </button>
+    </form>
+    {% endif %}
+</div>
 <section class="panel">
     <p><strong>Type:</strong> {{ leave.leave_type }}</p>
     <p><strong>Dates:</strong> {{ leave.start_date }} to {{ leave.end_date }}</p>

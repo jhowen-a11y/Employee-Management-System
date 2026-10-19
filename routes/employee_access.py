@@ -3,8 +3,24 @@ from functools import wraps
 from flask import abort
 from flask_login import current_user
 
+from models import db
+from models.attendance import Attendance
 from models.employee import Employee
+from models.leave import Leave
 from models.user import User
+
+
+def delete_employee_account(employee):
+    # Remove dependent records before deleting the linked employee account.
+    Attendance.query.filter_by(employee_id=employee.id).delete(
+        synchronize_session=False
+    )
+    Leave.query.filter_by(employee_id=employee.id).delete(
+        synchronize_session=False
+    )
+    user = employee.user
+    db.session.delete(employee)
+    db.session.delete(user)
 
 
 def current_employee():

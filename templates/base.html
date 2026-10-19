@@ -203,6 +203,25 @@
 
 </div>
 
+<dialog class="delete-dialog" id="deleteDialog"
+        aria-labelledby="deleteDialogTitle"
+        aria-describedby="deleteDialogMessage">
+    <div class="delete-dialog-icon" aria-hidden="true">
+        <i data-lucide="triangle-alert"></i>
+    </div>
+    <h2 id="deleteDialogTitle">Delete this record?</h2>
+    <p id="deleteDialogMessage">This action cannot be undone.</p>
+    <div class="delete-dialog-actions">
+        <button class="button button-secondary" id="cancelDelete"
+                type="button">Keep record</button>
+        <button class="button button-danger" id="confirmDelete"
+                type="button">
+            <i data-lucide="trash-2" aria-hidden="true"></i>
+            Delete permanently
+        </button>
+    </div>
+</dialog>
+
 {% block scripts %}{% endblock %}
 
 </body>

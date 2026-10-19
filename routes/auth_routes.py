@@ -1,3 +1,4 @@
+from datetime import date
 from functools import wraps
 
 import secrets
@@ -14,8 +15,10 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import func
 from werkzeug.security import check_password_hash
 
+from models import db
 from models.employee import Employee
 from models.attendance import Attendance
 from models.department import Department
@@ -125,17 +128,41 @@ def employee_home():
 @auth_bp.route("/hr/home")
 @login_required
 def hr_home():
-    # Show HR dashboard counts for the organization's records.
+    # Show HR's daily people operations workload.
     if current_user.role != User.HR:
         abort(403)
+    today = date.today()
+    present_today_count = (
+        db.session.query(func.count(func.distinct(Attendance.employee_id)))
+        .filter(
+            Attendance.attendance_date == today,
+            Attendance.status == "Present",
+        )
+        .scalar()
+        or 0
+    )
+    absent_today_count = (
+        db.session.query(func.count(func.distinct(Attendance.employee_id)))
+        .filter(
+            Attendance.attendance_date == today,
+            Attendance.status == "Absent",
+        )
+        .scalar()
+        or 0
+    )
     return render_template(
         "hr/home.html",
         employee_count=Employee.query.count(),
         user_count=User.query.count(),
         department_count=Department.query.count(),
-        attendance_count=Attendance.query.count(),
+        present_today_count=present_today_count,
+        absent_today_count=absent_today_count,
         pending_leave_count=Leave.query.filter_by(status="Pending").count(),
         payroll_count=Payroll.query.count(),
+        pending_payroll_count=Payroll.query.filter(
+            Payroll.payment_date.is_(None)
+        ).count(),
+        today=today,
     )
 
 

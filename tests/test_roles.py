@@ -191,6 +191,141 @@ class RoleManagementTests(unittest.TestCase):
                 self.User.ADMIN,
             )
 
+    def test_deleting_linked_accounts_cleans_records_and_preserves_payroll(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Deletion checks")
+            self.db.session.add(department)
+            self.db.session.flush()
+            department_id = department.id
+
+            payroll_employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Payroll",
+                last_name="Protected",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            removable_employee = self.Employee(
+                user_id=self.hr_id,
+                first_name="Removable",
+                last_name="Employee",
+                position="Coordinator",
+                salary=Decimal("45000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add_all([payroll_employee, removable_employee])
+            self.db.session.flush()
+            protected_employee_id = payroll_employee.id
+            removable_employee_id = removable_employee.id
+            removable_user_id = self.hr_id
+
+            self.db.session.add_all(
+                [
+                    self.Attendance(
+                        employee_id=payroll_employee.id,
+                        attendance_date=date(2026, 10, 1),
+                    ),
+                    self.Leave(
+                        employee_id=payroll_employee.id,
+                        leave_type="Annual",
+                        start_date=date(2026, 10, 5),
+                        end_date=date(2026, 10, 6),
+                    ),
+                    self.Payroll(
+                        employee_id=payroll_employee.id,
+                        pay_period_start=date(2026, 9, 1),
+                        pay_period_end=date(2026, 9, 30),
+                        basic_salary=Decimal("4000.00"),
+                        allowances=Decimal("0.00"),
+                        deductions=Decimal("0.00"),
+                        net_pay=Decimal("4000.00"),
+                    ),
+                    self.Attendance(
+                        employee_id=removable_employee.id,
+                        attendance_date=date(2026, 10, 2),
+                    ),
+                    self.Leave(
+                        employee_id=removable_employee.id,
+                        leave_type="Sick",
+                        start_date=date(2026, 10, 7),
+                        end_date=date(2026, 10, 8),
+                    ),
+                ]
+            )
+            self.db.session.commit()
+            protected_payroll_id = self.Payroll.query.one().id
+
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/employees/")
+        token = self.csrf_token(response)
+        response = self.client.post(
+            f"/employees/{protected_employee_id}/delete",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(
+            f"/users/{self.employee_id}/delete",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            self.assertIsNotNone(
+                self.db.session.get(self.Employee, protected_employee_id)
+            )
+            self.assertIsNotNone(
+                self.db.session.get(self.Payroll, protected_payroll_id)
+            )
+
+        response = self.client.post(
+            f"/users/{removable_user_id}/delete",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            self.assertIsNone(
+                self.db.session.get(self.Employee, removable_employee_id)
+            )
+            self.assertIsNone(self.db.session.get(self.User, removable_user_id))
+            self.assertEqual(self.Attendance.query.count(), 1)
+            self.assertEqual(self.Leave.query.count(), 1)
+            self.assertEqual(self.Payroll.query.count(), 1)
+
+            employee_user = self.User(
+                username="staff-two",
+                email="staff-two@example.test",
+                password_hash=generate_password_hash("StaffTwoPass123"),
+                role=self.User.EMPLOYEE,
+            )
+            self.db.session.add(employee_user)
+            self.db.session.flush()
+            removable_employee = self.Employee(
+                user=employee_user,
+                first_name="Taylor",
+                last_name="Staff",
+                position="Assistant",
+                salary=Decimal("42000.00"),
+                department_id=department_id,
+            )
+            self.db.session.add(removable_employee)
+            self.db.session.commit()
+            employee_user_id = employee_user.id
+            removable_employee_id = removable_employee.id
+
+        response = self.client.post(
+            f"/employees/{removable_employee_id}/delete",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            self.assertIsNone(
+                self.db.session.get(self.Employee, removable_employee_id)
+            )
+            self.assertIsNone(self.db.session.get(self.User, employee_user_id))
+
     def test_admin_can_edit_hr_account_and_employee_profile(self):
         from decimal import Decimal
 
@@ -497,7 +632,6 @@ class RoleManagementTests(unittest.TestCase):
         for path in (
             f"/attendance/{attendance_id}/delete",
             f"/leaves/{leave_id}/delete",
-            f"/payroll/{payroll_id}/delete",
         ):
             response = self.client.post(path, data={"_csrf_token": token})
             with self.subTest(path=path):
@@ -529,7 +663,95 @@ class RoleManagementTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 403)
 
-    def test_hr_can_create_edit_and_delete_payroll_records(self):
+    def test_hr_dashboard_shows_current_attendance_and_payroll_counts(self):
+        from datetime import date
+        from decimal import Decimal
+
+        today = date.today()
+        with self.app.app_context():
+            department = self.Department(department_name="HR overview")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employees = [
+                self.Employee(
+                    user_id=user_id,
+                    first_name=first_name,
+                    last_name="Overview",
+                    position="Associate",
+                    salary=Decimal("40000.00"),
+                    department_id=department.id,
+                )
+                for user_id, first_name in (
+                    (self.employee_id, "Present"),
+                    (self.hr_id, "Absent"),
+                )
+            ]
+            self.db.session.add_all(employees)
+            self.db.session.flush()
+            self.db.session.add_all(
+                [
+                    self.Attendance(
+                        employee_id=employees[0].id,
+                        attendance_date=today,
+                        status="Present",
+                    ),
+                    self.Attendance(
+                        employee_id=employees[1].id,
+                        attendance_date=today,
+                        status="Absent",
+                    ),
+                    self.Leave(
+                        employee_id=employees[0].id,
+                        leave_type="Annual",
+                        start_date=today,
+                        end_date=today,
+                        status="Pending",
+                    ),
+                    self.Payroll(
+                        employee_id=employees[0].id,
+                        pay_period_start=today,
+                        pay_period_end=today,
+                        basic_salary=Decimal("4000.00"),
+                        allowances=Decimal("0.00"),
+                        deductions=Decimal("0.00"),
+                        net_pay=Decimal("4000.00"),
+                    ),
+                    self.Payroll(
+                        employee_id=employees[1].id,
+                        pay_period_start=today,
+                        pay_period_end=today,
+                        basic_salary=Decimal("4000.00"),
+                        allowances=Decimal("0.00"),
+                        deductions=Decimal("0.00"),
+                        net_pay=Decimal("4000.00"),
+                        payment_date=today,
+                    ),
+                ]
+            )
+            self.db.session.commit()
+
+        hr_client = self.app.test_client()
+        self.login(hr_client, "hrstaff", "HrPass123")
+        response = hr_client.get("/hr/home")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        for metric, count in (
+            ("employees", 2),
+            ("present", 1),
+            ("absent", 1),
+            ("leave", 1),
+            ("departments", 1),
+            ("payroll", 2),
+        ):
+            with self.subTest(metric=metric):
+                self.assertRegex(
+                    html,
+                    rf'data-stat="{metric}">{count}</strong>',
+                )
+        self.assertIn("1 payroll record awaiting payment", html)
+        self.assertNotIn("/employees/add", html)
+
+    def test_hr_can_create_and_edit_payroll_records_but_not_delete(self):
         from datetime import date
         from decimal import Decimal
 
@@ -594,9 +816,9 @@ class RoleManagementTests(unittest.TestCase):
             f"/payroll/{payroll_id}/delete",
             data={"_csrf_token": token},
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 404)
         with self.app.app_context():
-            self.assertIsNone(self.db.session.get(self.Payroll, payroll_id))
+            self.assertIsNotNone(self.db.session.get(self.Payroll, payroll_id))
 
     def test_create_admin_cli_provisions_first_account(self):
         with self.app.app_context():
@@ -997,7 +1219,7 @@ class RoleManagementTests(unittest.TestCase):
                 f"/payroll/{own_payroll_id}/delete",
                 data={"_csrf_token": token},
             ).status_code,
-            403,
+            404,
         )
 
         self.assertEqual(
@@ -1077,14 +1299,14 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.location, "/")
 
-    def test_hr_login_uses_hr_home_placeholder(self):
+    def test_hr_login_uses_hr_dashboard(self):
         response = self.login(self.client, "hrstaff", "HrPass123")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.location, "/hr/home")
         home = self.client.get(response.location)
         self.assertEqual(home.status_code, 200)
-        self.assertIn(b"HR actions", home.get_data())
-        self.assertIn(b"Pending leave requests", home.get_data())
+        self.assertIn(b"Daily HR tasks", home.get_data())
+        self.assertIn(b"Pending leave", home.get_data())
         self.assertEqual(self.client.get("/").location, "/hr/home")
         self.assertEqual(self.client.get("/employee/home").status_code, 403)
         employees = self.client.get("/employees/")

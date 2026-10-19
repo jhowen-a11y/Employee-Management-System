@@ -34,17 +34,29 @@
                 <td>{{ user.employee.position if user.employee else '—' }}</td>
                 <td>{{ user.employee.department.department_name if user.employee else '—' }}</td>
                 <td>
-                    <a class="button button-secondary button-small" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
-                    {% if user.employee %}
-                    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
-                    {% if current_user.role == 'admin' %}
-                    <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">Edit</a>
-                    {% endif %}
-                    {% elif current_user.role == 'admin' %}
-                    <a class="button button-secondary button-small" href="{{ url_for('employee.link_user_to_employee', user_id=user.id) }}">Assign department</a>
-                    {% else %}
-                    <span class="role-label">No employee record</span>
-                    {% endif %}
+                    <div class="table-actions">
+                        <a class="button button-secondary button-small" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
+                        {% if user.employee %}
+                        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
+                        {% if current_user.role == 'admin' %}
+                        <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">Edit</a>
+                        <form method="post" action="{{ url_for('employee.delete_employee', employee_id=user.employee.id) }}"
+                              class="inline-form" data-confirm-delete
+                              data-delete-title="Delete employee and account?"
+                              data-delete-message="The employee record, login account, attendance, and leave requests for {{ user.employee.first_name }} {{ user.employee.last_name }} will be permanently removed. Payroll history prevents deletion.">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button class="button button-danger button-small" type="submit">
+                                <i data-lucide="trash-2" aria-hidden="true"></i>
+                                Delete
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% elif current_user.role == 'admin' %}
+                        <a class="button button-secondary button-small" href="{{ url_for('employee.link_user_to_employee', user_id=user.id) }}">Assign department</a>
+                        {% else %}
+                        <span class="role-label">No employee record</span>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -63,10 +75,22 @@
                 <td>{{ employee.department.department_name }}</td>
                 <td>{{ employee.user.email }}</td>
                 <td>
-                    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">View</a>
-                    {% if current_user.role == 'admin' %}
-                    <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit</a>
-                    {% endif %}
+                    <div class="table-actions">
+                        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">View</a>
+                        {% if current_user.role == 'admin' %}
+                        <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit</a>
+                        <form method="post" action="{{ url_for('employee.delete_employee', employee_id=employee.id) }}"
+                              class="inline-form" data-confirm-delete
+                              data-delete-title="Delete employee and account?"
+                              data-delete-message="The employee record, login account, attendance, and leave requests for {{ employee.first_name }} {{ employee.last_name }} will be permanently removed. Payroll history prevents deletion.">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button class="button button-danger button-small" type="submit">
+                                <i data-lucide="trash-2" aria-hidden="true"></i>
+                                Delete
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}

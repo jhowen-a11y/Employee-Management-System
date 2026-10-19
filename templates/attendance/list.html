@@ -26,14 +26,22 @@
                 <td>{{ record.time_out or '—' }}</td>
                 <td>{{ record.status }}</td>
                 <td>
-                    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">View</a>
-                    {% if current_user.role != 'employee' %}
-                    <a class="button button-secondary button-small" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit</a>
-                    <form method="post" action="{{ url_for('attendance.delete_attendance', attendance_id=record.id) }}" style="display:inline">
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                        <button class="button button-secondary button-small" type="submit">Delete</button>
-                    </form>
-                    {% endif %}
+                    <div class="table-actions">
+                        <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">View</a>
+                        {% if current_user.role != 'employee' %}
+                        <a class="button button-secondary button-small" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit</a>
+                        <form method="post" action="{{ url_for('attendance.delete_attendance', attendance_id=record.id) }}"
+                              class="inline-form" data-confirm-delete
+                              data-delete-title="Delete attendance record?"
+                              data-delete-message="This attendance entry for {{ record.employee.first_name }} {{ record.employee.last_name }} will be permanently removed.">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button class="button button-danger button-small" type="submit">
+                                <i data-lucide="trash-2" aria-hidden="true"></i>
+                                Delete
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}
