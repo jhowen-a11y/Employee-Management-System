@@ -19,6 +19,7 @@ from models.employee import Employee
 from models.leave import Leave
 from models.payroll import Payroll
 from models.user import User
+from profile_storage import profile_picture_url
 from routes.auth_routes import auth_bp
 from routes.employee_routes import employee_bp
 from routes.attendance_routes import attendance_bp
@@ -127,7 +128,10 @@ def create_app(test_config=None):
                 session["_csrf_token"] = token
             return token
 
-        return {"csrf_token": csrf_token}
+        return {
+            "csrf_token": csrf_token,
+            "profile_picture_url": profile_picture_url,
+        }
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(employee_bp)

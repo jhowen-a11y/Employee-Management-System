@@ -2,6 +2,7 @@
 import os
 import uuid
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
 from flask import (
     Blueprint,
@@ -21,6 +22,11 @@ from models import db
 from models.department import Department
 from models.employee import Employee
 from models.user import User
+from profile_storage import (
+    ProfileStorageError,
+    delete_profile_picture,
+    upload_profile_picture,
+)
 from routes.auth_routes import admin_required
 from routes.employee_access import (
     current_employee,
@@ -67,34 +73,32 @@ def save_profile_picture(file, employee_id):
     try:
         from PIL import Image
 
-        import io
-
-        with Image.open(io.BytesIO(image_data)) as image:
-            if image.format not in {"PNG", "JPEG", "WEBP"}:
-                return None, "The uploaded file is not a supported image."
-
+        with Image.open(BytesIO(image_data)) as image:
+            image_format = image.format
             image.verify()
-
     except Exception:
         return None, "The uploaded file is not a valid image."
 
-    upload_folder = os.path.join(
-        current_app.root_path,
-        "static",
-        "uploads",
-        "profiles",
-    )
-    os.makedirs(upload_folder, exist_ok=True)
+    image_details = {
+        "PNG": ("png", "image/png"),
+        "JPEG": ("jpg", "image/jpeg"),
+        "WEBP": ("webp", "image/webp"),
+    }
+    if image_format not in image_details:
+        return None, "The uploaded file is not a supported image."
 
+    extension, content_type = image_details[image_format]
     filename = f"employee_{employee_id}_{uuid.uuid4().hex}.{extension}"
-    destination = os.path.join(upload_folder, filename)
-
     try:
-        with open(destination, "wb") as image_file:
-            image_file.write(image_data)
-    except OSError:
-        current_app.logger.exception("Could not save employee profile picture.")
-        return None, "The profile picture could not be saved."
+        upload_profile_picture(filename, image_data, content_type)
+    except ProfileStorageError:
+        current_app.logger.exception(
+            "Could not upload employee profile picture to Supabase Storage."
+        )
+        return None, (
+            "The profile picture could not be uploaded. Check the storage "
+            "configuration and try again."
+        )
 
     return filename, None
 
@@ -448,37 +452,24 @@ def edit_employee(employee_id):
                     db.session.rollback()
 
                     if new_picture:
-                        new_path = os.path.join(
-                            current_app.root_path,
-                            "static",
-                            "uploads",
-                            "profiles",
-                            new_picture,
-                        )
                         try:
-                            os.remove(new_path)
-                        except OSError:
-                            pass
+                            delete_profile_picture(new_picture)
+                        except ProfileStorageError:
+                            current_app.logger.exception(
+                                "Could not remove uncommitted profile picture "
+                                "from Supabase Storage."
+                            )
 
                     raise
 
                 # Remove the previous image only after the new one is saved.
                 if new_picture and old_picture:
-                    old_path = os.path.join(
-                        current_app.root_path,
-                        "static",
-                        "uploads",
-                        "profiles",
-                        old_picture,
-                    )
-
                     try:
-                        if os.path.isfile(old_path):
-                            os.remove(old_path)
-                    except OSError:
+                        delete_profile_picture(old_picture)
+                    except ProfileStorageError:
                         current_app.logger.warning(
-                            "Could not remove old profile picture: %s",
-                            old_path,
+                            "Could not remove old profile picture from "
+                            "Supabase Storage."
                         )
 
                 flash("Employee updated successfully.", "success")

@@ -27,7 +27,7 @@
                 <div class="profile-picture-preview">
                     {% if employee.profile_picture %}
                         <img
-                            src="{{ url_for('static', filename='uploads/profiles/' ~ employee.profile_picture) }}"
+                            src="{{ profile_picture_url(employee.profile_picture) }}"
                             alt="Employee profile picture"
                             class="profile-picture-img"
                         >
