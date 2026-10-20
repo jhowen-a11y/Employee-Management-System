@@ -12,22 +12,32 @@ class Employee(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"),unique=True,nullable=False)
-    first_name: Mapped[str] = mapped_column(String(50),nullable=False)
-    last_name: Mapped[str] = mapped_column(String(50),nullable=False)
-    position: Mapped[str] = mapped_column(String(100),nullable=False)
-    salary: Mapped[Decimal] = mapped_column(Numeric(10, 2),nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), unique=True, nullable=False
+    )
+
+    first_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    position: Mapped[str] = mapped_column(String(100), nullable=False)
+    salary: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+    # Profile picture filename
+    profile_picture: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
 
     # Link to the Department
-    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"),nullable=False)
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id"), nullable=False
+    )
 
     # Relationships
     user: Mapped["User"] = relationship(back_populates="employee")
-
     department: Mapped["Department"] = relationship(back_populates="employees")
 
-    leave_requests: Mapped[list["Leave"]] = relationship(back_populates="employee")
+    leave_requests: Mapped[list["Leave"]] = relationship(
+        back_populates="employee"
+    )
 
     attendance_records: Mapped[list["Attendance"]] = relationship(
         back_populates="employee"
@@ -37,9 +47,15 @@ class Employee(db.Model):
         back_populates="employee"
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now(),onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
 
     def __repr__(self):
         return f"<Employee {self.first_name} {self.last_name}>"

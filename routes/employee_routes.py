@@ -1,10 +1,21 @@
 
+import os
+import uuid
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user
 from sqlalchemy.orm import selectinload
 from werkzeug.security import generate_password_hash
+from werkzeug.utils import secure_filename
 
 from models import db
 from models.department import Department
@@ -24,6 +35,69 @@ employee_bp = Blueprint(
     url_prefix="/employees"
 )
 
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+def save_profile_picture(file, employee_id):
+    """Save an uploaded profile picture and return its filename."""
+    if not file or not file.filename:
+        return None, None
+
+    original_filename = secure_filename(file.filename)
+
+    if not original_filename or "." not in original_filename:
+        return None, "Choose a valid image file."
+
+    extension = original_filename.rsplit(".", 1)[1].lower()
+
+    if extension not in ALLOWED_IMAGE_EXTENSIONS:
+        return None, "Upload a PNG, JPG, JPEG, or WEBP image."
+
+    image_data = file.read(MAX_IMAGE_SIZE + 1)
+    file.seek(0)
+
+    if not image_data:
+        return None, "The selected image is empty."
+
+    if len(image_data) > MAX_IMAGE_SIZE:
+        return None, "The image must be 5 MB or smaller."
+
+    # Verify the actual image instead of trusting the extension alone.
+    try:
+        from PIL import Image
+
+        import io
+
+        with Image.open(io.BytesIO(image_data)) as image:
+            if image.format not in {"PNG", "JPEG", "WEBP"}:
+                return None, "The uploaded file is not a supported image."
+
+            image.verify()
+
+    except Exception:
+        return None, "The uploaded file is not a valid image."
+
+    upload_folder = os.path.join(
+        current_app.root_path,
+        "static",
+        "uploads",
+        "profiles",
+    )
+    os.makedirs(upload_folder, exist_ok=True)
+
+    filename = f"employee_{employee_id}_{uuid.uuid4().hex}.{extension}"
+    destination = os.path.join(upload_folder, filename)
+
+    try:
+        with open(destination, "wb") as image_file:
+            image_file.write(image_data)
+    except OSError:
+        current_app.logger.exception("Could not save employee profile picture.")
+        return None, "The profile picture could not be saved."
+
+    return filename, None
+
 
 # View all employees
 @employee_bp.route("/")
@@ -36,6 +110,7 @@ def employee_list():
             per_page=50,
             error_out=False,
         )
+
         return render_template(
             "employee/list.html",
             employees=[],
@@ -43,12 +118,14 @@ def employee_list():
         )
 
     employee_query = Employee.query
+
     if current_user.role == User.EMPLOYEE:
         employee_query = employee_query.filter_by(user_id=current_user.id)
     elif current_user.role == User.HR:
         employee_query = employee_query.join(Employee.user).filter(
             User.role == User.EMPLOYEE
         )
+
     employees = employee_query.order_by(
         Employee.last_name.asc(),
         Employee.first_name.asc(),
@@ -69,10 +146,10 @@ def employee_list():
     )
 
 
+# Add an employee
 @employee_bp.route("/add", methods=["GET", "POST"])
 @management_required
 def add_employee():
-    # Create an employee and its associated user account.
     departments = Department.query.order_by(
         Department.department_name.asc()
     ).all()
@@ -126,14 +203,16 @@ def add_employee():
                 password_hash=generate_password_hash(password),
                 role=User.EMPLOYEE,
             )
+
             employee = Employee(
                 user=user,
                 first_name=first_name,
                 last_name=last_name,
                 position=position,
                 salary=salary,
-                department_id=department_id
+                department_id=department_id,
             )
+
             db.session.add(employee)
             db.session.commit()
 
@@ -143,11 +222,12 @@ def add_employee():
     return render_template("employee/add.html", departments=departments)
 
 
+# Link an existing user to an employee record
 @employee_bp.route("/link-user/<int:user_id>", methods=["GET", "POST"])
 @admin_required
 def link_user_to_employee(user_id):
-    # Create an employee record linked to an existing user account.
     user = db.get_or_404(User, user_id)
+
     if user.employee:
         return redirect(
             url_for("employee.edit_employee", employee_id=user.employee.id)
@@ -156,12 +236,14 @@ def link_user_to_employee(user_id):
     departments = Department.query.order_by(
         Department.department_name.asc()
     ).all()
+
     if request.method == "POST":
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         position = request.form.get("position", "").strip()
         department_id = request.form.get("department_id", type=int)
         salary_value = request.form.get("salary", "").strip()
+
         try:
             salary = Decimal(salary_value)
             if (
@@ -179,6 +261,7 @@ def link_user_to_employee(user_id):
             if department_id
             else None
         )
+
         if not all((first_name, last_name, position)):
             flash("Complete all required employee fields.", "error")
         elif (
@@ -200,12 +283,15 @@ def link_user_to_employee(user_id):
                 salary=salary,
                 department=department,
             )
+
             db.session.add(employee)
             db.session.commit()
+
             flash(
                 f"{user.username} was assigned to {department.department_name}.",
                 "success",
             )
+
             return redirect(
                 url_for("employee.employee_detail", employee_id=employee.id)
             )
@@ -221,6 +307,7 @@ def link_user_to_employee(user_id):
 @employee_bp.route("/<int:employee_id>")
 def employee_detail(employee_id):
     employee_query = Employee.query.filter_by(id=employee_id)
+
     if current_user.role == User.EMPLOYEE:
         own_employee = current_employee()
         employee_query = employee_query.filter_by(
@@ -230,30 +317,35 @@ def employee_detail(employee_id):
         employee_query = employee_query.join(Employee.user).filter(
             User.role == User.EMPLOYEE
         )
+
     employee = employee_query.first_or_404()
 
     return render_template(
         "employee/detail.html",
-        employee=employee
+        employee=employee,
     )
 
 
+# Edit an employee and upload their profile picture
 @employee_bp.route("/<int:employee_id>/edit", methods=["GET", "POST"])
 @management_required
 def edit_employee(employee_id):
-    # Update an employee's details and associated user account.
     employee_query = Employee.query.filter_by(id=employee_id)
+
     if current_user.role == User.HR:
         employee_query = employee_query.join(Employee.user).filter(
             User.role == User.EMPLOYEE
         )
+
     employee = employee_query.first_or_404()
+
     departments = Department.query.order_by(
         Department.department_name.asc()
     ).all()
 
     if request.method == "POST":
         is_admin = current_user.role == User.ADMIN
+
         username = (
             request.form.get("username", "").strip()
             if is_admin
@@ -264,6 +356,7 @@ def edit_employee(employee_id):
             if is_admin
             else employee.user.email
         )
+
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         position = request.form.get("position", "").strip()
@@ -285,15 +378,16 @@ def edit_employee(employee_id):
         duplicate_username = (
             User.query.filter(
                 User.username == username,
-                User.id != employee.user_id
+                User.id != employee.user_id,
             ).first()
             if is_admin
             else None
         )
+
         duplicate_email = (
             User.query.filter(
                 User.email == email,
-                User.id != employee.user_id
+                User.id != employee.user_id,
             ).first()
             if is_admin
             else None
@@ -319,28 +413,88 @@ def edit_employee(employee_id):
         elif duplicate_email:
             flash("That email address is already in use.", "error")
         else:
-            if is_admin:
-                employee.user.username = username
-                employee.user.email = email
-            employee.first_name = first_name
-            employee.last_name = last_name
-            employee.position = position
-            employee.salary = salary
-            employee.department_id = department_id
-            db.session.commit()
+            new_picture = None
+            picture_error = None
 
-            flash("Employee updated successfully.", "success")
-            return redirect(
-                url_for("employee.employee_detail", employee_id=employee.id)
-            )
+            picture_file = request.files.get("profile_picture")
+
+            if picture_file and picture_file.filename:
+                new_picture, picture_error = save_profile_picture(
+                    picture_file,
+                    employee.id,
+                )
+
+            if picture_error:
+                flash(picture_error, "error")
+            else:
+                old_picture = employee.profile_picture
+
+                if is_admin:
+                    employee.user.username = username
+                    employee.user.email = email
+
+                employee.first_name = first_name
+                employee.last_name = last_name
+                employee.position = position
+                employee.salary = salary
+                employee.department_id = department_id
+
+                if new_picture:
+                    employee.profile_picture = new_picture
+
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+                    if new_picture:
+                        new_path = os.path.join(
+                            current_app.root_path,
+                            "static",
+                            "uploads",
+                            "profiles",
+                            new_picture,
+                        )
+                        try:
+                            os.remove(new_path)
+                        except OSError:
+                            pass
+
+                    raise
+
+                # Remove the previous image only after the new one is saved.
+                if new_picture and old_picture:
+                    old_path = os.path.join(
+                        current_app.root_path,
+                        "static",
+                        "uploads",
+                        "profiles",
+                        old_picture,
+                    )
+
+                    try:
+                        if os.path.isfile(old_path):
+                            os.remove(old_path)
+                    except OSError:
+                        current_app.logger.warning(
+                            "Could not remove old profile picture: %s",
+                            old_path,
+                        )
+
+                flash("Employee updated successfully.", "success")
+
+                return redirect(
+                    url_for("employee.employee_detail", employee_id=employee.id)
+                )
 
     return render_template(
         "employee/edit.html",
         employee=employee,
-        departments=departments
+        departments=departments,
     )
 
 
+# Delete an employee
 @employee_bp.route("/<int:employee_id>/delete", methods=["POST"])
 @admin_required
 def delete_employee(employee_id):
@@ -350,11 +504,13 @@ def delete_employee(employee_id):
     if user.id == current_user.id:
         flash("You cannot delete your own account.", "error")
         return redirect(url_for("employee.employee_list"))
+
     if user.role == User.ADMIN and User.query.filter_by(
         role=User.ADMIN
     ).count() <= 1:
         flash("The last administrator cannot be deleted.", "error")
         return redirect(url_for("employee.employee_list"))
+
     if employee.payroll_records:
         flash(
             "This employee cannot be deleted while payroll records exist. "
@@ -365,5 +521,6 @@ def delete_employee(employee_id):
 
     delete_employee_account(employee)
     db.session.commit()
+
     flash("Employee and linked account deleted successfully.", "success")
     return redirect(url_for("employee.employee_list"))
