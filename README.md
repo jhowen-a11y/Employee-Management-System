@@ -182,7 +182,7 @@ python -m unittest discover -s tests -v
 - Disable debug mode in production by setting `FLASK_DEBUG=0` or leaving it unset.
 - Back up the database before applying migrations.
 - If deploying on Vercel, configure the environment variables for each deployment environment and redeploy after changing them.
-- Profile-picture uploads use Supabase Storage so they persist across Vercel deployments. Create a public bucket named `employee-profiles` (or set `SUPABASE_PROFILE_BUCKET` to another bucket name), then configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel. A Supabase secret key can be used as `SUPABASE_SECRET_KEY` instead. Keep either key server-side; never expose it in browser code. Existing local pictures continue to use their local static files until replaced.
+- Profile-picture uploads use Supabase Storage so they persist across Vercel deployments. Photos appear in the shared navigation, employee directory, and employee-related pages. Create a bucket named `employee-profiles` (or set `SUPABASE_PROFILE_BUCKET` to another bucket name); private buckets are supported using expiring signed URLs. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel. A Supabase secret key can be used as `SUPABASE_SECRET_KEY` instead. Keep either key server-side; never expose it in browser code. Existing local pictures continue to use their local static files until replaced.
 
 ## Project structure
 

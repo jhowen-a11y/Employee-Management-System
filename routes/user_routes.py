@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -20,6 +21,12 @@ from models.department import Department
 from models.employee import Employee
 from models.user import User
 from routes.employee_access import delete_employee_account
+from profile_storage import (
+    ProfileStorageError,
+    delete_profile_picture,
+    profile_picture_urls,
+    save_profile_picture,
+)
 
 user_bp = Blueprint("users", __name__, url_prefix="/users")
 ACCOUNT_CREATION_ROLES = User.ROLES
@@ -30,7 +37,8 @@ def require_admin():
     # Allow only administrators, except when users edit their own profile.
     if (
         current_user.role != User.ADMIN
-        and request.endpoint != "users.edit_profile"
+        and request.endpoint
+        not in {"users.edit_profile", "users.edit_profile_picture"}
     ):
         abort(403)
 
@@ -45,11 +53,19 @@ def user_list():
         per_page=50,
         error_out=False,
     )
+    picture_urls = profile_picture_urls(
+        [
+            user.employee.profile_picture
+            for user in users.items
+            if user.employee and user.employee.profile_picture
+        ]
+    )
     return render_template(
         "users/list.html",
         users=users,
         roles=User.ROLES,
         admin_count=User.query.filter_by(role=User.ADMIN).count(),
+        profile_picture_urls=picture_urls,
     )
 
 
@@ -96,6 +112,49 @@ def edit_profile():
             return redirect(url_for("users.edit_profile"))
 
     return render_template("users/profile.html")
+
+
+@user_bp.route("/profile/picture", methods=["POST"])
+def edit_profile_picture():
+    employee = current_user.employee
+    if employee is None:
+        flash("Your account is not linked to an employee record.", "error")
+        return redirect(url_for("users.edit_profile"))
+
+    image_file = request.files.get("profile_picture")
+    if not image_file or not image_file.filename:
+        flash("Choose a profile picture to upload.", "error")
+        return redirect(url_for("users.edit_profile"))
+
+    new_picture, picture_error = save_profile_picture(image_file, employee.id)
+    if picture_error:
+        flash(picture_error, "error")
+        return redirect(url_for("users.edit_profile"))
+
+    old_picture = employee.profile_picture
+    employee.profile_picture = new_picture
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        try:
+            delete_profile_picture(new_picture)
+        except ProfileStorageError:
+            current_app.logger.exception(
+                "Could not remove uncommitted profile picture from storage."
+            )
+        raise
+
+    if old_picture:
+        try:
+            delete_profile_picture(old_picture)
+        except ProfileStorageError:
+            current_app.logger.warning(
+                "Could not remove the previous profile picture from storage."
+            )
+
+    flash("Profile picture updated successfully.", "success")
+    return redirect(url_for("users.edit_profile"))
 
 
 @user_bp.route("/<int:user_id>/edit", methods=["GET", "POST"])

@@ -6,6 +6,7 @@ from models import db
 from models.department import Department
 from models.user import User
 from routes.employee_access import current_employee, management_required
+from profile_storage import profile_picture_urls
 
 department_bp = Blueprint(
     "department",
@@ -43,10 +44,18 @@ def department_detail(department_id):
             id=employee.department_id if employee else None
         )
     department = department_query.first_or_404()
+    picture_urls = profile_picture_urls(
+        [
+            employee.profile_picture
+            for employee in department.employees
+            if employee.profile_picture
+        ]
+    )
 
     return render_template(
         "departments/detail.html",
-        department=department
+        department=department,
+        profile_picture_urls=picture_urls,
     )
 
 

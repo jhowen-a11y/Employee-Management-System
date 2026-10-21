@@ -1,0 +1,9 @@
+{% macro person_avatar(photo_url, display_name, class_name='person-avatar') -%}
+    {% if photo_url %}
+    <img class="{{ class_name }}" src="{{ photo_url }}" alt="">
+    {% else %}
+    <span class="{{ class_name }} person-avatar-fallback" aria-hidden="true">
+        {{ display_name.split() | map('first') | join('') | upper or '?' }}
+    </span>
+    {% endif %}
+{%- endmacro %}

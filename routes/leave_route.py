@@ -8,6 +8,7 @@ from models import db
 from models.employee import Employee
 from models.leave import Leave
 from models.user import User
+from profile_storage import profile_picture_urls
 from routes.employee_access import (
     current_employee,
     employee_scoped_query,
@@ -36,10 +37,18 @@ def leave_list():
         per_page=50,
         error_out=False,
     )
+    picture_urls = profile_picture_urls(
+        [
+            leave.employee.profile_picture
+            for leave in leaves.items
+            if leave.employee.profile_picture
+        ]
+    )
 
     return render_template(
         "leave/list.html",
-        leaves=leaves
+        leaves=leaves,
+        profile_picture_urls=picture_urls,
     )
 
 

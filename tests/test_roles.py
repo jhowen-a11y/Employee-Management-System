@@ -1,6 +1,7 @@
 import os
 import re
 import unittest
+from io import BytesIO
 from unittest.mock import patch
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -1566,7 +1567,7 @@ class RoleManagementTests(unittest.TestCase):
         profile = self.client.get("/users/profile")
         self.assertEqual(profile.status_code, 200)
         self.assertIn(b'name="email"', profile.get_data())
-        self.assertIn(b'class="profile-initials"', profile.get_data())
+        self.assertIn(b"person-avatar-fallback", profile.get_data())
         response = self.client.post(
             "/users/profile",
             data={
@@ -1606,6 +1607,82 @@ class RoleManagementTests(unittest.TestCase):
             ).status_code,
             302,
         )
+
+    def test_employee_can_upload_own_profile_picture(self):
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Profile Photos")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.commit()
+            employee_id = employee.id
+
+        self.login(self.client, "staff", "StaffPass123")
+        profile = self.client.get("/users/profile")
+        self.assertIn(b'action="/users/profile/picture"', profile.get_data())
+
+        with patch(
+            "routes.user_routes.save_profile_picture",
+            return_value=("employee_1_new.jpg", None),
+        ):
+            response = self.client.post(
+                "/users/profile/picture",
+                data={
+                    "_csrf_token": self.csrf_token(profile),
+                    "profile_picture": (BytesIO(b"test image"), "avatar.jpg"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/users/profile")
+        with self.app.app_context():
+            employee = self.db.session.get(self.Employee, employee_id)
+            self.assertEqual(employee.profile_picture, "employee_1_new.jpg")
+
+    def test_employee_directory_shows_profile_picture_by_employee_name(self):
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Directory Photos")
+            self.db.session.add(department)
+            self.db.session.flush()
+            self.db.session.add(
+                self.Employee(
+                    user_id=self.employee_id,
+                    first_name="Jamie",
+                    last_name="Staff",
+                    position="Analyst",
+                    salary=Decimal("50000.00"),
+                    department_id=department.id,
+                    profile_picture="employee_1_photo.jpg",
+                )
+            )
+            self.db.session.commit()
+
+        self.login(self.client, "admin", "AdminPass123")
+        with patch(
+            "routes.employee_routes.profile_picture_urls",
+            return_value={
+                "employee_1_photo.jpg": "https://example.test/signed-photo"
+            },
+        ):
+            response = self.client.get("/employees/")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('src="https://example.test/signed-photo"', html)
+        self.assertIn("Jamie Staff", html)
 
     def test_admin_login_stays_on_shared_dashboard(self):
         response = self.login(self.client, "admin", "AdminPass123")

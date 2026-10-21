@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/avatar.html" import person_avatar with context %}
 
 {% block title %}Employees | MCM EMS{% endblock %}
 {% block header_title %}Employees{% endblock %}
@@ -26,7 +27,14 @@
                 <td>{{ user.role|capitalize }}</td>
                 <td>
                     {% if user.employee %}
-                    {{ user.employee.first_name }} {{ user.employee.last_name }}
+                    <div class="employee-list-person">
+                        {{ person_avatar(
+                            profile_picture_urls.get(user.employee.profile_picture),
+                            user.employee.first_name ~ ' ' ~ user.employee.last_name,
+                            'employee-list-avatar'
+                        ) }}
+                        <span>{{ user.employee.first_name }} {{ user.employee.last_name }}</span>
+                    </div>
                     {% else %}
                     —
                     {% endif %}
@@ -76,7 +84,16 @@
             <tbody>
             {% for employee in employees %}
             <tr>
-                <td>{{ employee.first_name }} {{ employee.last_name }}</td>
+                <td>
+                    <div class="employee-list-person">
+                        {{ person_avatar(
+                            profile_picture_urls.get(employee.profile_picture),
+                            employee.first_name ~ ' ' ~ employee.last_name,
+                            'employee-list-avatar'
+                        ) }}
+                        <span>{{ employee.first_name }} {{ employee.last_name }}</span>
+                    </div>
+                </td>
                 <td>{{ employee.position }}</td>
                 <td>{{ employee.department.department_name }}</td>
                 <td>{{ employee.user.email }}</td>

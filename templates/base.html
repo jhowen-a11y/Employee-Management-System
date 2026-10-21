@@ -1,3 +1,4 @@
+{% from "components/avatar.html" import person_avatar with context %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -173,10 +174,20 @@
                     System Online
                 </div>
 
-                <span class="account-label">
-                    {{ current_user.username }}<br>
-                    <small>{{ current_user.role|capitalize }}</small>
-                </span>
+                {% set signed_in_name = current_user.username %}
+                <a class="topbar-profile" href="{{ url_for('users.edit_profile') }}">
+                    {{ person_avatar(
+                        profile_picture_url(current_user.employee.profile_picture)
+                        if current_user.employee and current_user.employee.profile_picture
+                        else none,
+                        signed_in_name,
+                        'topbar-avatar'
+                    ) }}
+                    <span class="account-label">
+                        {{ signed_in_name }}<br>
+                        <small>{{ current_user.role|capitalize }}</small>
+                    </span>
+                </a>
                 <form method="post" action="{{ url_for('auth.logout') }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button class="button button-secondary button-small" type="submit">

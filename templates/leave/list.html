@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/avatar.html" import person_avatar with context %}
 
 {% block title %}Leave Requests | MCM EMS{% endblock %}
 {% block header_title %}Leave Requests{% endblock %}
@@ -18,7 +19,16 @@
             <tbody>
             {% for leave in leaves %}
             <tr>
-                <td>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</td>
+                <td>
+                    <div class="employee-list-person">
+                        {{ person_avatar(
+                            profile_picture_urls.get(leave.employee.profile_picture),
+                            leave.employee.first_name ~ ' ' ~ leave.employee.last_name,
+                            'employee-list-avatar'
+                        ) }}
+                        <span>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</span>
+                    </div>
+                </td>
                 <td>{{ leave.leave_type }}</td>
                 <td>{{ leave.start_date }} – {{ leave.end_date }}</td>
                 <td>{{ leave.status }}</td>

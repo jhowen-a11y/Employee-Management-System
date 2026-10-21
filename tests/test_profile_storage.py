@@ -9,7 +9,6 @@ from werkzeug.datastructures import FileStorage
 
 import profile_storage
 from profile_storage import ProfileStorageError
-from routes.employee_routes import save_profile_picture
 
 
 class ProfileStorageTests(unittest.TestCase):
@@ -25,14 +24,48 @@ class ProfileStorageTests(unittest.TestCase):
         self.environment.start()
         self.addCleanup(self.environment.stop)
 
-    def test_profile_picture_url_uses_public_bucket_url(self):
+    @patch("profile_storage._storage_bucket")
+    def test_profile_picture_url_uses_signed_url_for_private_bucket(self, storage):
+        storage.return_value.create_signed_urls.return_value = [
+            {"signedURL": "https://example.supabase.co/signed/photo.jpg"}
+        ]
         app = Flask(__name__)
         with app.app_context():
             self.assertEqual(
                 profile_storage.profile_picture_url("employee_1_photo.jpg"),
-                "https://example.supabase.co/storage/v1/object/public/"
-                "employee-photos/employee_1_photo.jpg",
+                "https://example.supabase.co/signed/photo.jpg",
             )
+        storage.return_value.create_signed_urls.assert_called_once_with(
+            ["employee_1_photo.jpg"],
+            expires_in=3600,
+        )
+
+    @patch("profile_storage._storage_bucket")
+    def test_profile_picture_urls_sign_multiple_pictures_in_one_request(
+        self,
+        storage,
+    ):
+        storage.return_value.create_signed_urls.return_value = [
+            {"signedURL": "https://example.test/one"},
+            {"signedURL": "https://example.test/two"},
+        ]
+
+        with Flask(__name__).app_context():
+            urls = profile_storage.profile_picture_urls(
+                ["one.jpg", "two.jpg", "one.jpg"]
+            )
+
+        self.assertEqual(
+            urls,
+            {
+                "one.jpg": "https://example.test/one",
+                "two.jpg": "https://example.test/two",
+            },
+        )
+        storage.return_value.create_signed_urls.assert_called_once_with(
+            ["one.jpg", "two.jpg"],
+            expires_in=3600,
+        )
 
     def test_profile_picture_url_rejects_paths(self):
         app = Flask(__name__)
@@ -64,7 +97,7 @@ class ProfileStorageTests(unittest.TestCase):
             {"content-type": "image/png", "upsert": "false"},
         )
 
-    @patch("routes.employee_routes.upload_profile_picture")
+    @patch("profile_storage.upload_profile_picture")
     def test_upload_uses_actual_image_format(self, upload):
         image_data = BytesIO()
         Image.new("RGB", (2, 2), color="blue").save(
@@ -76,7 +109,10 @@ class ProfileStorageTests(unittest.TestCase):
 
         app = Flask(__name__)
         with app.app_context():
-            filename, error = save_profile_picture(upload_file, employee_id=1)
+            filename, error = profile_storage.save_profile_picture(
+                upload_file,
+                employee_id=1,
+            )
 
         self.assertIsNone(error)
         self.assertTrue(filename.endswith(".png"))

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/avatar.html" import person_avatar with context %}
 
 {% block title %}Users &amp; Roles | MCM EMS{% endblock %}
 {% block header_title %}Users &amp; Roles{% endblock %}
@@ -28,7 +29,18 @@
             <tbody>
                 {% for user in users %}
                 <tr>
-                    <td>{{ user.username }}</td>
+                    <td>
+                        <div class="employee-list-person">
+                            {{ person_avatar(
+                                profile_picture_urls.get(user.employee.profile_picture)
+                                if user.employee else none,
+                                user.employee.first_name ~ ' ' ~ user.employee.last_name
+                                if user.employee else user.username,
+                                'employee-list-avatar'
+                            ) }}
+                            <span>{{ user.username }}</span>
+                        </div>
+                    </td>
                     <td>{{ user.email }}</td>
                     <td>
                         {% if user.id == current_user.id %}

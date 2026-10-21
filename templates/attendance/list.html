@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/avatar.html" import person_avatar with context %}
 
 {% block title %}Attendance | MCM EMS{% endblock %}
 {% block header_title %}Attendance{% endblock %}
@@ -20,7 +21,16 @@
             <tbody>
             {% for record in records %}
             <tr>
-                <td>{{ record.employee.first_name }} {{ record.employee.last_name }}</td>
+                <td>
+                    <div class="employee-list-person">
+                        {{ person_avatar(
+                            profile_picture_urls.get(record.employee.profile_picture),
+                            record.employee.first_name ~ ' ' ~ record.employee.last_name,
+                            'employee-list-avatar'
+                        ) }}
+                        <span>{{ record.employee.first_name }} {{ record.employee.last_name }}</span>
+                    </div>
+                </td>
                 <td>{{ record.attendance_date }}</td>
                 <td>{{ record.time_in or '—' }}</td>
                 <td>{{ record.time_out or '—' }}</td>

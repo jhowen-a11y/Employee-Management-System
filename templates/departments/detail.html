@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/avatar.html" import person_avatar with context %}
 
 {% block title %}Department Details | MCM EMS{% endblock %}
 {% block header_title %}Department Details{% endblock %}
@@ -17,7 +18,15 @@
     {% if department.employees %}
     <ul>
         {% for employee in department.employees %}
-        <li><a href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">{{ employee.first_name }} {{ employee.last_name }}</a> — {{ employee.position }}</li>
+        <li class="department-employee">
+            {{ person_avatar(
+                profile_picture_urls.get(employee.profile_picture),
+                employee.first_name ~ ' ' ~ employee.last_name,
+                'employee-list-avatar'
+            ) }}
+            <a href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">{{ employee.first_name }} {{ employee.last_name }}</a>
+            <span>— {{ employee.position }}</span>
+        </li>
         {% endfor %}
     </ul>
     {% else %}

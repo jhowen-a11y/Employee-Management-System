@@ -1,8 +1,5 @@
 
-import os
-import uuid
 from decimal import Decimal, InvalidOperation
-from io import BytesIO
 
 from flask import (
     Blueprint,
@@ -16,7 +13,6 @@ from flask import (
 from flask_login import current_user
 from sqlalchemy.orm import selectinload
 from werkzeug.security import generate_password_hash
-from werkzeug.utils import secure_filename
 
 from models import db
 from models.department import Department
@@ -25,7 +21,8 @@ from models.user import User
 from profile_storage import (
     ProfileStorageError,
     delete_profile_picture,
-    upload_profile_picture,
+    profile_picture_urls,
+    save_profile_picture,
 )
 from routes.auth_routes import admin_required
 from routes.employee_access import (
@@ -41,68 +38,6 @@ employee_bp = Blueprint(
     url_prefix="/employees"
 )
 
-ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
-
-
-def save_profile_picture(file, employee_id):
-    """Save an uploaded profile picture and return its filename."""
-    if not file or not file.filename:
-        return None, None
-
-    original_filename = secure_filename(file.filename)
-
-    if not original_filename or "." not in original_filename:
-        return None, "Choose a valid image file."
-
-    extension = original_filename.rsplit(".", 1)[1].lower()
-
-    if extension not in ALLOWED_IMAGE_EXTENSIONS:
-        return None, "Upload a PNG, JPG, JPEG, or WEBP image."
-
-    image_data = file.read(MAX_IMAGE_SIZE + 1)
-    file.seek(0)
-
-    if not image_data:
-        return None, "The selected image is empty."
-
-    if len(image_data) > MAX_IMAGE_SIZE:
-        return None, "The image must be 5 MB or smaller."
-
-    # Verify the actual image instead of trusting the extension alone.
-    try:
-        from PIL import Image
-
-        with Image.open(BytesIO(image_data)) as image:
-            image_format = image.format
-            image.verify()
-    except Exception:
-        return None, "The uploaded file is not a valid image."
-
-    image_details = {
-        "PNG": ("png", "image/png"),
-        "JPEG": ("jpg", "image/jpeg"),
-        "WEBP": ("webp", "image/webp"),
-    }
-    if image_format not in image_details:
-        return None, "The uploaded file is not a supported image."
-
-    extension, content_type = image_details[image_format]
-    filename = f"employee_{employee_id}_{uuid.uuid4().hex}.{extension}"
-    try:
-        upload_profile_picture(filename, image_data, content_type)
-    except ProfileStorageError:
-        current_app.logger.exception(
-            "Could not upload employee profile picture to Supabase Storage."
-        )
-        return None, (
-            "The profile picture could not be uploaded. Check the storage "
-            "configuration and try again."
-        )
-
-    return filename, None
-
-
 # View all employees
 @employee_bp.route("/")
 def employee_list():
@@ -114,11 +49,19 @@ def employee_list():
             per_page=50,
             error_out=False,
         )
+        picture_urls = profile_picture_urls(
+            [
+                user.employee.profile_picture
+                for user in users.items
+                if user.employee and user.employee.profile_picture
+            ]
+        )
 
         return render_template(
             "employee/list.html",
             employees=[],
             users=users,
+            profile_picture_urls=picture_urls,
         )
 
     employee_query = Employee.query
@@ -142,11 +85,19 @@ def employee_list():
         per_page=50,
         error_out=False,
     )
+    picture_urls = profile_picture_urls(
+        [
+            employee.profile_picture
+            for employee in employees.items
+            if employee.profile_picture
+        ]
+    )
 
     return render_template(
         "employee/list.html",
         employees=employees,
         users=None,
+        profile_picture_urls=picture_urls,
     )
 
 

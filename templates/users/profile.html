@@ -1,5 +1,6 @@
 
 {% extends "base.html" %}
+{% from "components/avatar.html" import person_avatar with context %}
 
 {% block title %}My Profile | MCM EMS{% endblock %}
 {% block header_title %}My Profile{% endblock %}
@@ -23,17 +24,12 @@
         {% endif %}
         
         <div class="profile-avatar">
-            {% if current_user.employee and current_user.employee.profile_picture %}
-                <img
-                    src="{{ profile_picture_url(current_user.employee.profile_picture) }}"
-                    alt="{{ profile_name }} profile picture"
-                    style="width: 100%; height: 100%; object-fit: contain; object-position: center; transform: scale(1);"
-                >
-            {% else %}
-                <span class="profile-initials">
-                    {{ profile_name.split() | map('first') | join('') | upper }}
-                </span>
-            {% endif %}
+            {{ person_avatar(
+                profile_picture_url(current_user.employee.profile_picture)
+                if current_user.employee and current_user.employee.profile_picture else none,
+                profile_name,
+                'profile-picture-img'
+            ) }}
         </div>
 
 
@@ -48,6 +44,30 @@
             </span>
         </div>
     </div>
+
+    {% if current_user.employee %}
+    <form
+        method="post"
+        action="{{ url_for('users.edit_profile_picture') }}"
+        enctype="multipart/form-data"
+        class="profile-picture-form"
+    >
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label for="profile_picture">Change profile picture</label>
+        <input
+            id="profile_picture"
+            name="profile_picture"
+            type="file"
+            accept=".png,.jpg,.jpeg,.webp"
+            required
+        >
+        <small>PNG, JPG, JPEG, or WEBP; maximum 5 MB.</small>
+        <button class="button button-secondary" type="submit">
+            <i data-lucide="camera" aria-hidden="true"></i>
+            Upload picture
+        </button>
+    </form>
+    {% endif %}
 
     <div class="profile-divider"></div>
 
