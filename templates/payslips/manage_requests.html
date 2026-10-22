@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Payslip Requests | MCM EMS{% endblock %}
+{% block header_title %}Manage Payslip Requests{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>Manage Payslip Requests</h1>
+        <p>Review employee requests without changing or recalculating payroll records.</p>
+    </div>
+    <a class="button button-secondary" href="{{ url_for('payroll.payroll_list') }}">Payroll Management</a>
+</div>
+<form class="payslip-filter" method="get">
+    <label for="status">Filter by status</label>
+    <select id="status" name="status">
+        <option value="">All requests</option>
+        {% for status in statuses %}
+        <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+        {% endfor %}
+    </select>
+    <button class="button button-secondary button-small" type="submit">Apply filter</button>
+</form>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr><th>Request</th><th>Employee</th><th>Pay period</th><th>Reason / details</th><th>Request date</th><th>Status</th><th>Reviewer / remarks</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+                {% for payslip_request in payslip_requests %}
+                <tr>
+                    <td>#{{ payslip_request.id }}</td>
+                    <td>{{ payslip_request.employee.first_name }} {{ payslip_request.employee.last_name }}<small class="table-secondary-text">EMP-{{ "%04d"|format(payslip_request.employee_id) }} · employee #{{ payslip_request.employee_id }}</small></td>
+                    <td>{{ payslip_request.pay_period_start }} – {{ payslip_request.pay_period_end }}</td>
+                    <td>{{ payslip_request.reason }}{% if payslip_request.details %}<small class="table-secondary-text">{{ payslip_request.details }}</small>{% endif %}</td>
+                    <td>{{ payslip_request.request_date.strftime('%Y-%m-%d %H:%M') if payslip_request.request_date else '—' }}</td>
+                    <td><span class="employee-status-badge {{ payslip_request.status|lower }}">{{ payslip_request.status }}</span></td>
+                    <td>
+                        {% if payslip_request.reviewer %}{{ payslip_request.reviewer.username }}{% if payslip_request.reviewed_at %}<small class="table-secondary-text">{{ payslip_request.reviewed_at.strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}{% else %}—{% endif %}
+                        {% if payslip_request.hr_remarks %}<small class="table-secondary-text">{{ payslip_request.hr_remarks }}</small>{% endif %}
+                    </td>
+                    <td><a class="button button-secondary button-small" href="{{ url_for('payslip.review_payslip_request', request_id=payslip_request.id) }}">Review</a></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="empty-state">No payslip requests match this filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

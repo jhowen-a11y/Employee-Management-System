@@ -24,6 +24,8 @@ from models.attendance import Attendance
 from models.department import Department
 from models.leave import Leave
 from models.payroll import Payroll
+from models.payslip_request import PayslipRequest
+from models.travel_order import TravelOrder
 from models.user import User
 
 
@@ -110,7 +112,24 @@ def employee_home():
     )
     payroll_records = (
         Payroll.query.filter_by(employee_id=employee.id)
+        .filter(Payroll.payment_date.is_not(None))
         .order_by(Payroll.pay_period_start.desc(), Payroll.id.desc())
+        .limit(5)
+        .all()
+        if employee
+        else []
+    )
+    payslip_requests = (
+        PayslipRequest.query.filter_by(employee_id=employee.id)
+        .order_by(PayslipRequest.request_date.desc(), PayslipRequest.id.desc())
+        .limit(5)
+        .all()
+        if employee
+        else []
+    )
+    travel_orders = (
+        TravelOrder.query.filter_by(employee_id=employee.id)
+        .order_by(TravelOrder.created_at.desc(), TravelOrder.id.desc())
         .limit(5)
         .all()
         if employee
@@ -122,6 +141,8 @@ def employee_home():
         attendance_records=attendance_records,
         leave_requests=leave_requests,
         payroll_records=payroll_records,
+        payslip_requests=payslip_requests,
+        travel_orders=travel_orders,
     )
 
 
@@ -168,6 +189,10 @@ def hr_home():
             .where(Payroll.payment_date.is_(None))
             .scalar_subquery()
             .label("pending_payroll_count"),
+            select(func.count(PayslipRequest.id))
+            .where(PayslipRequest.status == PayslipRequest.PENDING)
+            .scalar_subquery()
+            .label("pending_payslip_request_count"),
         )
     ).one()
     return render_template(
@@ -180,6 +205,7 @@ def hr_home():
         pending_leave_count=counts.pending_leave_count,
         payroll_count=counts.payroll_count,
         pending_payroll_count=counts.pending_payroll_count,
+        pending_payslip_request_count=counts.pending_payslip_request_count,
         today=today,
     )
 

@@ -7,6 +7,8 @@ from models import db
 from models.attendance import Attendance
 from models.employee import Employee
 from models.leave import Leave
+from models.payslip_request import PayslipRequest
+from models.travel_order import TravelOrder
 from models.user import User
 
 
@@ -16,6 +18,12 @@ def delete_employee_account(employee):
         synchronize_session=False
     )
     Leave.query.filter_by(employee_id=employee.id).delete(
+        synchronize_session=False
+    )
+    PayslipRequest.query.filter_by(employee_id=employee.id).delete(
+        synchronize_session=False
+    )
+    TravelOrder.query.filter_by(employee_id=employee.id).delete(
         synchronize_session=False
     )
     user = employee.user

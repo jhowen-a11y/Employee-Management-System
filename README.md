@@ -20,7 +20,9 @@ A role-based employee management web application built with Flask and PostgreSQL
 
 - Employee profiles and department management
 - Attendance records and leave-request review
-- Payroll records and employee self-service
+- Payroll management for HR/admins and finalized payslips for employees
+- Employee payslip requests with HR/admin approval and request history
+- Employee travel order requests with HR/admin approval tracking
 - Separate administrator, HR, and employee experiences
 - Sign-in required for application pages, with CSRF protection on forms
 - PostgreSQL schema migrations for query-performance indexes
@@ -117,7 +119,7 @@ Back up the database, then apply pending migrations:
 flask --app app db upgrade
 ```
 
-The current migration adds indexes for attendance, leave, and payroll queries. The baseline migration assumes the core tables are already present; it does not migrate records from another database engine. If you are moving data from MySQL or another database, export and migrate that data separately.
+The migrations add indexes for attendance, leave, and payroll queries, and a `payslip_requests` table for employee requests. A follow-up migration stores the requested pay period independently so employees can request missing periods that do not yet have a payroll row. Apply pending migrations with the command above. HR must create and finalize payroll through the existing payroll workflow before approving a request; approval never creates or recalculates payroll. A payslip is available only after a payment date has been recorded. Payslips display the saved values on the payroll record rather than recalculating from the employee's current salary. The baseline migration assumes the core tables are already present; it does not migrate records from another database engine. If you are moving data from MySQL or another database, export and migrate that data separately.
 
 > **Note:** Use migrations to change an established database schema. Do not run `db.create_all()` against an existing production database.
 
@@ -145,9 +147,9 @@ Open <http://127.0.0.1:5000/> in your browser. Press `Ctrl+C` in the terminal to
 
 | Role | Typical access |
 | --- | --- |
-| **Administrator** | Manage user accounts and roles, employee profiles, departments, attendance, leave, and payroll. |
-| **HR** | Manage employee employment details and departments, manage attendance, and review leave requests. HR cannot manage administrator/HR accounts or employee login credentials. |
-| **Employee** | View their own employee details, attendance, leave, and payroll; submit their own leave requests; update their profile. |
+| **Administrator** | Manage user accounts and roles, employee profiles, departments, attendance, leave, payroll, payslip requests, and travel orders. |
+| **HR** | Manage employee employment details and departments, attendance, payroll, payslip requests, travel orders, and leave review. HR cannot manage administrator/HR accounts or employee login credentials. |
+| **Employee** | View their own employee details, attendance, leave, finalized payslips, and request histories; submit their own leave, payslip, and travel order requests; update their profile. |
 
 All application pages require sign-in. Users are redirected to a role-specific home page after signing in. Payroll history cannot be deleted.
 
@@ -163,7 +165,13 @@ All application pages require sign-in. Users are redirected to a role-specific h
 | Departments | `/departments/` | Administrator and HR |
 | Attendance | `/attendance/` | Role-dependent |
 | Leave requests | `/leaves/` | Role-dependent |
-| Payroll | `/payroll/` | Role-dependent |
+| Payroll Management | `/payroll/` | Administrator and HR |
+| My Payslips | `/payslips/` | Employee |
+| Payslip Requests | `/payslips/requests` | Employee |
+| Manage Payslip Requests | `/payslips/manage` | Administrator and HR |
+| My Travel Orders | `/travel-orders/` | Employee |
+| Submit Travel Order | `/travel-orders/submit` | Employee |
+| Manage Travel Orders | `/travel-orders/manage` | Administrator and HR |
 | Users & Roles | `/users/` | Administrator |
 | Edit profile | `/users/profile` | Signed-in users |
 | Users API | `/users/api` | Administrator |

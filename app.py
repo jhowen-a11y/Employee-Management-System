@@ -18,6 +18,8 @@ from models.department import Department
 from models.employee import Employee
 from models.leave import Leave
 from models.payroll import Payroll
+from models.payslip_request import PayslipRequest
+from models.travel_order import TravelOrder
 from models.user import User
 from profile_storage import profile_picture_url
 from routes.auth_routes import auth_bp
@@ -26,6 +28,8 @@ from routes.attendance_routes import attendance_bp
 from routes.department_routes import department_bp
 from routes.leave_route import leave_bp
 from routes.payroll_route import payroll_bp
+from routes.payslip_routes import payslip_bp
+from routes.travel_order_routes import travel_order_bp
 from routes.user_routes import user_bp
 
 login_manager = LoginManager()
@@ -139,6 +143,8 @@ def create_app(test_config=None):
     app.register_blueprint(department_bp)
     app.register_blueprint(leave_bp)
     app.register_blueprint(payroll_bp)
+    app.register_blueprint(payslip_bp)
+    app.register_blueprint(travel_order_bp)
     app.register_blueprint(user_bp)
 
     @app.route("/")

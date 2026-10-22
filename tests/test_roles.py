@@ -30,6 +30,8 @@ class RoleManagementTests(unittest.TestCase):
         from models.employee import Employee
         from models.leave import Leave
         from models.payroll import Payroll
+        from models.payslip_request import PayslipRequest
+        from models.travel_order import TravelOrder
         from models.user import User
 
         cls.db = db
@@ -38,6 +40,8 @@ class RoleManagementTests(unittest.TestCase):
         cls.Employee = Employee
         cls.Leave = Leave
         cls.Payroll = Payroll
+        cls.PayslipRequest = PayslipRequest
+        cls.TravelOrder = TravelOrder
         cls.User = User
         cls.app = create_app(
             {"SQLALCHEMY_DATABASE_URI": "sqlite://", "TESTING": True}
@@ -1177,7 +1181,8 @@ class RoleManagementTests(unittest.TestCase):
             "/attendance/",
             "/leaves/",
             "/leaves/add",
-            "/payroll/",
+            "/payslips/",
+            "/payslips/requests",
             "/users/profile",
         ):
             with self.subTest(path=path):
@@ -1445,6 +1450,7 @@ class RoleManagementTests(unittest.TestCase):
                 allowances=Decimal("0.00"),
                 deductions=Decimal("0.00"),
                 net_pay=Decimal("5000.00"),
+                payment_date=date(2026, 10, 1),
             )
             other_payroll = self.Payroll(
                 employee=other_employee,
@@ -1454,6 +1460,7 @@ class RoleManagementTests(unittest.TestCase):
                 allowances=Decimal("0.00"),
                 deductions=Decimal("0.00"),
                 net_pay=Decimal("7000.00"),
+                payment_date=date(2026, 10, 1),
             )
             self.db.session.add_all(
                 [
@@ -1483,7 +1490,8 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"5000.00", home.get_data())
         self.assertIn(b"My Department", home.get_data())
         self.assertIn(b"My Attendance", home.get_data())
-        self.assertIn(b"My Payroll", home.get_data())
+        self.assertIn(b"My Payslips", home.get_data())
+        self.assertNotIn(b"My Payroll", home.get_data())
         self.assertIn(b"Edit Profile", home.get_data())
         self.assertNotIn(b"Users &amp; Roles", home.get_data())
         self.assertNotIn(b">Employees<", home.get_data())
@@ -1494,14 +1502,14 @@ class RoleManagementTests(unittest.TestCase):
             f"/departments/{own_department_id}",
             f"/attendance/{own_attendance_id}",
             f"/leaves/{own_leave_id}",
-            f"/payroll/{own_payroll_id}",
+            f"/payslips/{own_payroll_id}",
         )
         other_routes = (
             f"/employees/{other_employee_id}",
             f"/departments/{other_department_id}",
             f"/attendance/{other_attendance_id}",
             f"/leaves/{other_leave_id}",
-            f"/payroll/{other_payroll_id}",
+            f"/payslips/{other_payroll_id}",
         )
         for path in own_routes:
             with self.subTest(path=path):
@@ -1509,6 +1517,9 @@ class RoleManagementTests(unittest.TestCase):
         for path in other_routes:
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 404)
+        for path in ("/payroll/", f"/payroll/{own_payroll_id}"):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 403)
 
         csrf_page = self.client.get("/employee/home")
         token = self.csrf_token(csrf_page)
@@ -1520,14 +1531,8 @@ class RoleManagementTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 403)
-        self.assertNotIn(
-            b"Edit payroll",
-            self.client.get(f"/payroll/{own_payroll_id}").get_data(),
-        )
-        self.assertNotIn(
-            b">Edit</a>",
-            self.client.get("/payroll/").get_data(),
-        )
+        self.assertEqual(self.client.get(f"/payroll/{own_payroll_id}").status_code, 403)
+        self.assertEqual(self.client.get("/payroll/").status_code, 403)
         self.assertEqual(
             self.client.post(
                 f"/payroll/{own_payroll_id}/delete",
@@ -1768,6 +1773,561 @@ class RoleManagementTests(unittest.TestCase):
                 )
                 asset_response.close()
 
+    def test_employee_payslips_are_finalized_owned_and_downloadable(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Payslip access")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employees = [
+                self.Employee(
+                    user_id=user_id,
+                    first_name=name,
+                    last_name="Staff",
+                    position="Analyst",
+                    salary=Decimal("50000.00"),
+                    department_id=department.id,
+                )
+                for user_id, name in (
+                    (self.employee_id, "Own"),
+                    (self.hr_id, "Other"),
+                )
+            ]
+            self.db.session.add_all(employees)
+            self.db.session.flush()
+            own_payroll = self.Payroll(
+                employee_id=employees[0].id,
+                pay_period_start=date(2026, 9, 1),
+                pay_period_end=date(2026, 9, 30),
+                basic_salary=Decimal("4000.00"),
+                allowances=Decimal("250.00"),
+                deductions=Decimal("100.00"),
+                net_pay=Decimal("4150.00"),
+                payment_date=date(2026, 10, 1),
+            )
+            draft_payroll = self.Payroll(
+                employee_id=employees[0].id,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31),
+                basic_salary=Decimal("5000.00"),
+                allowances=Decimal("0.00"),
+                deductions=Decimal("0.00"),
+                net_pay=Decimal("5000.00"),
+            )
+            other_payroll = self.Payroll(
+                employee_id=employees[1].id,
+                pay_period_start=date(2026, 9, 1),
+                pay_period_end=date(2026, 9, 30),
+                basic_salary=Decimal("7000.00"),
+                allowances=Decimal("0.00"),
+                deductions=Decimal("0.00"),
+                net_pay=Decimal("7000.00"),
+                payment_date=date(2026, 10, 1),
+            )
+            self.db.session.add_all([own_payroll, draft_payroll, other_payroll])
+            employees[0].salary = Decimal("99000.00")
+            self.db.session.commit()
+            own_id = own_payroll.id
+            draft_id = draft_payroll.id
+            other_id = other_payroll.id
+
+        self.login(self.client, "staff", "StaffPass123")
+        listing = self.client.get("/payslips/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertIn(b"4150.00", listing.data)
+        self.assertNotIn(b"5000.00", listing.data)
+        self.assertNotIn(b"7000.00", listing.data)
+        self.assertEqual(self.client.get(f"/payslips/{own_id}").status_code, 200)
+        self.assertEqual(self.client.get(f"/payslips/{draft_id}").status_code, 404)
+        self.assertEqual(self.client.get(f"/payslips/{other_id}").status_code, 404)
+        download = self.client.get(f"/payslips/{own_id}/download")
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(download.mimetype, "application/pdf")
+        self.assertTrue(download.data.startswith(b"%PDF"))
+        self.assertEqual(download.headers["Cache-Control"], "private, no-store")
+        self.assertEqual(self.client.get("/payroll/").status_code, 403)
+        self.assertEqual(self.client.get("/payroll/add").status_code, 403)
+        self.assertEqual(self.client.get("/payslips/manage").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/payslips/{other_id}/download").status_code,
+            404,
+        )
+
+    def test_employee_requests_validate_ownership_and_prevent_pending_duplicates(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Payslip requests")
+            self.db.session.add(department)
+            self.db.session.flush()
+            second_user = self.User(
+                username="second-staff",
+                email="second-staff@example.test",
+                password_hash=generate_password_hash("SecondPass123"),
+                role=self.User.EMPLOYEE,
+            )
+            own_employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Own",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            other_employee = self.Employee(
+                user=second_user,
+                first_name="Second",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department=department,
+            )
+            self.db.session.add_all([own_employee, other_employee])
+            self.db.session.flush()
+            payrolls = [
+                self.Payroll(
+                    employee_id=employee.id,
+                    pay_period_start=date(2026, 10, 1),
+                    pay_period_end=date(2026, 10, 31),
+                    basic_salary=Decimal("4000.00"),
+                    allowances=Decimal("0.00"),
+                    deductions=Decimal("0.00"),
+                    net_pay=Decimal("4000.00"),
+                )
+                for employee in (own_employee, other_employee)
+            ]
+            self.db.session.add_all(payrolls)
+            self.db.session.commit()
+            own_employee_id = own_employee.id
+            other_employee_id = other_employee.id
+            own_payroll_id = payrolls[0].id
+
+        self.login(self.client, "staff", "StaffPass123")
+        form = self.client.get("/payslips/requests")
+        self.assertEqual(form.status_code, 200)
+        response = self.client.post(
+            "/payslips/requests",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "pay_period_start": "2026-10-01",
+                "pay_period_end": "2026-10-31",
+                "employee_id": str(other_employee_id),
+                "reason": "Personal copy",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            linked_request = self.PayslipRequest.query.one()
+            self.assertEqual(linked_request.employee_id, own_employee_id)
+            self.assertEqual(linked_request.payroll_id, own_payroll_id)
+
+        form = self.client.get("/payslips/requests")
+        response = self.client.post(
+            "/payslips/requests",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "pay_period_start": "2026-08-01",
+                "pay_period_end": "2026-08-31",
+                "reason": "Loan or financial requirement",
+                "details": "Bank application",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            self.assertEqual(self.PayslipRequest.query.count(), 2)
+            payslip_request = self.PayslipRequest.query.filter_by(
+                pay_period_start=date(2026, 8, 1)
+            ).one()
+            self.assertEqual(payslip_request.employee_id, own_employee_id)
+            self.assertIsNone(payslip_request.payroll_id)
+            self.assertEqual(payslip_request.status, "Pending")
+            self.assertIsNotNone(payslip_request.request_date)
+
+        form = self.client.get("/payslips/requests")
+        duplicate = self.client.post(
+            "/payslips/requests",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "pay_period_start": "2026-08-01",
+                "pay_period_end": "2026-08-31",
+                "reason": "Other",
+            },
+        )
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertIn(b"pending request already exists", duplicate.data)
+        with self.app.app_context():
+            self.assertEqual(self.PayslipRequest.query.count(), 2)
+
+        second_client = self.app.test_client()
+        self.login(second_client, "second-staff", "SecondPass123")
+        history = second_client.get("/payslips/requests")
+        self.assertEqual(history.status_code, 200)
+        self.assertNotIn(b"Bank application", history.data)
+
+    def test_hr_reviews_pending_requests_and_employee_sees_remarks(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Request review")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            payslip_request = self.PayslipRequest(
+                employee=employee,
+                payroll=None,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31),
+                reason="Payslip not received",
+            )
+            rejected_request = self.PayslipRequest(
+                employee=employee,
+                payroll=None,
+                pay_period_start=date(2026, 9, 1),
+                pay_period_end=date(2026, 9, 30),
+                reason="Other",
+            )
+            self.db.session.add_all([employee, payslip_request, rejected_request])
+            self.db.session.commit()
+            request_id = payslip_request.id
+            rejected_request_id = rejected_request.id
+            employee_record_id = employee.id
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        self.assertEqual(
+            employee_client.get("/payslips/manage").status_code,
+            403,
+        )
+        self.assertEqual(
+            employee_client.get(f"/payslips/manage/{request_id}").status_code,
+            403,
+        )
+        employee_form = employee_client.get("/payslips/requests")
+        forbidden_review = employee_client.post(
+            f"/payslips/manage/{request_id}",
+            data={
+                "_csrf_token": self.csrf_token(employee_form),
+                "status": "Approved",
+            },
+        )
+        self.assertEqual(forbidden_review.status_code, 403)
+
+        self.login(self.client, "hrstaff", "HrPass123")
+        listing = self.client.get("/payslips/manage?status=Pending")
+        self.assertEqual(listing.status_code, 200)
+        self.assertIn(b"Jamie Staff", listing.data)
+        detail = self.client.get(f"/payslips/manage/{request_id}")
+        response = self.client.post(
+            f"/payslips/manage/{request_id}",
+            data={
+                "_csrf_token": self.csrf_token(detail),
+                "status": "Approved",
+                "hr_remarks": "Payroll has not been finalized.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            pending = self.db.session.get(self.PayslipRequest, request_id)
+            self.assertEqual(pending.status, "Pending")
+
+        detail = self.client.get(f"/payslips/manage/{request_id}")
+        self.assertIn(b"Create payroll record", detail.data)
+        add_form = self.client.get(
+            f"/payroll/add?employee_id={employee_record_id}"
+            "&pay_period_start=2026-10-01&pay_period_end=2026-10-31"
+        )
+        self.assertEqual(add_form.status_code, 200)
+        self.assertIn(b'value="2026-10-01"', add_form.data)
+        response = self.client.post(
+            "/payroll/add",
+            data={
+                "_csrf_token": self.csrf_token(add_form),
+                "employee_id": str(employee_record_id),
+                "pay_period_start": "2026-10-01",
+                "pay_period_end": "2026-10-31",
+                "payment_date": "2026-11-05",
+                "basic_salary": "4000.00",
+                "allowances": "200.00",
+                "deductions": "100.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            payroll_id = self.Payroll.query.one().id
+
+        detail = self.client.get(f"/payslips/manage/{request_id}")
+        response = self.client.post(
+            f"/payslips/manage/{request_id}",
+            data={
+                "_csrf_token": self.csrf_token(detail),
+                "status": "Approved",
+                "hr_remarks": "Your finalized payslip is available.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            reviewed = self.db.session.get(self.PayslipRequest, request_id)
+            self.assertEqual(reviewed.status, "Approved")
+            self.assertEqual(reviewed.reviewed_by, self.hr_id)
+            self.assertIsNotNone(reviewed.reviewed_at)
+            self.assertEqual(
+                reviewed.hr_remarks,
+                "Your finalized payslip is available.",
+            )
+        stale = self.client.post(
+            f"/payslips/manage/{request_id}",
+            data={
+                "_csrf_token": self.csrf_token(detail),
+                "status": "Rejected",
+            },
+        )
+        self.assertEqual(stale.status_code, 409)
+
+        rejection_form = self.client.get(
+            f"/payslips/manage/{rejected_request_id}"
+        )
+        rejected = self.client.post(
+            f"/payslips/manage/{rejected_request_id}",
+            data={
+                "_csrf_token": self.csrf_token(rejection_form),
+                "status": "Rejected",
+                "hr_remarks": "Please contact HR for more information.",
+            },
+        )
+        self.assertEqual(rejected.status_code, 302)
+        with self.app.app_context():
+            rejected_record = self.db.session.get(
+                self.PayslipRequest,
+                rejected_request_id,
+            )
+            self.assertEqual(rejected_record.status, "Rejected")
+            self.assertEqual(rejected_record.reviewed_by, self.hr_id)
+            self.assertIsNotNone(rejected_record.reviewed_at)
+
+        history = employee_client.get("/payslips/requests")
+        self.assertIn(b"Approved", history.data)
+        self.assertIn(b"Rejected", history.data)
+        self.assertIn(b"Your finalized payslip is available.", history.data)
+        self.assertIn(
+            b"Please contact HR for more information.",
+            history.data,
+        )
+        self.assertEqual(
+            employee_client.get(f"/payslips/{payroll_id}").status_code,
+            200,
+        )
+        self.assertEqual(
+            employee_client.get(f"/payslips/{payroll_id}/download").status_code,
+            200,
+        )
+
+        admin_client = self.app.test_client()
+        self.login(admin_client, "admin", "AdminPass123")
+        self.assertEqual(admin_client.get("/payslips/manage").status_code, 200)
+
+    def test_employee_travel_order_submission_validation_and_ownership(self):
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Travel requests")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Travel",
+                last_name="Employee",
+                position="Coordinator",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            second_user = self.User(
+                username="travel-other",
+                email="travel-other@example.test",
+                password_hash=generate_password_hash("TravelOther123"),
+                role=self.User.EMPLOYEE,
+            )
+            other_employee = self.Employee(
+                user=second_user,
+                first_name="Other",
+                last_name="Employee",
+                position="Coordinator",
+                salary=Decimal("50000.00"),
+                department=department,
+            )
+            self.db.session.add_all([employee, other_employee])
+            self.db.session.commit()
+            employee_id = employee.id
+
+        self.login(self.client, "staff", "StaffPass123")
+        home = self.client.get("/employee/home")
+        self.assertIn(b"My Travel Orders", home.data)
+        self.assertIn(b"Submit Travel Order", home.data)
+
+        form = self.client.get("/travel-orders/submit")
+        self.assertEqual(form.status_code, 200)
+        incomplete = self.client.post(
+            "/travel-orders/submit",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "destination": "Cebu",
+            },
+        )
+        self.assertEqual(incomplete.status_code, 200)
+        self.assertIn(b"Destination and purpose are required", incomplete.data)
+
+        form = self.client.get("/travel-orders/submit")
+        invalid_dates = self.client.post(
+            "/travel-orders/submit",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "destination": "Cebu",
+                "purpose": "Client meeting",
+                "departure_date": "2026-11-10",
+                "return_date": "2026-11-09",
+            },
+        )
+        self.assertEqual(invalid_dates.status_code, 200)
+        self.assertIn(
+            b"Return date cannot be earlier than departure date",
+            invalid_dates.data,
+        )
+        with self.app.app_context():
+            self.assertEqual(self.TravelOrder.query.count(), 0)
+
+        form = self.client.get("/travel-orders/submit")
+        created = self.client.post(
+            "/travel-orders/submit",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "employee_id": "999999",
+                "destination": "Cebu",
+                "purpose": "Client meeting",
+                "departure_date": "2026-11-10",
+                "return_date": "2026-11-12",
+            },
+        )
+        self.assertEqual(created.status_code, 302)
+        with self.app.app_context():
+            order = self.TravelOrder.query.one()
+            order_id = order.id
+            self.assertEqual(order.employee_id, employee_id)
+            self.assertEqual(order.status, self.TravelOrder.PENDING)
+            self.assertIsNotNone(order.created_at)
+
+        listing = self.client.get("/travel-orders/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertIn(b"Cebu", listing.data)
+        self.assertIn(b"Pending", listing.data)
+        other_client = self.app.test_client()
+        self.login(other_client, "travel-other", "TravelOther123")
+        self.assertNotIn(b"Cebu", other_client.get("/travel-orders/").data)
+        self.assertEqual(other_client.get("/travel-orders/submit").status_code, 200)
+        self.assertEqual(self.client.get("/travel-orders/manage").status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                f"/travel-orders/manage/{order_id}/status",
+                data={
+                    "_csrf_token": self.csrf_token(listing),
+                    "status": "Approved",
+                },
+            ).status_code,
+            403,
+        )
+
+    def test_hr_and_admin_can_review_only_pending_travel_orders(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Travel review")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Travel",
+                last_name="Requester",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            approved_order = self.TravelOrder(
+                employee=employee,
+                destination="Manila",
+                purpose="Conference",
+                departure_date=date(2026, 12, 1),
+                return_date=date(2026, 12, 3),
+            )
+            declined_order = self.TravelOrder(
+                employee=employee,
+                destination="Davao",
+                purpose="Site visit",
+                departure_date=date(2026, 12, 5),
+                return_date=date(2026, 12, 6),
+            )
+            self.db.session.add_all([employee, approved_order, declined_order])
+            self.db.session.commit()
+            approved_id = approved_order.id
+            declined_id = declined_order.id
+
+        self.login(self.client, "hrstaff", "HrPass123")
+        pending_page = self.client.get("/travel-orders/manage?status=Pending")
+        self.assertEqual(pending_page.status_code, 200)
+        self.assertIn(b"Manila", pending_page.data)
+        self.assertIn(b"Davao", pending_page.data)
+        response = self.client.post(
+            f"/travel-orders/manage/{approved_id}/status",
+            data={
+                "_csrf_token": self.csrf_token(pending_page),
+                "status": "Approved",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            order = self.db.session.get(self.TravelOrder, approved_id)
+            self.assertEqual(order.status, self.TravelOrder.APPROVED)
+            self.assertEqual(order.approved_by, self.hr_id)
+            self.assertIsNotNone(order.approval_date)
+
+        stale = self.client.post(
+            f"/travel-orders/manage/{approved_id}/status",
+            data={
+                "_csrf_token": self.csrf_token(pending_page),
+                "status": "Declined",
+            },
+        )
+        self.assertEqual(stale.status_code, 409)
+        approved_page = self.client.get("/travel-orders/manage?status=Approved")
+        self.assertIn(b"Manila", approved_page.data)
+        self.assertNotIn(b"Davao", approved_page.data)
+
+        admin_client = self.app.test_client()
+        self.login(admin_client, "admin", "AdminPass123")
+        admin_page = admin_client.get("/travel-orders/manage")
+        self.assertEqual(admin_page.status_code, 200)
+        declined = admin_client.post(
+            f"/travel-orders/manage/{declined_id}/status",
+            data={
+                "_csrf_token": self.csrf_token(admin_page),
+                "status": "Declined",
+            },
+        )
+        self.assertEqual(declined.status_code, 302)
+        with self.app.app_context():
+            order = self.db.session.get(self.TravelOrder, declined_id)
+            self.assertEqual(order.status, self.TravelOrder.DECLINED)
+            self.assertEqual(order.approved_by, self.admin_id)
+            self.assertIsNotNone(order.approval_date)
 
 if __name__ == "__main__":
     unittest.main()

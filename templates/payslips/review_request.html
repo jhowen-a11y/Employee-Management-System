@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Review Payslip Request | MCM EMS{% endblock %}
+{% block header_title %}Review Payslip Request{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>Request #{{ payslip_request.id }}</h1>
+        <p>{{ payslip_request.employee.first_name }} {{ payslip_request.employee.last_name }} · employee #{{ payslip_request.employee_id }}</p>
+    </div>
+    <a class="button button-secondary" href="{{ url_for('payslip.manage_payslip_requests') }}">Back to requests</a>
+</div>
+<section class="panel payslip-review-grid">
+    <div>
+        <h2>Request details</h2>
+        <p><strong>Pay period:</strong> {{ payslip_request.pay_period_start }} – {{ payslip_request.pay_period_end }}</p>
+        <p><strong>Reason:</strong> {{ payslip_request.reason }}</p>
+        <p><strong>Additional details:</strong> {{ payslip_request.details or '—' }}</p>
+        <p><strong>Submitted:</strong> {{ payslip_request.request_date.strftime('%Y-%m-%d %H:%M') if payslip_request.request_date else '—' }}</p>
+        <p><strong>Current status:</strong> <span class="employee-status-badge {{ payslip_request.status|lower }}">{{ payslip_request.status }}</span></p>
+        <p><strong>HR remarks:</strong> {{ payslip_request.hr_remarks or '—' }}</p>
+        {% if payslip_request.reviewer %}
+        <p><strong>Reviewed by:</strong> {{ payslip_request.reviewer.username }}{% if payslip_request.reviewed_at %} on {{ payslip_request.reviewed_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}</p>
+        {% endif %}
+    </div>
+    <div>
+        <h2>Payroll processing</h2>
+        {% if payroll_record %}
+        <p><strong>Basic salary:</strong> {{ "%.2f"|format(payroll_record.basic_salary) }}</p>
+        <p><strong>Allowances:</strong> {{ "%.2f"|format(payroll_record.allowances) }}</p>
+        <p><strong>Gross salary:</strong> {{ "%.2f"|format(payroll_record.basic_salary + payroll_record.allowances) }}</p>
+        <p><strong>Deductions:</strong> {{ "%.2f"|format(payroll_record.deductions) }}</p>
+        <p><strong>Net salary:</strong> {{ "%.2f"|format(payroll_record.net_pay) }}</p>
+        <p><strong>Payment status:</strong> {% if payroll_record.payment_date %}Paid {{ payroll_record.payment_date }}{% else %}Not finalized{% endif %}</p>
+        <a class="button button-secondary button-small" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll_record.id) }}">Open payroll record</a>
+        {% else %}
+        <p>No payroll record exists for this employee and period. Create it through the existing payroll process; the request will not create or calculate payroll.</p>
+        <a class="button button-primary button-small"
+           href="{{ url_for('payroll.add_payroll', employee_id=payslip_request.employee_id, pay_period_start=payslip_request.pay_period_start.isoformat(), pay_period_end=payslip_request.pay_period_end.isoformat()) }}">Create payroll record</a>
+        {% endif %}
+    </div>
+</section>
+
+{% if payslip_request.status == 'Pending' %}
+<section class="panel payslip-review-form">
+    <h2>Review this request</h2>
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field payslip-full-width">
+            <label for="hr_remarks">Remarks to employee</label>
+            <textarea id="hr_remarks" name="hr_remarks" rows="4" maxlength="2000" aria-describedby="review-help"></textarea>
+            <small id="review-help">Remarks are included in the employee's request history.</small>
+        </div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit" name="status" value="Approved" {% if not payroll_record or not payroll_record.payment_date %}disabled title="Finalize payroll payment before approving"{% endif %}>Approve request</button>
+            <button class="button button-danger" type="submit" name="status" value="Rejected">Reject request</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

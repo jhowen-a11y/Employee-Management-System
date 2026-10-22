@@ -113,6 +113,16 @@
             <span class="hr-task-copy"><strong>Payroll operations</strong><small>Review payroll and payment status</small></span>
             <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
         </a>
+        <a class="hr-task-card" href="{{ url_for('payslip.manage_payslip_requests') }}">
+            <span class="hr-task-icon"><i data-lucide="file-clock" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Manage payslip requests</strong><small>Review employee requests</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
+        <a class="hr-task-card" href="{{ url_for('travel_order.manage_travel_orders') }}">
+            <span class="hr-task-icon"><i data-lucide="map" aria-hidden="true"></i></span>
+            <span class="hr-task-copy"><strong>Manage travel orders</strong><small>Review employee travel requests</small></span>
+            <i class="hr-task-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+        </a>
         <a class="hr-task-card hr-task-primary" href="{{ url_for('employee.add_employee') }}">
             <span class="hr-task-icon"><i data-lucide="user-round-plus" aria-hidden="true"></i></span>
             <span class="hr-task-copy"><strong>Add employee</strong><small>Create an employee record and account</small></span>

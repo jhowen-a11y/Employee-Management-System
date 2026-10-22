@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Payslip Details | MCM EMS{% endblock %}
+{% block header_title %}Payslip Details{% endblock %}
+
+{% block head %}
+<style>
+    @media print {
+        .sidebar, .topbar, .page-heading .button, .flash-messages { display: none !important; }
+        .main-area, .content { width: 100%; margin: 0; padding: 0; }
+        .payslip-document { border: 0; box-shadow: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>Finalized payslip</h1>
+        <p>Pay period {{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</p>
+    </div>
+    <div class="payslip-actions">
+        <button class="button button-secondary" type="button" onclick="window.print()">Print</button>
+        <a class="button button-primary" href="{{ url_for('payslip.download_payslip', payroll_id=payroll.id) }}">Download PDF</a>
+    </div>
+</div>
+<section class="panel payslip-document" aria-label="Payslip">
+    <div class="payslip-document-heading">
+        <div>
+            <span class="hr-eyebrow">EMPLOYEE PAYSLIP</span>
+            <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
+            <p>Employee ID: EMP-{{ "%04d"|format(employee.id) }}</p>
+        </div>
+        <div class="payslip-period">
+            <span>PAY PERIOD</span>
+            <strong>{{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</strong>
+            <small>Paid {{ payroll.payment_date }}</small>
+        </div>
+    </div>
+    <dl class="payslip-amounts">
+        <div><dt>Basic salary</dt><dd>{{ "%.2f"|format(payroll.basic_salary) }}</dd></div>
+        <div><dt>Allowances</dt><dd>{{ "%.2f"|format(payroll.allowances) }}</dd></div>
+        <div><dt>Gross salary</dt><dd>{{ "%.2f"|format(payroll.basic_salary + payroll.allowances) }}</dd></div>
+        <div><dt>Deductions</dt><dd>− {{ "%.2f"|format(payroll.deductions) }}</dd></div>
+        <div class="payslip-net"><dt>Net salary</dt><dd>{{ "%.2f"|format(payroll.net_pay) }}</dd></div>
+    </dl>
+    <p class="payslip-finalized-note">This payslip reflects the finalized values recorded for this pay period.</p>
+</section>
+{% endblock %}

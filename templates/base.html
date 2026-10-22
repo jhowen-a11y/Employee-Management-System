@@ -75,10 +75,25 @@
                 <i data-lucide="calendar-plus"></i>
                 Submit Leave
             </a>
-            <a href="{{ url_for('payroll.payroll_list') }}"
-               class="{% if request.endpoint in ('payroll.payroll_list', 'payroll.payroll_detail') %}active{% endif %}">
+            <a href="{{ url_for('payslip.my_payslips') }}"
+               class="{% if request.endpoint in ('payslip.my_payslips', 'payslip.payslip_detail') %}active{% endif %}">
                 <i data-lucide="wallet"></i>
-                My Payroll
+                My Payslips
+            </a>
+            <a href="{{ url_for('payslip.my_payslip_requests') }}"
+               class="{% if request.endpoint == 'payslip.my_payslip_requests' %}active{% endif %}">
+                <i data-lucide="file-clock"></i>
+                Payslip Requests
+            </a>
+            <a href="{{ url_for('travel_order.my_travel_orders') }}"
+               class="{% if request.endpoint == 'travel_order.my_travel_orders' %}active{% endif %}">
+                <i data-lucide="map"></i>
+                My Travel Orders
+            </a>
+            <a href="{{ url_for('travel_order.submit_travel_order') }}"
+               class="{% if request.endpoint == 'travel_order.submit_travel_order' %}active{% endif %}">
+                <i data-lucide="map-pin-plus"></i>
+                Submit Travel Order
             </a>
             <a href="{{ url_for('users.edit_profile') }}"
                class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
@@ -115,6 +130,16 @@
                class="{% if request.endpoint in ('payroll.payroll_list', 'payroll.payroll_detail') %}active{% endif %}">
                 <i data-lucide="wallet"></i>
                 Payroll
+            </a>
+            <a href="{{ url_for('payslip.manage_payslip_requests') }}"
+               class="{% if request.endpoint in ('payslip.manage_payslip_requests', 'payslip.review_payslip_request') %}active{% endif %}">
+                <i data-lucide="file-clock"></i>
+                Manage Payslip Requests
+            </a>
+            <a href="{{ url_for('travel_order.manage_travel_orders') }}"
+               class="{% if request.endpoint in ('travel_order.manage_travel_orders', 'travel_order.update_travel_order_status') %}active{% endif %}">
+                <i data-lucide="map"></i>
+                Manage Travel Orders
             </a>
 
             {% if current_user.role == 'admin' %}

@@ -2,19 +2,13 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from flask_login import current_user
 from sqlalchemy.orm import selectinload
 
 from models import db
 from models.payroll import Payroll
 from models.employee import Employee
-from models.user import User
 from profile_storage import profile_picture_urls
-from routes.employee_access import (
-    current_employee,
-    employee_scoped_query,
-    management_required,
-)
+from routes.employee_access import management_required
 
 payroll_bp = Blueprint(
     "payroll",
@@ -56,10 +50,9 @@ def read_date(value):
 
 # View all payroll records
 @payroll_bp.route("/")
+@management_required
 def payroll_list():
-    payroll_records = employee_scoped_query(
-        Payroll.query, Payroll.employee_id
-    ).order_by(
+    payroll_records = Payroll.query.order_by(
         Payroll.pay_period_start.desc(),
         Payroll.id.desc(),
     ).options(
@@ -86,14 +79,9 @@ def payroll_list():
 
 # View one payroll record
 @payroll_bp.route("/<int:payroll_id>")
+@management_required
 def payroll_detail(payroll_id):
-    payroll_query = Payroll.query.filter_by(id=payroll_id)
-    if current_user.role == User.EMPLOYEE:
-        employee = current_employee()
-        payroll_query = payroll_query.filter_by(
-            employee_id=employee.id if employee else None
-        )
-    payroll = payroll_query.first_or_404()
+    payroll = db.get_or_404(Payroll, payroll_id)
 
     return render_template(
         "payroll/detail.html",

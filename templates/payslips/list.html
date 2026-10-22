@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}My Payslips | MCM EMS{% endblock %}
+{% block header_title %}My Payslips{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>My Payslips</h1>
+        <p>View or download finalized payslips for your employee record.</p>
+    </div>
+    <a class="button button-secondary" href="{{ url_for('payslip.my_payslip_requests') }}">Payslip requests</a>
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Pay period</th>
+                    <th>Basic salary</th>
+                    <th>Allowances</th>
+                    <th>Gross salary</th>
+                    <th>Deductions</th>
+                    <th>Net salary</th>
+                    <th>Payment status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payroll in payslips %}
+                <tr>
+                    <td>{{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</td>
+                    <td>{{ "%.2f"|format(payroll.basic_salary) }}</td>
+                    <td>{{ "%.2f"|format(payroll.allowances) }}</td>
+                    <td>{{ "%.2f"|format(payroll.basic_salary + payroll.allowances) }}</td>
+                    <td>{{ "%.2f"|format(payroll.deductions) }}</td>
+                    <td>{{ "%.2f"|format(payroll.net_pay) }}</td>
+                    <td><span class="employee-status-badge approved">Paid {{ payroll.payment_date }}</span></td>
+                    <td class="payslip-actions">
+                        <a class="button button-secondary button-small" href="{{ url_for('payslip.payslip_detail', payroll_id=payroll.id) }}">View</a>
+                        <a class="button button-secondary button-small" href="{{ url_for('payslip.download_payslip', payroll_id=payroll.id) }}">Download PDF</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="empty-state">No finalized payslips are available yet. Payslips appear here after payment is recorded.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

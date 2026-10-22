@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Travel Orders | MCM EMS{% endblock %}
+{% block header_title %}Manage Travel Orders{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Manage Travel Orders</h1>
+    <p>Review employee travel requests and record an approval or decline.</p>
+</div>
+<form class="payslip-filter" method="get">
+    <label for="status">Filter by status</label>
+    <select id="status" name="status">
+        <option value="">All requests</option>
+        {% for status in statuses %}
+        <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+        {% endfor %}
+    </select>
+    <button class="button button-secondary button-small" type="submit">Apply filter</button>
+</form>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Travel Order ID</th>
+                    <th>Employee</th>
+                    <th>Destination</th>
+                    <th>Purpose</th>
+                    <th>Departure</th>
+                    <th>Return</th>
+                    <th>Submitted</th>
+                    <th>Status</th>
+                    <th>Reviewed by / on</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for travel_order in travel_orders %}
+                <tr>
+                    <td>TO-{{ "%04d"|format(travel_order.id) }}</td>
+                    <td>{{ travel_order.employee.first_name }} {{ travel_order.employee.last_name }}<small class="table-secondary-text">Employee #{{ travel_order.employee_id }}</small></td>
+                    <td>{{ travel_order.destination }}</td>
+                    <td>{{ travel_order.purpose }}</td>
+                    <td>{{ travel_order.departure_date }}</td>
+                    <td>{{ travel_order.return_date }}</td>
+                    <td>{{ travel_order.created_at.strftime('%Y-%m-%d %H:%M') if travel_order.created_at else '—' }}</td>
+                    <td><span class="employee-status-badge {{ travel_order.status|lower }}">{{ travel_order.status }}</span></td>
+                    <td>
+                        {% if travel_order.reviewer %}
+                            {{ travel_order.reviewer.username }}
+                            {% if travel_order.approval_date %}<small class="table-secondary-text">{{ travel_order.approval_date.strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if travel_order.status == 'Pending' %}
+                        <div class="travel-order-actions">
+                            <form method="post" action="{{ url_for('travel_order.update_travel_order_status', travel_order_id=travel_order.id) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="Approved">
+                                <button class="button button-primary button-small" type="submit">Approve</button>
+                            </form>
+                            <form method="post" action="{{ url_for('travel_order.update_travel_order_status', travel_order_id=travel_order.id) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="Declined">
+                                <button class="button button-danger button-small" type="submit">Decline</button>
+                            </form>
+                        </div>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="10" class="empty-state">No travel orders match this filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

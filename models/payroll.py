@@ -45,6 +45,12 @@ class Payroll(db.Model):
         back_populates="payroll_records"
     )
 
+    payslip_requests: Mapped[list["PayslipRequest"]] = relationship(
+        back_populates="payroll",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     def __repr__(self):
         return (
             f"<Payroll Employee ID: {self.employee_id}, "

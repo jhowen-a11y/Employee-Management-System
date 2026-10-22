@@ -7,7 +7,7 @@
 {% block content %}
 <div class="page-heading page-heading-row">
     <div>
-        <h1>{% if current_user.role == 'employee' %}My Payroll{% else %}Payroll Records{% endif %}</h1>
+        <h1>Payroll Records</h1>
         <p>Review pay periods and payroll amounts.</p>
     </div>
     {% if current_user.role != 'employee' %}
@@ -17,11 +17,10 @@
 <section class="panel table-panel">
     <div class="table-scroll">
         <table class="data-table">
-            <thead><tr>{% if current_user.role != 'employee' %}<th>Employee</th>{% endif %}<th>Pay period</th><th>Basic salary</th><th>Allowances</th><th>Deductions</th><th>Net pay</th><th>Payment status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Employee</th><th>Pay period</th><th>Basic salary</th><th>Allowances</th><th>Deductions</th><th>Net pay</th><th>Payment status</th><th>Actions</th></tr></thead>
             <tbody>
             {% for payroll in payroll_records %}
             <tr>
-                {% if current_user.role != 'employee' %}
                 <td>
                     <div class="employee-list-person">
                         {{ person_avatar(
@@ -32,7 +31,6 @@
                         <span>{{ payroll.employee.first_name }} {{ payroll.employee.last_name }}</span>
                     </div>
                 </td>
-                {% endif %}
                 <td>{{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</td>
                 <td>{{ payroll.basic_salary }}</td>
                 <td>{{ payroll.allowances }}</td>
@@ -41,13 +39,11 @@
                 <td>{% if payroll.payment_date %}Paid {{ payroll.payment_date }}{% else %}Pending payment{% endif %}</td>
                 <td>
                     <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_detail', payroll_id=payroll.id) }}">View</a>
-                    {% if current_user.role != 'employee' %}
                     <a class="button button-secondary button-small" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit</a>
-                    {% endif %}
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="{% if current_user.role == 'employee' %}7{% else %}8{% endif %}" class="empty-state">No payroll records found.</td></tr>
+            <tr><td colspan="8" class="empty-state">No payroll records found.</td></tr>
             {% endfor %}
             </tbody>
         </table>

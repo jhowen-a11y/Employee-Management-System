@@ -14,5 +14,7 @@ from .user import User
 from .department import Department
 from .leave import Leave
 from .payroll import Payroll
+from .payslip_request import PayslipRequest
+from .travel_order import TravelOrder
 from .employee import Employee
 from .attendance import Attendance

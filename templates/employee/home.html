@@ -75,12 +75,12 @@
         </span>
         <i class="employee-stat-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
     </a>
-    <a class="employee-stat-card" href="{{ url_for('payroll.payroll_list') }}">
+    <a class="employee-stat-card" href="{{ url_for('payslip.my_payslips') }}">
         <span class="employee-stat-icon payroll">
             <i data-lucide="wallet" aria-hidden="true"></i>
         </span>
         <span class="employee-stat-copy">
-            <span>Pay statements</span>
+            <span>My Payslips</span>
             <strong>{{ payroll_records|length }} <small>recent</small></strong>
         </span>
         <i class="employee-stat-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
@@ -192,10 +192,10 @@
                 <i data-lucide="wallet" aria-hidden="true"></i>
             </span>
             <div>
-                <h2>Pay statements</h2>
-                <p>Your latest payroll records</p>
+                <h2>My Payslips</h2>
+                <p>Your finalized payroll statements</p>
             </div>
-            <a href="{{ url_for('payroll.payroll_list') }}" aria-label="View all pay statements">
+            <a href="{{ url_for('payslip.my_payslips') }}" aria-label="View all payslips">
                 <i data-lucide="arrow-right" aria-hidden="true"></i>
             </a>
         </header>
@@ -204,13 +204,13 @@
             {% for payroll in payroll_records[:5] %}
             <li>
                 <a class="employee-activity-row"
-                   href="{{ url_for('payroll.payroll_detail', payroll_id=payroll.id) }}">
+                   href="{{ url_for('payslip.payslip_detail', payroll_id=payroll.id) }}">
                     <span class="employee-activity-date payroll-date">
                         <i data-lucide="receipt" aria-hidden="true"></i>
                     </span>
                     <span class="employee-activity-copy">
                         <strong>{{ payroll.pay_period_start.strftime('%b %d') }} – {{ payroll.pay_period_end.strftime('%b %d, %Y') }}</strong>
-                        <small>{% if payroll.payment_date %}Paid {{ payroll.payment_date.strftime('%b %d, %Y') }}{% else %}Awaiting payment{% endif %}</small>
+                        <small>Paid {{ payroll.payment_date.strftime('%b %d, %Y') }}</small>
                     </span>
                     <span class="employee-pay-amount">{{ "%.2f"|format(payroll.net_pay) }}</span>
                 </a>
@@ -220,12 +220,101 @@
         {% else %}
         <div class="employee-empty-state">
             <i data-lucide="wallet-cards" aria-hidden="true"></i>
-            <strong>No pay statements yet</strong>
-            <p>Your payroll records will appear here.</p>
+            <strong>No payslips available yet</strong>
+            <p>Finalized payslips will appear here after payment.</p>
         </div>
         {% endif %}
-        <a class="employee-card-footer" href="{{ url_for('payroll.payroll_list') }}">
-            View payroll <i data-lucide="arrow-right" aria-hidden="true"></i>
+        <a class="employee-card-footer" href="{{ url_for('payslip.my_payslips') }}">
+            View all payslips <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </a>
+    </article>
+
+    <article class="employee-activity-card">
+        <header class="employee-activity-header">
+            <span class="employee-activity-icon payroll">
+                <i data-lucide="file-clock" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2>Payslip requests</h2>
+                <p>Your latest request updates</p>
+            </div>
+            <a href="{{ url_for('payslip.my_payslip_requests') }}" aria-label="View payslip requests">
+                <i data-lucide="arrow-right" aria-hidden="true"></i>
+            </a>
+        </header>
+        {% if payslip_requests %}
+        <ul class="employee-activity-list">
+            {% for payslip_request in payslip_requests %}
+            <li>
+                <a class="employee-activity-row"
+                   href="{{ url_for('payslip.my_payslip_requests') }}">
+                    <span class="employee-activity-date payroll-date">
+                        <i data-lucide="receipt" aria-hidden="true"></i>
+                    </span>
+                    <span class="employee-activity-copy">
+                        <strong>{{ payslip_request.pay_period_start }} – {{ payslip_request.pay_period_end }}</strong>
+                        <small>{{ payslip_request.reason }}</small>
+                    </span>
+                    <span class="employee-status-badge {{ payslip_request.status|lower }}">
+                        {{ payslip_request.status }}
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="employee-empty-state">
+            <i data-lucide="file-plus-2" aria-hidden="true"></i>
+            <strong>No payslip requests yet</strong>
+            <p>Request a payslip for a period that is missing from your account.</p>
+        </div>
+        {% endif %}
+        <a class="employee-card-footer" href="{{ url_for('payslip.my_payslip_requests') }}">
+            Request a payslip <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </a>
+    </article>
+
+    <article class="employee-activity-card">
+        <header class="employee-activity-header">
+            <span class="employee-activity-icon attendance">
+                <i data-lucide="map" aria-hidden="true"></i>
+            </span>
+            <div>
+                <h2>My Travel Orders</h2>
+                <p>Your latest travel requests</p>
+            </div>
+            <a href="{{ url_for('travel_order.my_travel_orders') }}" aria-label="View my travel orders">
+                <i data-lucide="arrow-right" aria-hidden="true"></i>
+            </a>
+        </header>
+        {% if travel_orders %}
+        <ul class="employee-activity-list">
+            {% for travel_order in travel_orders %}
+            <li>
+                <div class="employee-activity-row">
+                    <span class="employee-activity-date payroll-date">
+                        <i data-lucide="map-pin" aria-hidden="true"></i>
+                    </span>
+                    <span class="employee-activity-copy">
+                        <strong>{{ travel_order.destination }}</strong>
+                        <small>{{ travel_order.departure_date }} – {{ travel_order.return_date }}</small>
+                    </span>
+                    <span class="employee-status-badge {{ travel_order.status|lower }}">
+                        {{ travel_order.status }}
+                    </span>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="employee-empty-state">
+            <i data-lucide="map" aria-hidden="true"></i>
+            <strong>No travel orders yet</strong>
+            <p>Submit a travel order to request approval for upcoming travel.</p>
+        </div>
+        {% endif %}
+        <a class="employee-card-footer" href="{{ url_for('travel_order.submit_travel_order') }}">
+            Submit Travel Order <i data-lucide="arrow-right" aria-hidden="true"></i>
         </a>
     </article>
 </section>

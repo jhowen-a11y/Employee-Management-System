@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}My Travel Orders | MCM EMS{% endblock %}
+{% block header_title %}My Travel Orders{% endblock %}
+
+{% block content %}
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>My Travel Orders</h1>
+        <p>View the status and details of your submitted travel requests.</p>
+    </div>
+    <a class="button button-primary" href="{{ url_for('travel_order.submit_travel_order') }}">Submit Travel Order</a>
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Travel Order ID</th>
+                    <th>Destination</th>
+                    <th>Purpose</th>
+                    <th>Departure</th>
+                    <th>Return</th>
+                    <th>Submitted</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for travel_order in travel_orders %}
+                <tr>
+                    <td>TO-{{ "%04d"|format(travel_order.id) }}</td>
+                    <td>{{ travel_order.destination }}</td>
+                    <td>{{ travel_order.purpose }}</td>
+                    <td>{{ travel_order.departure_date }}</td>
+                    <td>{{ travel_order.return_date }}</td>
+                    <td>{{ travel_order.created_at.strftime('%Y-%m-%d %H:%M') if travel_order.created_at else '—' }}</td>
+                    <td><span class="employee-status-badge {{ travel_order.status|lower }}">{{ travel_order.status }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="empty-state">You have not submitted any travel orders yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

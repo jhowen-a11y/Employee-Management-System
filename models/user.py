@@ -27,5 +27,15 @@ class User(UserMixin, db.Model):
         back_populates="user"
     )
 
+    reviewed_payslip_requests: Mapped[list["PayslipRequest"]] = relationship(
+        back_populates="reviewer",
+        foreign_keys="PayslipRequest.reviewed_by",
+    )
+
+    reviewed_travel_orders: Mapped[list["TravelOrder"]] = relationship(
+        back_populates="reviewer",
+        foreign_keys="TravelOrder.approved_by",
+    )
+
     def __repr__(self):
         return f"<User {self.username} (Role: {self.role})>"

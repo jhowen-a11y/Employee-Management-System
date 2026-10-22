@@ -47,6 +47,18 @@ class Employee(db.Model):
         back_populates="employee"
     )
 
+    payslip_requests: Mapped[list["PayslipRequest"]] = relationship(
+        back_populates="employee",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    travel_orders: Mapped[list["TravelOrder"]] = relationship(
+        back_populates="employee",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

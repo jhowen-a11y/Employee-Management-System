@@ -3,6 +3,7 @@ import unittest
 from sqlalchemy import create_mock_engine
 
 from models import db
+from models.travel_order import TravelOrder
 
 
 class PostgreSQLSchemaTests(unittest.TestCase):
@@ -25,6 +26,8 @@ class PostgreSQLSchemaTests(unittest.TestCase):
             "attendance",
             "leaves",
             "payroll",
+            "payslip_requests",
+            "travel_orders",
         ):
             with self.subTest(table=table):
                 self.assertIn(f"CREATE TABLE {table}", create_statements)
@@ -38,9 +41,18 @@ class PostgreSQLSchemaTests(unittest.TestCase):
             "ix_leaves_status",
             "ix_payroll_period_id",
             "ix_payroll_employee_period_id",
+            "ix_payslip_requests_status_date",
+            "uq_payslip_requests_pending_employee_pay_period",
+            "ix_travel_orders_status_created",
+            "ix_travel_orders_employee_created",
         ):
             with self.subTest(index=index):
-                self.assertIn(f"CREATE INDEX {index}", create_statements)
+                statement = (
+                    f"CREATE UNIQUE INDEX {index}"
+                    if index == "uq_payslip_requests_pending_employee_pay_period"
+                    else f"CREATE INDEX {index}"
+                )
+                self.assertIn(statement, create_statements)
 
 
 if __name__ == "__main__":

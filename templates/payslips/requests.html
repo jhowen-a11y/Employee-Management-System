@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Payslip Requests | MCM EMS{% endblock %}
+{% block header_title %}Payslip Requests{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Payslip Requests</h1>
+    <p>Request a missing pay period and track HR's response. HR will process payroll separately; finalized payslips appear in My Payslips after payment is recorded.</p>
+</div>
+<section class="panel payslip-request-form">
+    <h2>Request a payslip</h2>
+    <form method="post" class="form-grid">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-field">
+            <label for="pay_period_start">Pay period start</label>
+            <input id="pay_period_start" name="pay_period_start" type="date" required>
+        </div>
+        <div class="form-field">
+            <label for="pay_period_end">Pay period end</label>
+            <input id="pay_period_end" name="pay_period_end" type="date" required>
+        </div>
+        <div class="form-field payslip-full-width">
+            <small>Choose the dates for the missing period. HR will check or create the matching payroll record using the existing payroll workflow.</small>
+        </div>
+        <div class="form-field payslip-full-width">
+            <label for="reason">Reason for request</label>
+            <select id="reason" name="reason" required>
+                <option value="">Select a reason</option>
+                {% for reason in reasons %}
+                <option value="{{ reason }}">{{ reason }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-field payslip-full-width">
+            <label for="details">Additional details <span>(optional)</span></label>
+            <textarea id="details" name="details" rows="4" maxlength="{{ max_details_length }}"></textarea>
+            <small>Maximum {{ max_details_length }} characters.</small>
+        </div>
+        <div class="form-actions">
+            <button class="button button-primary" type="submit">Submit request</button>
+        </div>
+    </form>
+</section>
+
+<div class="page-heading">
+    <h2>My request history</h2>
+    <p>Your request status, HR reviewer, and any remarks are shown here.</p>
+</div>
+<section class="panel table-panel">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr><th>Pay period</th><th>Reason</th><th>Request date</th><th>Status</th><th>HR remarks</th><th>Reviewed by</th></tr>
+            </thead>
+            <tbody>
+                {% for payslip_request in request_history %}
+                <tr>
+                    <td>{{ payslip_request.pay_period_start }} – {{ payslip_request.pay_period_end }}</td>
+                    <td>{{ payslip_request.reason }}{% if payslip_request.details %}<small class="table-secondary-text">{{ payslip_request.details }}</small>{% endif %}</td>
+                    <td>{{ payslip_request.request_date.strftime('%Y-%m-%d %H:%M') if payslip_request.request_date else '—' }}</td>
+                    <td><span class="employee-status-badge {{ payslip_request.status|lower }}">{{ payslip_request.status }}</span></td>
+                    <td>{{ payslip_request.hr_remarks or '—' }}</td>
+                    <td>
+                        {% if payslip_request.reviewer %}
+                            {{ payslip_request.reviewer.username }}
+                            {% if payslip_request.reviewed_at %}<small class="table-secondary-text">{{ payslip_request.reviewed_at.strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="empty-state">You have not submitted any payslip requests.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
