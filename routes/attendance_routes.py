@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date, time
 from flask_login import current_user
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from models import db
 from models.attendance import Attendance
@@ -50,7 +50,7 @@ def attendance_list():
         Attendance.attendance_date.desc(),
         Attendance.id.desc(),
     ).options(
-        selectinload(Attendance.employee)
+        joinedload(Attendance.employee)
     ).paginate(
         page=request.args.get("page", 1, type=int),
         per_page=50,

@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from flask_login import current_user
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from models import db
 from models.employee import Employee
@@ -31,7 +31,7 @@ def leave_list():
         Leave.created_at.desc(),
         Leave.id.desc(),
     ).options(
-        selectinload(Leave.employee)
+        joinedload(Leave.employee)
     ).paginate(
         page=request.args.get("page", 1, type=int),
         per_page=50,

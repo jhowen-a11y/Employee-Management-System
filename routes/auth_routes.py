@@ -93,7 +93,7 @@ def employee_home():
     # Show the signed-in employee's attendance, leave, and payroll records.
     if current_user.role != User.EMPLOYEE:
         abort(403)
-    employee = Employee.query.filter_by(user_id=current_user.id).first()
+    employee = current_user.employee
     attendance_records = (
         Attendance.query.filter_by(employee_id=employee.id)
         .order_by(Attendance.attendance_date.desc(), Attendance.id.desc())

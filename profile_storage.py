@@ -1,9 +1,14 @@
+import hashlib
 import os
+import threading
+import time
 import uuid
+from collections import OrderedDict
 from io import BytesIO
 from pathlib import Path
 
-from flask import current_app, g, url_for
+from flask import current_app, g, has_request_context, url_for
+from flask_login import current_user
 from supabase import create_client
 from werkzeug.utils import secure_filename
 
@@ -11,6 +16,10 @@ from werkzeug.utils import secure_filename
 DEFAULT_PROFILE_BUCKET = "employee-profiles"
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
+SIGNED_URL_CACHE_SECONDS = 3300
+SIGNED_URL_CACHE_LIMIT = 1024
+_signed_url_cache = OrderedDict()
+_signed_url_cache_lock = threading.Lock()
 
 
 class ProfileStorageError(RuntimeError):
@@ -71,9 +80,42 @@ def profile_picture_urls(paths):
         g.profile_picture_urls = cached_urls
         return urls
 
+    user_scope = _signed_url_cache_scope()
+    paths_to_sign = []
+    project_url = os.getenv("SUPABASE_URL", "")
+    bucket_name = _profile_bucket_name()
+    storage_key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_SECRET_KEY")
+    )
+    storage_key_id = (
+        hashlib.sha256(storage_key.encode()).digest()
+        if storage_key
+        else None
+    )
+    cache_scope = user_scope if storage_key_id else None
+    for path in remote_paths:
+        cache_key = cache_scope + (
+            project_url,
+            bucket_name,
+            storage_key_id,
+            path,
+        ) if cache_scope else None
+        signed_url = _get_cached_signed_url(cache_key) if cache_key else None
+        if signed_url:
+            urls[path] = signed_url
+        else:
+            paths_to_sign.append(path)
+
+    if not paths_to_sign:
+        cached_urls.update(urls)
+        g.profile_picture_urls = cached_urls
+        return urls
+
+    signing_started = time.perf_counter()
     try:
         signed_urls = _storage_bucket().create_signed_urls(
-            remote_paths,
+            paths_to_sign,
             expires_in=3600,
         )
     except ProfileStorageError:
@@ -82,23 +124,69 @@ def profile_picture_urls(paths):
         raise ProfileStorageError(
             "Supabase Storage could not create profile picture URLs."
         ) from error
+    finally:
+        g.profile_picture_signing_ms = (
+            getattr(g, "profile_picture_signing_ms", 0.0)
+            + (time.perf_counter() - signing_started) * 1000
+        )
 
-    for path, signed_url in zip(remote_paths, signed_urls):
+    if len(signed_urls) != len(paths_to_sign):
+        raise ProfileStorageError(
+            "Supabase Storage returned incomplete profile picture URLs."
+        )
+
+    for path, signed_url in zip(paths_to_sign, signed_urls):
         url = signed_url.get("signedURL") or signed_url.get("signedUrl")
         if signed_url.get("error") or not url:
             raise ProfileStorageError(
                 "Supabase Storage could not create a profile picture URL."
             )
         urls[path] = url
-
-    if len(signed_urls) != len(remote_paths):
-        raise ProfileStorageError(
-            "Supabase Storage returned incomplete profile picture URLs."
-        )
+        if cache_scope:
+            _store_cached_signed_url(
+                cache_scope + (
+                    project_url,
+                    bucket_name,
+                    storage_key_id,
+                    path,
+                ),
+                url,
+            )
 
     cached_urls.update(urls)
     g.profile_picture_urls = cached_urls
     return urls
+
+
+def _signed_url_cache_scope():
+    if not has_request_context() or not current_user.is_authenticated:
+        return None
+    return current_user.get_id(), current_user.role
+
+
+def _get_cached_signed_url(cache_key):
+    now = time.monotonic()
+    with _signed_url_cache_lock:
+        cached = _signed_url_cache.get(cache_key)
+        if cached is None:
+            return None
+        expires_at, signed_url = cached
+        if expires_at <= now:
+            del _signed_url_cache[cache_key]
+            return None
+        _signed_url_cache.move_to_end(cache_key)
+        return signed_url
+
+
+def _store_cached_signed_url(cache_key, signed_url):
+    with _signed_url_cache_lock:
+        _signed_url_cache[cache_key] = (
+            time.monotonic() + SIGNED_URL_CACHE_SECONDS,
+            signed_url,
+        )
+        _signed_url_cache.move_to_end(cache_key)
+        while len(_signed_url_cache) > SIGNED_URL_CACHE_LIMIT:
+            _signed_url_cache.popitem(last=False)
 
 
 def save_profile_picture(file, employee_id):

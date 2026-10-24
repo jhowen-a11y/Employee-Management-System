@@ -25,6 +25,7 @@ A role-based employee management web application built with Flask and PostgreSQL
 - Employee travel order requests with HR/admin approval tracking
 - Separate administrator, HR, and employee experiences
 - Sign-in required for application pages, with CSRF protection on forms
+- Same-origin page navigation with responsive skeletons and full-page fallback
 - PostgreSQL schema migrations for query-performance indexes
 
 ## Technology
@@ -33,6 +34,15 @@ A role-based employee management web application built with Flask and PostgreSQL
 - Flask, Flask-Login, Flask-SQLAlchemy, and Flask-Migrate
 - PostgreSQL with Psycopg 3
 - Jinja templates, HTML, CSS, and JavaScript
+- Server-rendered page navigation progressively enhanced in the browser
+
+Internal GET links load fresh server-rendered content without reloading the
+shared navigation or assets. Slow page responses show layout-matched skeletons;
+forms and downloads keep their normal browser behavior. Responses include
+`Server-Timing` values for total application processing and Supabase profile
+photo URL signing, along with database query time/count, to help identify
+remaining production bottlenecks. Signed photo URLs are reused briefly only
+for the same account and role.
 
 ## Getting started
 

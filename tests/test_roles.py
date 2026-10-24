@@ -295,6 +295,50 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn("hr-task-grid", html)
         self.assertIn("Users &amp; roles", html)
         self.assertIn("Review leave requests", html)
+        self.assertIn('id="skeleton-dashboard"', html)
+        self.assertIn("Server-Timing", dashboard.headers)
+        self.assertIn("database;dur=", dashboard.headers["Server-Timing"])
+        self.assertIn("profile-storage;dur=", dashboard.headers["Server-Timing"])
+
+    def test_payroll_list_avoids_separate_employee_queries(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Payroll query")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            self.db.session.add(
+                self.Payroll(
+                    employee_id=employee.id,
+                    pay_period_start=date(2026, 10, 1),
+                    pay_period_end=date(2026, 10, 15),
+                    basic_salary=Decimal("4000.00"),
+                    allowances=Decimal("100.00"),
+                    deductions=Decimal("50.00"),
+                    net_pay=Decimal("4050.00"),
+                )
+            )
+            self.db.session.commit()
+
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/payroll/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Jamie Staff", response.get_data(as_text=True))
+        self.assertIn(
+            'desc="3 queries"',
+            response.headers["Server-Timing"],
+        )
 
     def test_deleting_linked_accounts_cleans_records_and_preserves_payroll(self):
         from datetime import date

@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from models import db
 from models.payroll import Payroll
@@ -56,7 +56,7 @@ def payroll_list():
         Payroll.pay_period_start.desc(),
         Payroll.id.desc(),
     ).options(
-        selectinload(Payroll.employee)
+        joinedload(Payroll.employee)
     ).paginate(
         page=request.args.get("page", 1, type=int),
         per_page=50,

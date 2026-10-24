@@ -11,7 +11,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash
 
 from models import db
@@ -43,7 +43,7 @@ employee_bp = Blueprint(
 def employee_list():
     if current_user.role in (User.ADMIN, User.HR):
         users = User.query.options(
-            selectinload(User.employee).selectinload(Employee.department)
+            joinedload(User.employee).joinedload(Employee.department)
         ).order_by(User.username.asc()).paginate(
             page=request.args.get("page", 1, type=int),
             per_page=50,
@@ -78,8 +78,8 @@ def employee_list():
         Employee.first_name.asc(),
         Employee.id.asc(),
     ).options(
-        selectinload(Employee.department),
-        selectinload(Employee.user),
+        joinedload(Employee.department),
+        joinedload(Employee.user),
     ).paginate(
         page=request.args.get("page", 1, type=int),
         per_page=50,

@@ -5,7 +5,6 @@ from flask_login import current_user
 
 from models import db
 from models.attendance import Attendance
-from models.employee import Employee
 from models.leave import Leave
 from models.payslip_request import PayslipRequest
 from models.travel_order import TravelOrder
@@ -33,7 +32,7 @@ def delete_employee_account(employee):
 
 def current_employee():
     # Find the employee record linked to the signed-in user.
-    return Employee.query.filter_by(user_id=current_user.id).first()
+    return current_user.employee
 
 
 def employee_scoped_query(query, employee_id_column):

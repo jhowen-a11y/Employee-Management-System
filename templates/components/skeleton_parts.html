@@ -1,0 +1,7 @@
+{% macro skeleton_line(width="100%") -%}
+<span class="skeleton-block skeleton-line" style="--skeleton-width: {{ width }}" aria-hidden="true"></span>
+{%- endmacro %}
+
+{% macro skeleton_circle(size="40px") -%}
+<span class="skeleton-block skeleton-circle" style="--skeleton-size: {{ size }}" aria-hidden="true"></span>
+{%- endmacro %}

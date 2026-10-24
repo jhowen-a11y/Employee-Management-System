@@ -4,6 +4,7 @@ from io import BytesIO
 from unittest.mock import Mock, patch
 
 from flask import Flask
+from flask_login import LoginManager, UserMixin, login_user
 from PIL import Image
 from werkzeug.datastructures import FileStorage
 
@@ -66,6 +67,72 @@ class ProfileStorageTests(unittest.TestCase):
             ["one.jpg", "two.jpg"],
             expires_in=3600,
         )
+
+    @patch("profile_storage._storage_bucket")
+    def test_signed_url_cache_is_scoped_to_user_and_role(
+        self,
+        storage,
+    ):
+        class Account(UserMixin):
+            def __init__(self, account_id, role):
+                self.id = account_id
+                self.role = role
+
+        app = Flask(__name__)
+        app.secret_key = "profile-storage-tests"
+        login_manager = LoginManager(app)
+        accounts = {
+            "account-one": Account("account-one", "admin"),
+            "account-one-employee": Account("account-one", "employee"),
+            "account-two": Account("account-two", "admin"),
+        }
+
+        @login_manager.user_loader
+        def load_user(user_id):
+            return accounts.get(user_id)
+
+        storage.return_value.create_signed_urls.return_value = [
+            {"signedURL": "https://example.test/signed/photo"}
+        ]
+        with profile_storage._signed_url_cache_lock:
+            profile_storage._signed_url_cache.clear()
+
+        for account in (accounts["account-one"], accounts["account-one"]):
+            with app.test_request_context():
+                login_user(account)
+                self.assertEqual(
+                    profile_storage.profile_picture_url("cached-photo.jpg"),
+                    "https://example.test/signed/photo",
+                )
+
+        with app.test_request_context():
+            login_user(accounts["account-one-employee"])
+            profile_storage.profile_picture_url("cached-photo.jpg")
+
+        with app.test_request_context():
+            login_user(accounts["account-two"])
+            profile_storage.profile_picture_url("cached-photo.jpg")
+
+        self.assertEqual(
+            storage.return_value.create_signed_urls.call_count,
+            3,
+        )
+
+    def test_signed_url_cache_expires_before_storage_url(self):
+        cache_key = ("account", "employee", "project", "bucket", "photo.jpg")
+        with profile_storage._signed_url_cache_lock:
+            profile_storage._signed_url_cache.clear()
+        with patch(
+            "profile_storage.time.monotonic",
+            side_effect=(
+                100,
+                100 + profile_storage.SIGNED_URL_CACHE_SECONDS + 1,
+            ),
+        ):
+            profile_storage._store_cached_signed_url(cache_key, "signed-url")
+            self.assertIsNone(
+                profile_storage._get_cached_signed_url(cache_key)
+            )
 
     def test_profile_picture_url_rejects_paths(self):
         app = Flask(__name__)

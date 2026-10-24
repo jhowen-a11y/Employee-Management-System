@@ -23,7 +23,7 @@
     {% block head %}{% endblock %}
 </head>
 
-<body>
+<body data-user-role="{{ current_user.role }}">
 
 <div class="app">
 
@@ -246,6 +246,8 @@
     </div>
 
 </div>
+
+{% include "components/navigation_skeletons.html" %}
 
 <dialog class="delete-dialog" id="deleteDialog"
         aria-labelledby="deleteDialogTitle"

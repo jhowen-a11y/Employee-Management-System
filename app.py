@@ -2,12 +2,24 @@ import hashlib
 import hmac
 import os
 import secrets
+import time
 from pathlib import Path
 
 
 import click
-from sqlalchemy import func, select
-from flask import Flask, abort, redirect, render_template, request, session, url_for
+from sqlalchemy import event, func, select
+from sqlalchemy.orm import joinedload
+from flask import (
+    Flask,
+    abort,
+    g,
+    has_request_context,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from dotenv import load_dotenv
 from flask_login import LoginManager, current_user
 from werkzeug.security import generate_password_hash
@@ -84,10 +96,61 @@ def create_app(test_config=None):
                 response.cache_control.public = True
                 response.cache_control.max_age = 31536000
                 response.cache_control.immutable = True
+        if hasattr(g, "request_started_at"):
+            app_duration = (time.perf_counter() - g.request_started_at) * 1000
+            database_duration = getattr(g, "database_duration_ms", 0.0)
+            database_query_count = getattr(g, "database_query_count", 0)
+            signing_duration = getattr(g, "profile_picture_signing_ms", 0.0)
+            response.headers["Server-Timing"] = (
+                f"app;dur={app_duration:.1f}, "
+                f"database;dur={database_duration:.1f};"
+                f'desc="{database_query_count} queries", '
+                f"profile-storage;dur={signing_duration:.1f}"
+            )
         return response
 
     db.init_app(app)
     migrate.init_app(app, db)
+
+    @app.before_request
+    def start_request_timing():
+        g.request_started_at = time.perf_counter()
+        g.database_duration_ms = 0.0
+        g.database_query_count = 0
+        g.profile_picture_signing_ms = 0.0
+
+    def start_database_query(
+        connection,
+        cursor,
+        statement,
+        parameters,
+        context,
+        executemany,
+    ):
+        if context is None:
+            return
+        context._ems_query_started_at = time.perf_counter()
+
+    def finish_database_query(
+        connection,
+        cursor,
+        statement,
+        parameters,
+        context,
+        executemany,
+    ):
+        query_started_at = getattr(context, "_ems_query_started_at", None)
+        if query_started_at is None or not has_request_context():
+            return
+        g.database_query_count += 1
+        g.database_duration_ms += (
+            time.perf_counter() - query_started_at
+        ) * 1000
+
+    with app.app_context():
+        event.listen(db.engine, "before_cursor_execute", start_database_query)
+        event.listen(db.engine, "after_cursor_execute", finish_database_query)
+
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Please sign in to continue."
@@ -96,7 +159,11 @@ def create_app(test_config=None):
     @login_manager.user_loader
     def load_user(user_id):
         try:
-            return db.session.get(User, int(user_id))
+            return db.session.execute(
+                select(User)
+                .options(joinedload(User.employee))
+                .where(User.id == int(user_id))
+            ).scalar_one_or_none()
         except (TypeError, ValueError):
             return None
 

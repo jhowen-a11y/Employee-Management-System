@@ -1,0 +1,175 @@
+{% from "components/skeleton_parts.html" import skeleton_line, skeleton_circle %}
+
+<template id="skeleton-dashboard">
+    <div class="navigation-skeleton" role="status" aria-label="Loading dashboard">
+        <section class="skeleton-dashboard-welcome">
+            <div>
+                {{ skeleton_line("28%") }}
+                {{ skeleton_line("42%") }}
+                {{ skeleton_line("76%") }}
+            </div>
+            <div class="skeleton-dashboard-attention">
+                {{ skeleton_circle("42px") }}
+                <div>{{ skeleton_line("160px") }}{{ skeleton_line("120px") }}</div>
+            </div>
+        </section>
+        <section class="hr-overview skeleton-section">
+            <div class="skeleton-section-heading">
+                {{ skeleton_line("180px") }}
+            </div>
+            <div class="hr-stat-grid">
+                {% for _ in range(6) %}
+                <div class="skeleton-card">
+                    {{ skeleton_circle("38px") }}
+                    {{ skeleton_line("48px") }}
+                    {{ skeleton_line("95px") }}
+                    {{ skeleton_line("125px") }}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        <section class="skeleton-section">
+            <div class="skeleton-section-heading">
+                {{ skeleton_line("150px") }}
+            </div>
+            <div class="hr-task-grid">
+                {% for _ in range(4) %}
+                <div class="skeleton-card skeleton-task-card">
+                    {{ skeleton_circle("36px") }}
+                    {{ skeleton_line("70%") }}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</template>
+
+<template id="skeleton-employee-dashboard">
+    <div class="navigation-skeleton" role="status" aria-label="Loading employee home">
+        <div class="skeleton-page-heading">
+            {{ skeleton_line("35%") }}
+            {{ skeleton_line("65%") }}
+        </div>
+        <section class="skeleton-employee-overview">
+            {{ skeleton_circle("76px") }}
+            <div>{{ skeleton_line("150px") }}{{ skeleton_line("110px") }}{{ skeleton_line("180px") }}</div>
+            <div>{{ skeleton_line("110px") }}{{ skeleton_line("90px") }}</div>
+        </section>
+        <div class="employee-quick-stats">
+            {% for _ in range(3) %}
+            <div class="skeleton-card skeleton-employee-stat">
+                {{ skeleton_circle("40px") }}
+                <div>{{ skeleton_line("110px") }}{{ skeleton_line("70px") }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="employee-activity-grid">
+            {% for _ in range(3) %}
+            <section class="skeleton-card skeleton-activity-card">
+                {{ skeleton_line("55%") }}
+                {% for _ in range(4) %}
+                {{ skeleton_line("88%") }}
+                {% endfor %}
+            </section>
+            {% endfor %}
+        </div>
+    </div>
+</template>
+
+<template id="skeleton-payroll-list">
+    <div class="navigation-skeleton" role="status" aria-label="Loading payroll records">
+        <div class="skeleton-page-heading">
+            {{ skeleton_line("210px") }}
+            {{ skeleton_line("280px") }}
+        </div>
+        <section class="panel table-panel skeleton-table-panel">
+            <div class="table-scroll">
+                <table class="data-table" aria-hidden="true">
+                    <thead><tr>{% for _ in range(8) %}<th>{{ skeleton_line("72px") }}</th>{% endfor %}</tr></thead>
+                    <tbody>
+                    {% for _ in range(7) %}
+                    <tr>{% for _ in range(8) %}<td>{{ skeleton_line("78px") }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</template>
+
+<template id="skeleton-employee-list">
+    <div class="navigation-skeleton" role="status" aria-label="Loading employees">
+        <div class="skeleton-page-heading">
+            {{ skeleton_line("200px") }}
+            {{ skeleton_line("300px") }}
+        </div>
+        <section class="panel table-panel skeleton-table-panel">
+            <div class="table-scroll">
+                <table class="data-table" aria-hidden="true">
+                    <thead><tr>{% for _ in range(7) %}<th>{{ skeleton_line("76px") }}</th>{% endfor %}</tr></thead>
+                    <tbody>
+                    {% for _ in range(7) %}
+                    <tr>{% for _ in range(7) %}<td>{{ skeleton_line("82px") }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</template>
+
+<template id="skeleton-detail">
+    <div class="navigation-skeleton" role="status" aria-label="Loading details">
+        <div class="skeleton-page-heading">
+            {{ skeleton_line("240px") }}
+            {{ skeleton_line("150px") }}
+        </div>
+        <section class="panel skeleton-detail-panel">
+            <div class="skeleton-detail-grid">
+                {% for _ in range(6) %}
+                <div class="skeleton-detail-item">
+                    {{ skeleton_line("70px") }}
+                    {{ skeleton_line("150px") }}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</template>
+
+<template id="skeleton-list">
+    <div class="navigation-skeleton" role="status" aria-label="Loading page">
+        <div class="skeleton-page-heading">
+            {{ skeleton_line("220px") }}
+            {{ skeleton_line("280px") }}
+        </div>
+        <section class="panel table-panel skeleton-table-panel">
+            <div class="table-scroll">
+                <table class="data-table" aria-hidden="true">
+                    <thead><tr>{% for _ in range(5) %}<th>{{ skeleton_line("80px") }}</th>{% endfor %}</tr></thead>
+                    <tbody>
+                    {% for _ in range(6) %}
+                    <tr>{% for _ in range(5) %}<td>{{ skeleton_line("95px") }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</template>
+
+<template id="skeleton-form">
+    <div class="navigation-skeleton" role="status" aria-label="Loading form">
+        <div class="skeleton-page-heading">
+            {{ skeleton_line("210px") }}
+            {{ skeleton_line("290px") }}
+        </div>
+        <section class="panel skeleton-form-panel">
+            <div class="skeleton-form-grid">
+                {% for _ in range(6) %}
+                <div>{{ skeleton_line("90px") }}{{ skeleton_line("100%") }}</div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</template>
