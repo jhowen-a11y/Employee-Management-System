@@ -14,6 +14,36 @@
     <a class="button button-primary" href="{{ url_for('attendance.add_attendance') }}">Add attendance</a>
     {% endif %}
 </div>
+<form class="table-filters" method="get" data-search-debounce>
+    <label class="visually-hidden" for="attendance-search">Search attendance</label>
+    <input id="attendance-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name or ID">
+    <label for="attendance-from">Date from</label>
+    <input id="attendance-from" type="date" name="from" value="{{ date_from }}">
+    <label for="attendance-to">Date to</label>
+    <input id="attendance-to" type="date" name="to" value="{{ date_to }}">
+    <label for="attendance-status">Status</label>
+    <select id="attendance-status" name="status">
+        <option value="">All statuses</option>
+        {% for option in statuses %}
+        <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+    </select>
+    <label for="attendance-sort">Sort</label>
+    <select id="attendance-sort" name="sort">
+        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+        <option value="date" {% if sort == 'date' %}selected{% endif %}>Date</option>
+        <option value="time_in" {% if sort == 'time_in' %}selected{% endif %}>Time in</option>
+        <option value="time_out" {% if sort == 'time_out' %}selected{% endif %}>Time out</option>
+        <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
+    </select>
+    <label for="attendance-direction">Direction</label>
+    <select id="attendance-direction" name="direction">
+        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+    </select>
+    <button class="button button-secondary button-small" type="submit">Search / apply</button>
+    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list') }}">Clear all</a>
+</form>
 <section class="panel table-panel">
     <div class="table-scroll">
         <table class="data-table">
@@ -55,7 +85,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="empty-state">No attendance records found.</td></tr>
+            <tr><td colspan="6" class="empty-state">No attendance records match your search and filters.</td></tr>
             {% endfor %}
             </tbody>
         </table>
@@ -64,11 +94,11 @@
 {% if records.pages > 1 %}
 <nav class="pagination" aria-label="Attendance pages">
     {% if records.has_prev %}
-    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list', page=records.prev_num) }}">Previous</a>
+    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list', page=records.prev_num, q=search, status=status, from=date_from, to=date_to, sort=sort, direction=direction) }}">Previous</a>
     {% endif %}
     <span>Page {{ records.page }} of {{ records.pages }} ({{ records.total }} records)</span>
     {% if records.has_next %}
-    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list', page=records.next_num) }}">Next</a>
+    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list', page=records.next_num, q=search, status=status, from=date_from, to=date_to, sort=sort, direction=direction) }}">Next</a>
     {% endif %}
 </nav>
 {% endif %}

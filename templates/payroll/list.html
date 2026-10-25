@@ -14,6 +14,36 @@
     <a class="button button-primary" href="{{ url_for('payroll.add_payroll') }}">Add payroll</a>
     {% endif %}
 </div>
+<form class="table-filters" method="get" data-search-debounce>
+    <label class="visually-hidden" for="payroll-search">Search payroll records</label>
+    <input id="payroll-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name, ID, or pay period">
+    <label for="payroll-from">Period from</label>
+    <input id="payroll-from" type="date" name="from" value="{{ period_from }}">
+    <label for="payroll-to">Period to</label>
+    <input id="payroll-to" type="date" name="to" value="{{ period_to }}">
+    <label for="payroll-status">Payment status</label>
+    <select id="payroll-status" name="status">
+        <option value="">All statuses</option>
+        <option value="paid" {% if status == 'paid' %}selected{% endif %}>Paid</option>
+        <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending payment</option>
+    </select>
+    <label for="payroll-sort">Sort</label>
+    <select id="payroll-sort" name="sort">
+        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+        <option value="period" {% if sort == 'period' %}selected{% endif %}>Pay period</option>
+        <option value="gross" {% if sort == 'gross' %}selected{% endif %}>Gross pay</option>
+        <option value="deductions" {% if sort == 'deductions' %}selected{% endif %}>Deductions</option>
+        <option value="net" {% if sort == 'net' %}selected{% endif %}>Net pay</option>
+        <option value="payment_date" {% if sort == 'payment_date' %}selected{% endif %}>Payroll date</option>
+    </select>
+    <label for="payroll-direction">Direction</label>
+    <select id="payroll-direction" name="direction">
+        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+    </select>
+    <button class="button button-secondary button-small" type="submit">Search / apply</button>
+    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list') }}">Clear all</a>
+</form>
 <section class="panel table-panel">
     <div class="table-scroll">
         <table class="data-table">
@@ -43,20 +73,23 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="empty-state">No payroll records found.</td></tr>
+            <tr><td colspan="8" class="empty-state">No payroll records match your search and filters.</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
 </section>
 {% if payroll_records.pages > 1 %}
+{% set page_args = request.args.to_dict() %}
 <nav class="pagination" aria-label="Payroll pages">
     {% if payroll_records.has_prev %}
-    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list', page=payroll_records.prev_num) }}">Previous</a>
+    {% set _ = page_args.update({'page': payroll_records.prev_num}) %}
+    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list', **page_args) }}">Previous</a>
     {% endif %}
     <span>Page {{ payroll_records.page }} of {{ payroll_records.pages }} ({{ payroll_records.total }} records)</span>
     {% if payroll_records.has_next %}
-    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list', page=payroll_records.next_num) }}">Next</a>
+    {% set _ = page_args.update({'page': payroll_records.next_num}) %}
+    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list', **page_args) }}">Next</a>
     {% endif %}
 </nav>
 {% endif %}

@@ -3,10 +3,11 @@ from functools import wraps
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
-from sqlalchemy import func, update
+from sqlalchemy import String, cast, func, or_, update
 from sqlalchemy.orm import joinedload
 
 from models import db
+from models.employee import Employee
 from models.travel_order import TravelOrder
 from models.user import User
 from routes.employee_access import current_employee, management_required
@@ -42,14 +43,79 @@ def parse_date(value):
 @employee_required
 def my_travel_orders():
     employee = current_employee()
-    orders = (
-        TravelOrder.query.filter_by(employee_id=employee.id)
-        .order_by(TravelOrder.created_at.desc(), TravelOrder.id.desc())
-        .all()
-        if employee
-        else []
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    date_from_value = request.args.get("from", "").strip()
+    date_to_value = request.args.get("to", "").strip()
+    date_from = parse_date(date_from_value) if date_from_value else None
+    date_to = parse_date(date_to_value) if date_to_value else None
+    if (date_from_value and date_from is None) or (date_to_value and date_to is None):
+        abort(400, description="Enter valid departure date filters.")
+    if status and status not in TravelOrder.STATUSES:
+        abort(400, description="Select a valid travel order status.")
+    sort = request.args.get("sort", "departure").strip()
+    direction = request.args.get("direction", "desc").strip().lower()
+    sort_fields = {
+        "destination": (TravelOrder.destination,),
+        "departure": (TravelOrder.departure_date,),
+        "return": (TravelOrder.return_date,),
+        "submission": (TravelOrder.created_at,),
+        "status": (TravelOrder.status,),
+    }
+    if sort not in sort_fields:
+        sort = "departure"
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+    query = TravelOrder.query.join(TravelOrder.employee)
+    if employee:
+        query = query.filter(TravelOrder.employee_id == employee.id)
+    else:
+        query = query.filter(TravelOrder.employee_id == -1)
+    if search:
+        search_pattern = f"%{search}%"
+        search_filters = [
+            TravelOrder.destination.ilike(search_pattern),
+            TravelOrder.purpose.ilike(search_pattern),
+        ]
+        if employee:
+            search_filters.extend([
+                Employee.first_name.ilike(search_pattern),
+                Employee.last_name.ilike(search_pattern),
+                (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+            ])
+        if search.isdecimal():
+            search_filters.append(
+                cast(TravelOrder.employee_id, String).ilike(search_pattern)
+            )
+        query = query.filter(or_(*search_filters))
+    if status:
+        query = query.filter(TravelOrder.status == status)
+    if date_from:
+        query = query.filter(TravelOrder.departure_date >= date_from)
+    if date_to:
+        query = query.filter(TravelOrder.departure_date <= date_to)
+    orders = query.order_by(
+        *sort_expressions, TravelOrder.id.desc()
+    ).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
     )
-    return render_template("travel_orders/list.html", travel_orders=orders)
+    return render_template(
+        "travel_orders/list.html",
+        travel_orders=orders,
+        search=search,
+        status=status,
+        statuses=TravelOrder.STATUSES,
+        date_from=date_from_value,
+        date_to=date_to_value,
+        sort=sort,
+        direction=direction,
+    )
 
 
 @travel_order_bp.route("/submit", methods=["GET", "POST"])
@@ -112,21 +178,74 @@ def manage_travel_orders():
     if status and status not in TravelOrder.STATUSES:
         abort(400, description="Select a valid travel order status.")
 
-    query = TravelOrder.query.options(
+    search = request.args.get("q", "").strip()
+    date_from_value = request.args.get("from", "").strip()
+    date_to_value = request.args.get("to", "").strip()
+    date_from = parse_date(date_from_value) if date_from_value else None
+    date_to = parse_date(date_to_value) if date_to_value else None
+    if (date_from_value and date_from is None) or (date_to_value and date_to is None):
+        abort(400, description="Enter valid departure date filters.")
+    sort = request.args.get("sort", "submission").strip()
+    direction = request.args.get("direction", "desc").strip().lower()
+    sort_fields = {
+        "employee": (Employee.last_name, Employee.first_name),
+        "destination": (TravelOrder.destination,),
+        "departure": (TravelOrder.departure_date,),
+        "return": (TravelOrder.return_date,),
+        "submission": (TravelOrder.created_at,),
+        "status": (TravelOrder.status,),
+    }
+    if sort not in sort_fields:
+        sort = "submission"
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+
+    query = TravelOrder.query.join(TravelOrder.employee).options(
         joinedload(TravelOrder.employee),
         joinedload(TravelOrder.reviewer),
     )
+    if search:
+        search_pattern = f"%{search}%"
+        search_filters = [
+            Employee.first_name.ilike(search_pattern),
+            Employee.last_name.ilike(search_pattern),
+            (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+            TravelOrder.destination.ilike(search_pattern),
+            TravelOrder.purpose.ilike(search_pattern),
+        ]
+        if search.isdecimal():
+            search_filters.extend([
+                cast(Employee.id, String).ilike(search_pattern),
+                cast(TravelOrder.id, String).ilike(search_pattern),
+            ])
+        query = query.filter(or_(*search_filters))
     if status:
-        query = query.filter_by(status=status)
+        query = query.filter(TravelOrder.status == status)
+    if date_from:
+        query = query.filter(TravelOrder.departure_date >= date_from)
+    if date_to:
+        query = query.filter(TravelOrder.departure_date <= date_to)
     travel_orders = query.order_by(
-        TravelOrder.created_at.desc(),
-        TravelOrder.id.desc(),
-    ).all()
+        *sort_expressions, TravelOrder.id.desc()
+    ).paginate(
+        page=request.args.get("page", 1, type=int),
+        per_page=50,
+        error_out=False,
+    )
     return render_template(
         "travel_orders/manage.html",
         travel_orders=travel_orders,
         statuses=TravelOrder.STATUSES,
         selected_status=status,
+        search=search,
+        date_from=date_from_value,
+        date_to=date_to_value,
+        sort=sort,
+        direction=direction,
     )
 
 

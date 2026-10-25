@@ -1,7 +1,8 @@
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import abort, Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date, time
 from flask_login import current_user
+from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import joinedload
 
 from models import db
@@ -44,11 +45,59 @@ def parse_time(value):
 # View all attendance records
 @attendance_bp.route("/")
 def attendance_list():
-    records = employee_scoped_query(
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    date_from_value = request.args.get("from", "").strip()
+    date_to_value = request.args.get("to", "").strip()
+    date_from = parse_date(date_from_value) if date_from_value else None
+    date_to = parse_date(date_to_value) if date_to_value else None
+    if (date_from_value and date_from is None) or (date_to_value and date_to is None):
+        abort(400, description="Enter valid attendance date filters.")
+    statuses = ("Present", "Absent", "Late", "On Leave")
+    if status and status not in statuses:
+        abort(400, description="Select a valid attendance status.")
+    sort = request.args.get("sort", "date").strip()
+    direction = request.args.get("direction", "desc").strip().lower()
+    sort_fields = {
+        "employee": (Employee.last_name, Employee.first_name),
+        "date": (Attendance.attendance_date,),
+        "time_in": (Attendance.time_in,),
+        "time_out": (Attendance.time_out,),
+        "status": (Attendance.status,),
+    }
+    if sort not in sort_fields:
+        sort = "date"
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+
+    query = employee_scoped_query(
         Attendance.query, Attendance.employee_id
-    ).order_by(
-        Attendance.attendance_date.desc(),
-        Attendance.id.desc(),
+    ).join(Attendance.employee)
+    if search:
+        search_pattern = f"%{search}%"
+        search_filters = [
+            Employee.first_name.ilike(search_pattern),
+            Employee.last_name.ilike(search_pattern),
+            (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+        ]
+        if search.isdecimal():
+            search_filters.append(
+                cast(Employee.id, String).ilike(search_pattern)
+            )
+        query = query.filter(or_(*search_filters))
+    if status:
+        query = query.filter(Attendance.status == status)
+    if date_from:
+        query = query.filter(Attendance.attendance_date >= date_from)
+    if date_to:
+        query = query.filter(Attendance.attendance_date <= date_to)
+
+    records = query.order_by(
+        *sort_expressions, Attendance.id.desc()
     ).options(
         joinedload(Attendance.employee)
     ).paginate(
@@ -68,6 +117,13 @@ def attendance_list():
         "attendance/list.html",
         records=records,
         profile_picture_urls=picture_urls,
+        search=search,
+        status=status,
+        statuses=statuses,
+        date_from=date_from_value,
+        date_to=date_to_value,
+        sort=sort,
+        direction=direction,
     )
 
 

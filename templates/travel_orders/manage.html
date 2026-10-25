@@ -8,15 +8,36 @@
     <h1>Manage Travel Orders</h1>
     <p>Review employee travel requests and record an approval or decline.</p>
 </div>
-<form class="payslip-filter" method="get">
+<form class="table-filters" method="get" data-search-debounce>
+    <label class="visually-hidden" for="travel-search">Search travel orders</label>
+    <input id="travel-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name/ID, destination, or purpose">
     <label for="status">Filter by status</label>
     <select id="status" name="status">
         <option value="">All requests</option>
-        {% for status in statuses %}
-        <option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status }}</option>
+        {% for option in statuses %}
+        <option value="{{ option }}" {% if selected_status == option %}selected{% endif %}>{{ option }}</option>
         {% endfor %}
     </select>
-    <button class="button button-secondary button-small" type="submit">Apply filter</button>
+    <label for="travel-from">Departure from</label>
+    <input id="travel-from" type="date" name="from" value="{{ date_from }}">
+    <label for="travel-to">Departure to</label>
+    <input id="travel-to" type="date" name="to" value="{{ date_to }}">
+    <label for="travel-sort">Sort</label>
+    <select id="travel-sort" name="sort">
+        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+        <option value="destination" {% if sort == 'destination' %}selected{% endif %}>Destination</option>
+        <option value="departure" {% if sort == 'departure' %}selected{% endif %}>Departure date</option>
+        <option value="return" {% if sort == 'return' %}selected{% endif %}>Return date</option>
+        <option value="submission" {% if sort == 'submission' %}selected{% endif %}>Submission date</option>
+        <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
+    </select>
+    <label for="travel-direction">Direction</label>
+    <select id="travel-direction" name="direction">
+        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+    </select>
+    <button class="button button-secondary button-small" type="submit">Search / apply</button>
+    <a class="button button-secondary button-small" href="{{ url_for('travel_order.manage_travel_orders') }}">Clear all</a>
 </form>
 <section class="panel table-panel">
     <div class="table-scroll">
@@ -70,10 +91,24 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="10" class="empty-state">No travel orders match this filter.</td></tr>
+                <tr><td colspan="10" class="empty-state">No travel orders match your search and filters.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </section>
+{% if travel_orders.pages > 1 %}
+{% set page_args = request.args.to_dict() %}
+<nav class="pagination" aria-label="Travel order pages">
+    {% if travel_orders.has_prev %}
+    {% set _ = page_args.update({'page': travel_orders.prev_num}) %}
+    <a class="button button-secondary button-small" href="{{ url_for('travel_order.manage_travel_orders', **page_args) }}">Previous</a>
+    {% endif %}
+    <span>Page {{ travel_orders.page }} of {{ travel_orders.pages }} ({{ travel_orders.total }} requests)</span>
+    {% if travel_orders.has_next %}
+    {% set _ = page_args.update({'page': travel_orders.next_num}) %}
+    <a class="button button-secondary button-small" href="{{ url_for('travel_order.manage_travel_orders', **page_args) }}">Next</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

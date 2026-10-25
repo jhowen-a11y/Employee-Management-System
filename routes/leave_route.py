@@ -1,7 +1,8 @@
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import abort, Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from flask_login import current_user
+from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import joinedload
 
 from models import db
@@ -25,11 +26,67 @@ leave_bp = Blueprint(
 # View all leave requests
 @leave_bp.route("/")
 def leave_list():
-    leaves = employee_scoped_query(
+    search = request.args.get("q", "").strip()
+    leave_type = request.args.get("leave_type", "").strip()
+    status = request.args.get("status", "").strip()
+    date_from_value = request.args.get("from", "").strip()
+    date_to_value = request.args.get("to", "").strip()
+    try:
+        date_from = date.fromisoformat(date_from_value) if date_from_value else None
+        date_to = date.fromisoformat(date_to_value) if date_to_value else None
+    except ValueError:
+        abort(400, description="Enter valid leave date filters.")
+    if (date_from_value and date_from is None) or (date_to_value and date_to is None):
+        abort(400, description="Enter valid leave date filters.")
+    leave_types = ("Annual", "Sick", "Personal", "Maternity", "Paternity", "Other")
+    statuses = ("Pending", "Approved", "Rejected")
+    if leave_type and leave_type not in leave_types:
+        abort(400, description="Select a valid leave type.")
+    if status and status not in statuses:
+        abort(400, description="Select a valid leave status.")
+    sort = request.args.get("sort", "submission_date").strip()
+    direction = request.args.get("direction", "desc").strip().lower()
+    sort_fields = {
+        "employee": (Employee.last_name, Employee.first_name),
+        "leave_type": (Leave.leave_type,),
+        "start_date": (Leave.start_date,),
+        "end_date": (Leave.end_date,),
+        "submission_date": (Leave.created_at,),
+        "status": (Leave.status,),
+    }
+    if sort not in sort_fields:
+        sort = "submission_date"
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+
+    query = employee_scoped_query(
         Leave.query, Leave.employee_id
-    ).order_by(
-        Leave.created_at.desc(),
-        Leave.id.desc(),
+    ).join(Leave.employee)
+    if search:
+        search_pattern = f"%{search}%"
+        search_filters = [
+            Employee.first_name.ilike(search_pattern),
+            Employee.last_name.ilike(search_pattern),
+            (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+        ]
+        if search.isdecimal():
+            search_filters.append(cast(Employee.id, String).ilike(search_pattern))
+        query = query.filter(or_(*search_filters))
+    if leave_type:
+        query = query.filter(Leave.leave_type == leave_type)
+    if status:
+        query = query.filter(Leave.status == status)
+    if date_from:
+        query = query.filter(Leave.end_date >= date_from)
+    if date_to:
+        query = query.filter(Leave.start_date <= date_to)
+
+    leaves = query.order_by(
+        *sort_expressions, Leave.id.desc()
     ).options(
         joinedload(Leave.employee)
     ).paginate(
@@ -49,6 +106,15 @@ def leave_list():
         "leave/list.html",
         leaves=leaves,
         profile_picture_urls=picture_urls,
+        search=search,
+        leave_type=leave_type,
+        status=status,
+        leave_types=leave_types,
+        statuses=statuses,
+        date_from=date_from_value,
+        date_to=date_to_value,
+        sort=sort,
+        direction=direction,
     )
 
 

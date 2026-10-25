@@ -21,6 +21,7 @@ A role-based employee management web application built with Flask and PostgreSQL
 - Employee profiles and department management
 - Attendance records and leave-request review
 - Payroll management for HR/admins and finalized payslips for employees
+- Server-side search, sorting, filtering, and pagination across management lists
 - Employee payslip requests with HR/admin approval and request history
 - Employee travel order requests with HR/admin approval tracking
 - Separate administrator, HR, and employee experiences

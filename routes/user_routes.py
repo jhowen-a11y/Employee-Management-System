@@ -12,7 +12,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -45,10 +45,41 @@ def require_admin():
 
 @user_bp.route("/")
 def user_list():
-    # Show all user accounts.
-    users = User.query.options(
+    search = request.args.get("q", "").strip()
+    selected_role = request.args.get("role", "").strip()
+    sort = request.args.get("sort", "username").strip()
+    direction = request.args.get("direction", "asc").strip().lower()
+    sort_fields = {
+        "name": (Employee.last_name, Employee.first_name),
+        "username": (User.username,),
+        "role": (User.role,),
+    }
+    if sort not in sort_fields:
+        sort = "username"
+    if direction not in {"asc", "desc"}:
+        direction = "asc"
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+    user_query = User.query.outerjoin(User.employee)
+    if search:
+        search_pattern = f"%{search}%"
+        user_query = user_query.filter(or_(
+            User.username.ilike(search_pattern),
+            User.email.ilike(search_pattern),
+            User.role.ilike(search_pattern),
+            Employee.first_name.ilike(search_pattern),
+            Employee.last_name.ilike(search_pattern),
+            (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+        ))
+    if selected_role in User.ROLES:
+        user_query = user_query.filter(User.role == selected_role)
+    else:
+        selected_role = ""
+    users = user_query.options(
         joinedload(User.employee)
-    ).order_by(User.username.asc()).paginate(
+    ).order_by(*sort_expressions, User.id.asc()).paginate(
         page=request.args.get("page", 1, type=int),
         per_page=50,
         error_out=False,
@@ -64,6 +95,10 @@ def user_list():
         "users/list.html",
         users=users,
         roles=User.ROLES,
+        search=search,
+        selected_role=selected_role,
+        sort=sort,
+        direction=direction,
         admin_count=User.query.filter_by(role=User.ADMIN).count(),
         profile_picture_urls=picture_urls,
     )

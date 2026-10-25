@@ -11,6 +11,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash
 
@@ -41,10 +42,72 @@ employee_bp = Blueprint(
 # View all employees
 @employee_bp.route("/")
 def employee_list():
+    search = request.args.get("q", "").strip()
+    selected_department = request.args.get("department", "").strip()
+    selected_role = request.args.get("role", "").strip()
+    sort = request.args.get("sort", "name").strip()
+    direction = request.args.get("direction", "asc").strip().lower()
+    sort_fields = {
+        "name": (Employee.last_name, Employee.first_name),
+        "employee_id": (Employee.id,),
+        "department": (Department.department_name,),
+        "role": (User.role,),
+        "created_at": (Employee.created_at,),
+        "username": (User.username,),
+    }
+    if sort not in sort_fields:
+        sort = "name"
+    if direction not in {"asc", "desc"}:
+        direction = "asc"
+
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+    department_query = Department.query
+    if current_user.role == User.EMPLOYEE:
+        employee = current_employee()
+        department_query = department_query.filter_by(
+            id=employee.department_id if employee else None
+        )
+    departments = department_query.order_by(
+        Department.department_name.asc()
+    ).all()
+
     if current_user.role in (User.ADMIN, User.HR):
-        users = User.query.options(
+        user_query = User.query.outerjoin(User.employee).outerjoin(
+            Employee.department
+        )
+        if search:
+            search_pattern = f"%{search}%"
+            search_filters = [
+                User.username.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                User.role.ilike(search_pattern),
+                Department.department_name.ilike(search_pattern),
+                Employee.first_name.ilike(search_pattern),
+                Employee.last_name.ilike(search_pattern),
+                (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+            ]
+            if search.isdecimal():
+                search_filters.append(
+                    cast(Employee.id, String).ilike(search_pattern)
+                )
+            user_query = user_query.filter(or_(*search_filters))
+        if selected_department:
+            if not selected_department.isdecimal():
+                selected_department = ""
+            else:
+                user_query = user_query.filter(
+                    Employee.department_id == int(selected_department)
+                )
+        if selected_role in User.ROLES:
+            user_query = user_query.filter(User.role == selected_role)
+        else:
+            selected_role = ""
+        users = user_query.options(
             joinedload(User.employee).joinedload(Employee.department)
-        ).order_by(User.username.asc()).paginate(
+        ).order_by(*sort_expressions, User.id.asc()).paginate(
             page=request.args.get("page", 1, type=int),
             per_page=50,
             error_out=False,
@@ -62,6 +125,12 @@ def employee_list():
             employees=[],
             users=users,
             profile_picture_urls=picture_urls,
+            search=search,
+            sort=sort,
+            direction=direction,
+            departments=departments,
+            selected_department=selected_department,
+            selected_role=selected_role,
         )
 
     employee_query = Employee.query
@@ -73,10 +142,38 @@ def employee_list():
             User.role == User.EMPLOYEE
         )
 
+    employee_query = employee_query.join(Employee.user).join(
+        Employee.department
+    )
+    if search:
+        search_pattern = f"%{search}%"
+        search_filters = [
+            Employee.first_name.ilike(search_pattern),
+            Employee.last_name.ilike(search_pattern),
+            Employee.position.ilike(search_pattern),
+            Department.department_name.ilike(search_pattern),
+            User.username.ilike(search_pattern),
+            User.email.ilike(search_pattern),
+            (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+        ]
+        if search.isdecimal():
+            search_filters.append(
+                cast(Employee.id, String).ilike(search_pattern)
+            )
+        employee_query = employee_query.filter(or_(*search_filters))
+    if selected_department and selected_department.isdecimal():
+        employee_query = employee_query.filter(
+            Employee.department_id == int(selected_department)
+        )
+    elif selected_department:
+        selected_department = ""
+    if selected_role in User.ROLES:
+        employee_query = employee_query.filter(User.role == selected_role)
+    else:
+        selected_role = ""
+
     employees = employee_query.order_by(
-        Employee.last_name.asc(),
-        Employee.first_name.asc(),
-        Employee.id.asc(),
+        *sort_expressions, Employee.id.asc()
     ).options(
         joinedload(Employee.department),
         joinedload(Employee.user),
@@ -98,6 +195,12 @@ def employee_list():
         employees=employees,
         users=None,
         profile_picture_urls=picture_urls,
+        search=search,
+        sort=sort,
+        direction=direction,
+        departments=departments,
+        selected_department=selected_department,
+        selected_role=selected_role,
     )
 
 

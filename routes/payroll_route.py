@@ -1,7 +1,8 @@
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import abort, Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import joinedload
 
 from models import db
@@ -52,9 +53,67 @@ def read_date(value):
 @payroll_bp.route("/")
 @management_required
 def payroll_list():
-    payroll_records = Payroll.query.order_by(
-        Payroll.pay_period_start.desc(),
-        Payroll.id.desc(),
+    search = request.args.get("q", "").strip()
+    period_from_value = request.args.get("from", "").strip()
+    period_to_value = request.args.get("to", "").strip()
+    period_from = read_date(period_from_value) if period_from_value else None
+    period_to = read_date(period_to_value) if period_to_value else None
+    if (period_from_value and period_from is None) or (period_to_value and period_to is None):
+        abort(400, description="Enter valid payroll period dates.")
+    status = request.args.get("status", "").strip()
+    if status not in {"", "paid", "pending"}:
+        abort(400, description="Select a valid payroll status.")
+    sort = request.args.get("sort", "period").strip()
+    direction = request.args.get("direction", "desc").strip().lower()
+    gross_pay = Payroll.basic_salary + Payroll.allowances
+    sort_fields = {
+        "employee": (Employee.last_name, Employee.first_name),
+        "period": (Payroll.pay_period_start,),
+        "gross": (gross_pay,),
+        "deductions": (Payroll.deductions,),
+        "net": (Payroll.net_pay,),
+        "payment_date": (Payroll.payment_date,),
+    }
+    if sort not in sort_fields:
+        sort = "period"
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    sort_expressions = [
+        expression.asc() if direction == "asc" else expression.desc()
+        for expression in sort_fields[sort]
+    ]
+
+    query = Payroll.query.join(Payroll.employee)
+    if search:
+        search_pattern = f"%{search}%"
+        search_filters = [
+            Employee.first_name.ilike(search_pattern),
+            Employee.last_name.ilike(search_pattern),
+            (Employee.first_name + " " + Employee.last_name).ilike(search_pattern),
+        ]
+        if search.isdecimal():
+            search_filters.extend([
+                cast(Employee.id, String).ilike(search_pattern),
+                Payroll.pay_period_start.cast(String).ilike(search_pattern),
+                Payroll.pay_period_end.cast(String).ilike(search_pattern),
+            ])
+        else:
+            search_filters.extend([
+                Payroll.pay_period_start.cast(String).ilike(search_pattern),
+                Payroll.pay_period_end.cast(String).ilike(search_pattern),
+            ])
+        query = query.filter(or_(*search_filters))
+    if period_from:
+        query = query.filter(Payroll.pay_period_end >= period_from)
+    if period_to:
+        query = query.filter(Payroll.pay_period_start <= period_to)
+    if status == "paid":
+        query = query.filter(Payroll.payment_date.is_not(None))
+    elif status == "pending":
+        query = query.filter(Payroll.payment_date.is_(None))
+
+    payroll_records = query.order_by(
+        *sort_expressions, Payroll.id.desc()
     ).options(
         joinedload(Payroll.employee)
     ).paginate(
@@ -74,6 +133,12 @@ def payroll_list():
         "payroll/list.html",
         payroll_records=payroll_records,
         profile_picture_urls=picture_urls,
+        search=search,
+        period_from=period_from_value,
+        period_to=period_to_value,
+        status=status,
+        sort=sort,
+        direction=direction,
     )
 
 

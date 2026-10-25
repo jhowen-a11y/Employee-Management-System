@@ -5,6 +5,43 @@
         window.lucide.createIcons();
     }
 
+    const searchTimers = new WeakMap();
+    document.addEventListener("input", function (event) {
+        const input = event.target;
+        if (
+            !(input instanceof HTMLInputElement) ||
+            input.type !== "search" ||
+            !input.form ||
+            !input.form.hasAttribute("data-search-debounce")
+        ) {
+            return;
+        }
+
+        window.clearTimeout(searchTimers.get(input));
+        const form = input.form;
+        searchTimers.set(input, window.setTimeout(function () {
+            if (form && form.isConnected) {
+                form.requestSubmit();
+            }
+        }, 350));
+    });
+    document.addEventListener("submit", function (event) {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-search-debounce")) {
+            return;
+        }
+
+        form.querySelectorAll('input[type="search"]').forEach(function (input) {
+            window.clearTimeout(searchTimers.get(input));
+        });
+        form.setAttribute("aria-busy", "true");
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+            submitButton.textContent = "Loading results...";
+            submitButton.disabled = true;
+        }
+    });
+
     const deleteDialog = document.getElementById("deleteDialog");
     const deleteTitle = document.getElementById("deleteDialogTitle");
     const deleteMessage = document.getElementById("deleteDialogMessage");
