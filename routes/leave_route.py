@@ -38,6 +38,8 @@ def leave_list():
         abort(400, description="Enter valid leave date filters.")
     if (date_from_value and date_from is None) or (date_to_value and date_to is None):
         abort(400, description="Enter valid leave date filters.")
+    if date_from and date_to and date_to < date_from:
+        abort(400, description="The end date cannot be earlier than the start date.")
     leave_types = ("Annual", "Sick", "Personal", "Maternity", "Paternity", "Other")
     statuses = ("Pending", "Approved", "Rejected")
     if leave_type and leave_type not in leave_types:

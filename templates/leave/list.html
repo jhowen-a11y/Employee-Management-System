@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "components/avatar.html" import person_avatar with context %}
+{% from "components/date_range_picker.html" import date_range_picker %}
 
 {% block title %}Leave Requests | MCM EMS{% endblock %}
 {% block header_title %}Leave Requests{% endblock %}
@@ -12,43 +13,55 @@
     </div>
     <a class="button button-primary" href="{{ url_for('leave.add_leave') }}">{% if current_user.role == 'employee' %}Submit request{% else %}Add leave request{% endif %}</a>
 </div>
-<form class="table-filters" method="get" data-search-debounce>
-    <label class="visually-hidden" for="leave-search">Search leave requests</label>
-    <input id="leave-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name or ID">
-    <label for="leave-type">Leave type</label>
-    <select id="leave-type" name="leave_type">
-        <option value="">All types</option>
-        {% for option in leave_types %}
-        <option value="{{ option }}" {% if leave_type == option %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-    </select>
-    <label for="leave-status">Status</label>
-    <select id="leave-status" name="status">
-        <option value="">All statuses</option>
-        {% for option in statuses %}
-        <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-    </select>
-    <label for="leave-from">Date from</label>
-    <input id="leave-from" type="date" name="from" value="{{ date_from }}">
-    <label for="leave-to">Date to</label>
-    <input id="leave-to" type="date" name="to" value="{{ date_to }}">
-    <label for="leave-sort">Sort</label>
-    <select id="leave-sort" name="sort">
-        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
-        <option value="leave_type" {% if sort == 'leave_type' %}selected{% endif %}>Leave type</option>
-        <option value="start_date" {% if sort == 'start_date' %}selected{% endif %}>Start date</option>
-        <option value="end_date" {% if sort == 'end_date' %}selected{% endif %}>End date</option>
-        <option value="submission_date" {% if sort == 'submission_date' %}selected{% endif %}>Submission date</option>
-        <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
-    </select>
-    <label for="leave-direction">Direction</label>
-    <select id="leave-direction" name="direction">
-        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
-        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
-    </select>
-    <button class="button button-secondary button-small" type="submit">Search / apply</button>
-    <a class="button button-secondary button-small" href="{{ url_for('leave.leave_list') }}">Clear all</a>
+<form class="table-filters" method="get" data-search-form>
+    <div class="table-search-group">
+        <label class="visually-hidden" for="leave-search">Search leave requests</label>
+        <input id="leave-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name or ID">
+        <button class="button button-primary button-small search-submit" type="submit" data-search-submit>Search</button>
+    </div>
+    <div class="filter-controls">
+        <div class="filter-control">
+            <label for="leave-type">Leave type</label>
+            <select id="leave-type" name="leave_type">
+                <option value="">All types</option>
+                {% for option in leave_types %}
+                <option value="{{ option }}" {% if leave_type == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="leave-status">Status</label>
+            <select id="leave-status" name="status">
+                <option value="">All statuses</option>
+                {% for option in statuses %}
+                <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {{ date_range_picker('leave-date-range', 'Date range', date_from, date_to) }}
+        <div class="filter-control">
+            <label for="leave-sort">Sort by</label>
+            <select id="leave-sort" name="sort">
+                <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+                <option value="leave_type" {% if sort == 'leave_type' %}selected{% endif %}>Leave type</option>
+                <option value="start_date" {% if sort == 'start_date' %}selected{% endif %}>Start date</option>
+                <option value="end_date" {% if sort == 'end_date' %}selected{% endif %}>End date</option>
+                <option value="submission_date" {% if sort == 'submission_date' %}selected{% endif %}>Submission date</option>
+                <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="leave-direction">Order</label>
+            <select id="leave-direction" name="direction">
+                <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+                <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+            </select>
+        </div>
+    </div>
+    <div class="filter-actions">
+        <button class="button button-primary button-small" type="submit" data-search-submit>Apply filters</button>
+        <a class="button button-secondary button-small" href="{{ url_for('leave.leave_list') }}">Reset filters</a>
+    </div>
 </form>
 <section class="panel table-panel">
     <div class="table-scroll">

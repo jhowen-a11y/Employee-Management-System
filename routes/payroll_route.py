@@ -60,10 +60,12 @@ def payroll_list():
     period_to = read_date(period_to_value) if period_to_value else None
     if (period_from_value and period_from is None) or (period_to_value and period_to is None):
         abort(400, description="Enter valid payroll period dates.")
+    if period_from and period_to and period_to < period_from:
+        abort(400, description="The end date cannot be earlier than the start date.")
     status = request.args.get("status", "").strip()
     if status not in {"", "paid", "pending"}:
         abort(400, description="Select a valid payroll status.")
-    sort = request.args.get("sort", "period").strip()
+    sort = request.args.get("sort", "employee").strip()
     direction = request.args.get("direction", "desc").strip().lower()
     gross_pay = Payroll.basic_salary + Payroll.allowances
     sort_fields = {
@@ -75,7 +77,7 @@ def payroll_list():
         "payment_date": (Payroll.payment_date,),
     }
     if sort not in sort_fields:
-        sort = "period"
+        sort = "employee"
     if direction not in {"asc", "desc"}:
         direction = "desc"
     sort_expressions = [

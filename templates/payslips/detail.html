@@ -7,7 +7,14 @@
 <style>
     @media print {
         .sidebar, .topbar, .page-heading .button, .flash-messages { display: none !important; }
-        .main-area, .content { width: 100%; margin: 0; padding: 0; }
+        .app, .main-area, .content {
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            margin: 0;
+            overflow: visible;
+            padding: 0;
+        }
         .payslip-document { border: 0; box-shadow: none; }
     }
 </style>
@@ -20,7 +27,7 @@
         <p>Pay period {{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</p>
     </div>
     <div class="payslip-actions">
-        <button class="button button-secondary" type="button" onclick="window.print()">Print</button>
+        <button class="button button-secondary" type="button" data-print-page>Print</button>
         <a class="button button-primary" href="{{ url_for('payslip.download_payslip', payroll_id=payroll.id) }}">Download PDF</a>
     </div>
 </div>

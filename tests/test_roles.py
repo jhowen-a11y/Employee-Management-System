@@ -300,6 +300,41 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn("database;dur=", dashboard.headers["Server-Timing"])
         self.assertIn("profile-storage;dur=", dashboard.headers["Server-Timing"])
 
+    def test_date_filters_reject_reversed_ranges_and_date_sort_options_work(self):
+        self.login(self.client, "admin", "AdminPass123")
+        admin_routes = (
+            ("/attendance/", "date"),
+            ("/leaves/", "start_date"),
+            ("/payroll/", "period"),
+            ("/travel-orders/manage", "departure"),
+        )
+        for path, sort in admin_routes:
+            with self.subTest(path=path, behavior="sort"):
+                response = self.client.get(f"{path}?sort={sort}")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(
+                    f'<option value="{sort}" selected>',
+                    response.get_data(as_text=True),
+                )
+            with self.subTest(path=path, behavior="reversed range"):
+                response = self.client.get(
+                    f"{path}?from=2026-10-02&to=2026-10-01"
+                )
+                self.assertEqual(response.status_code, 400)
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        response = employee_client.get("/travel-orders/?sort=departure")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            '<option value="departure" selected>',
+            response.get_data(as_text=True),
+        )
+        response = employee_client.get(
+            "/travel-orders/?from=2026-10-02&to=2026-10-01"
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_payroll_list_avoids_separate_employee_queries(self):
         from datetime import date
         from decimal import Decimal
@@ -1274,7 +1309,9 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"admin@example.test", response.get_data())
         self.assertIn(b"hrstaff@example.test", response.get_data())
         self.assertIn(b"Users and Employees", response.get_data())
-        self.assertIn(b"Edit Profile", response.get_data())
+        self.assertIn(b'class="sidebar-account-profile', response.get_data())
+        self.assertEqual(response.get_data().count(b"Sign out"), 1)
+        self.assertNotIn(b"Edit Profile", response.get_data())
         self.assertEqual(self.client.get("/users/profile").status_code, 200)
 
     def test_admin_can_assign_existing_user_to_department(self):
@@ -1536,7 +1573,9 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"My Attendance", home.get_data())
         self.assertIn(b"My Payslips", home.get_data())
         self.assertNotIn(b"My Payroll", home.get_data())
-        self.assertIn(b"Edit Profile", home.get_data())
+        self.assertIn(b'class="sidebar-account-profile', home.get_data())
+        self.assertEqual(home.get_data().count(b"Sign out"), 1)
+        self.assertNotIn(b"Edit Profile", home.get_data())
         self.assertNotIn(b"Users &amp; Roles", home.get_data())
         self.assertNotIn(b">Employees<", home.get_data())
         self.assertNotIn(b"Finance", home.get_data())

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "components/avatar.html" import person_avatar with context %}
+{% from "components/date_range_picker.html" import date_range_picker %}
 
 {% block title %}Payroll | MCM EMS{% endblock %}
 {% block header_title %}Payroll{% endblock %}
@@ -14,35 +15,45 @@
     <a class="button button-primary" href="{{ url_for('payroll.add_payroll') }}">Add payroll</a>
     {% endif %}
 </div>
-<form class="table-filters" method="get" data-search-debounce>
-    <label class="visually-hidden" for="payroll-search">Search payroll records</label>
-    <input id="payroll-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name, ID, or pay period">
-    <label for="payroll-from">Period from</label>
-    <input id="payroll-from" type="date" name="from" value="{{ period_from }}">
-    <label for="payroll-to">Period to</label>
-    <input id="payroll-to" type="date" name="to" value="{{ period_to }}">
-    <label for="payroll-status">Payment status</label>
-    <select id="payroll-status" name="status">
-        <option value="">All statuses</option>
-        <option value="paid" {% if status == 'paid' %}selected{% endif %}>Paid</option>
-        <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending payment</option>
-    </select>
-    <label for="payroll-sort">Sort</label>
-    <select id="payroll-sort" name="sort">
-        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
-        <option value="period" {% if sort == 'period' %}selected{% endif %}>Pay period</option>
-        <option value="gross" {% if sort == 'gross' %}selected{% endif %}>Gross pay</option>
-        <option value="deductions" {% if sort == 'deductions' %}selected{% endif %}>Deductions</option>
-        <option value="net" {% if sort == 'net' %}selected{% endif %}>Net pay</option>
-        <option value="payment_date" {% if sort == 'payment_date' %}selected{% endif %}>Payroll date</option>
-    </select>
-    <label for="payroll-direction">Direction</label>
-    <select id="payroll-direction" name="direction">
-        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
-        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
-    </select>
-    <button class="button button-secondary button-small" type="submit">Search / apply</button>
-    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list') }}">Clear all</a>
+<form class="table-filters" method="get" data-search-form>
+    <div class="table-search-group">
+        <label class="visually-hidden" for="payroll-search">Search payroll records</label>
+        <input id="payroll-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name, ID, or pay period">
+        <button class="button button-primary button-small search-submit" type="submit" data-search-submit>Search</button>
+    </div>
+    <div class="filter-controls">
+        {{ date_range_picker('payroll-date-range', 'Period range', period_from, period_to) }}
+        <div class="filter-control">
+            <label for="payroll-status">Payment status</label>
+            <select id="payroll-status" name="status">
+                <option value="">All statuses</option>
+                <option value="paid" {% if status == 'paid' %}selected{% endif %}>Paid</option>
+                <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending payment</option>
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="payroll-sort">Sort by</label>
+            <select id="payroll-sort" name="sort">
+                <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+                <option value="period" {% if sort == 'period' %}selected{% endif %}>Pay period</option>
+                <option value="gross" {% if sort == 'gross' %}selected{% endif %}>Gross pay</option>
+                <option value="deductions" {% if sort == 'deductions' %}selected{% endif %}>Deductions</option>
+                <option value="net" {% if sort == 'net' %}selected{% endif %}>Net pay</option>
+                <option value="payment_date" {% if sort == 'payment_date' %}selected{% endif %}>Payroll date</option>
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="payroll-direction">Order</label>
+            <select id="payroll-direction" name="direction">
+                <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+                <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+            </select>
+        </div>
+    </div>
+    <div class="filter-actions">
+        <button class="button button-primary button-small" type="submit" data-search-submit>Apply filters</button>
+        <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_list') }}">Reset filters</a>
+    </div>
 </form>
 <section class="panel table-panel">
     <div class="table-scroll">

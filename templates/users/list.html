@@ -15,29 +15,42 @@
     </a>
 </div>
 
-<form class="table-filters" method="get" data-search-debounce>
-    <label class="visually-hidden" for="user-search">Search users and roles</label>
-    <input id="user-search" type="search" name="q" value="{{ search }}" placeholder="Search username, name, email, or role">
-    <label for="user-role-filter">Role</label>
-    <select id="user-role-filter" name="role">
-        <option value="">All roles</option>
-        {% for role in roles %}
-        <option value="{{ role }}" {% if selected_role == role %}selected{% endif %}>{{ role|capitalize }}</option>
-        {% endfor %}
-    </select>
-    <label for="user-sort">Sort</label>
-    <select id="user-sort" name="sort">
-        <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
-        <option value="username" {% if sort == 'username' %}selected{% endif %}>Username</option>
-        <option value="role" {% if sort == 'role' %}selected{% endif %}>Role</option>
-    </select>
-    <label for="user-direction">Direction</label>
-    <select id="user-direction" name="direction">
-        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
-        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
-    </select>
-    <button class="button button-secondary button-small" type="submit">Search / apply</button>
-    <a class="button button-secondary button-small" href="{{ url_for('users.user_list') }}">Clear all</a>
+<form class="table-filters" method="get" data-search-form>
+    <div class="table-search-group">
+        <label class="visually-hidden" for="user-search">Search users and roles</label>
+        <input id="user-search" type="search" name="q" value="{{ search }}" placeholder="Search username, name, email, or role">
+        <button class="button button-primary button-small search-submit" type="submit" data-search-submit>Search</button>
+    </div>
+    <div class="filter-controls">
+        <div class="filter-control">
+            <label for="user-role-filter">Role</label>
+            <select id="user-role-filter" name="role">
+                <option value="">All roles</option>
+                {% for role in roles %}
+                <option value="{{ role }}" {% if selected_role == role %}selected{% endif %}>{{ role|capitalize }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="user-sort">Sort by</label>
+            <select id="user-sort" name="sort">
+                <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
+                <option value="username" {% if sort == 'username' %}selected{% endif %}>Username</option>
+                <option value="role" {% if sort == 'role' %}selected{% endif %}>Role</option>
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="user-direction">Order</label>
+            <select id="user-direction" name="direction">
+                <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+                <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+            </select>
+        </div>
+    </div>
+    <div class="filter-actions">
+        <button class="button button-primary button-small" type="submit" data-search-submit>Apply filters</button>
+        <a class="button button-secondary button-small" href="{{ url_for('users.user_list') }}">Reset filters</a>
+    </div>
 </form>
 <section class="panel table-panel">
     <div class="table-scroll">

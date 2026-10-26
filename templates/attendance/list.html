@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "components/avatar.html" import person_avatar with context %}
+{% from "components/date_range_picker.html" import date_range_picker %}
 
 {% block title %}Attendance | MCM EMS{% endblock %}
 {% block header_title %}Attendance{% endblock %}
@@ -14,35 +15,45 @@
     <a class="button button-primary" href="{{ url_for('attendance.add_attendance') }}">Add attendance</a>
     {% endif %}
 </div>
-<form class="table-filters" method="get" data-search-debounce>
-    <label class="visually-hidden" for="attendance-search">Search attendance</label>
-    <input id="attendance-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name or ID">
-    <label for="attendance-from">Date from</label>
-    <input id="attendance-from" type="date" name="from" value="{{ date_from }}">
-    <label for="attendance-to">Date to</label>
-    <input id="attendance-to" type="date" name="to" value="{{ date_to }}">
-    <label for="attendance-status">Status</label>
-    <select id="attendance-status" name="status">
-        <option value="">All statuses</option>
-        {% for option in statuses %}
-        <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-    </select>
-    <label for="attendance-sort">Sort</label>
-    <select id="attendance-sort" name="sort">
-        <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
-        <option value="date" {% if sort == 'date' %}selected{% endif %}>Date</option>
-        <option value="time_in" {% if sort == 'time_in' %}selected{% endif %}>Time in</option>
-        <option value="time_out" {% if sort == 'time_out' %}selected{% endif %}>Time out</option>
-        <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
-    </select>
-    <label for="attendance-direction">Direction</label>
-    <select id="attendance-direction" name="direction">
-        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
-        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
-    </select>
-    <button class="button button-secondary button-small" type="submit">Search / apply</button>
-    <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list') }}">Clear all</a>
+<form class="table-filters" method="get" data-search-form>
+    <div class="table-search-group">
+        <label class="visually-hidden" for="attendance-search">Search attendance</label>
+        <input id="attendance-search" type="search" name="q" value="{{ search }}" placeholder="Search employee name or ID">
+        <button class="button button-primary button-small search-submit" type="submit" data-search-submit>Search</button>
+    </div>
+    <div class="filter-controls">
+        {{ date_range_picker('attendance-date-range', 'Date range', date_from, date_to) }}
+        <div class="filter-control">
+            <label for="attendance-status">Status</label>
+            <select id="attendance-status" name="status">
+                <option value="">All statuses</option>
+                {% for option in statuses %}
+                <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="attendance-sort">Sort by</label>
+            <select id="attendance-sort" name="sort">
+                <option value="employee" {% if sort == 'employee' %}selected{% endif %}>Employee</option>
+                <option value="date" {% if sort == 'date' %}selected{% endif %}>Date</option>
+                <option value="time_in" {% if sort == 'time_in' %}selected{% endif %}>Time in</option>
+                <option value="time_out" {% if sort == 'time_out' %}selected{% endif %}>Time out</option>
+                <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="attendance-direction">Order</label>
+            <select id="attendance-direction" name="direction">
+                <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+                <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+            </select>
+        </div>
+    </div>
+    <div class="filter-actions">
+        <button class="button button-primary button-small" type="submit" data-search-submit>Apply filters</button>
+        <a class="button button-secondary button-small" href="{{ url_for('attendance.attendance_list') }}">Reset filters</a>
+    </div>
 </form>
 <section class="panel table-panel">
     <div class="table-scroll">

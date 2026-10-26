@@ -5,39 +5,272 @@
         window.lucide.createIcons();
     }
 
-    const searchTimers = new WeakMap();
-    document.addEventListener("input", function (event) {
-        const input = event.target;
-        if (
-            !(input instanceof HTMLInputElement) ||
-            input.type !== "search" ||
-            !input.form ||
-            !input.form.hasAttribute("data-search-debounce")
-        ) {
+    function parseRangeDate(value) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+        if (!match) {
+            return null;
+        }
+        const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        return date.getFullYear() === Number(match[1]) &&
+            date.getMonth() === Number(match[2]) - 1 &&
+            date.getDate() === Number(match[3])
+            ? date
+            : null;
+    }
+
+    function rangeDateValue(date) {
+        return [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, "0"),
+            String(date.getDate()).padStart(2, "0")
+        ].join("-");
+    }
+
+    function formatRangeDate(value) {
+        const date = parseRangeDate(value);
+        return date
+            ? new Intl.DateTimeFormat(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric"
+            }).format(date)
+            : "";
+    }
+
+    function updateDateRangeDisplay(range) {
+        const from = range.querySelector("[data-range-from]");
+        const to = range.querySelector("[data-range-to]");
+        const display = range.querySelector("[data-range-display]");
+        const clear = range.querySelector("[data-range-clear]");
+        const toggle = range.querySelector("[data-range-toggle]");
+        const instruction = range.querySelector("[data-range-instructions]");
+        const done = range.querySelector("[data-range-done]");
+
+        range.dataset.dateFrom = from.value;
+        range.dataset.dateTo = to.value;
+        if (from.value && to.value) {
+            display.textContent = formatRangeDate(from.value) + " – " + formatRangeDate(to.value);
+            instruction.textContent = "Date range selected";
+            done.hidden = false;
+        } else if (from.value) {
+            display.textContent = formatRangeDate(from.value) + " – Choose end date";
+            instruction.textContent = "Select an end date";
+            done.hidden = true;
+        } else {
+            display.textContent = "Choose dates";
+            instruction.textContent = "Select a start date";
+            done.hidden = true;
+        }
+        clear.hidden = !from.value && !to.value;
+        toggle.setAttribute("aria-label", from.value && to.value
+            ? "Date range: " + display.textContent
+            : "Choose date range");
+    }
+
+    function renderDateRangeCalendar(range) {
+        const monthLabel = range.querySelector("[data-range-month]");
+        const days = range.querySelector("[data-range-days]");
+        const instructions = range.querySelector("[data-range-instructions]");
+        const from = range.querySelector("[data-range-from]").value;
+        const to = range.querySelector("[data-range-to]").value;
+        const mode = range.dataset.rangeMode || "start";
+        const month = new Date(
+            Number(range.dataset.viewYear),
+            Number(range.dataset.viewMonth),
+            1
+        );
+        const year = month.getFullYear();
+        const monthIndex = month.getMonth();
+        const firstWeekday = new Date(year, monthIndex, 1).getDay();
+        const dayCount = new Date(year, monthIndex + 1, 0).getDate();
+
+        monthLabel.textContent = new Intl.DateTimeFormat(undefined, {
+            month: "long",
+            year: "numeric"
+        }).format(month);
+        instructions.textContent = mode === "end"
+            ? "Select an end date"
+            : "Select a start date";
+        days.replaceChildren();
+
+        for (let index = 0; index < firstWeekday + dayCount; index += 1) {
+            if (index < firstWeekday) {
+                const spacer = document.createElement("span");
+                spacer.setAttribute("aria-hidden", "true");
+                days.append(spacer);
+                continue;
+            }
+
+            const day = index - firstWeekday + 1;
+            const date = new Date(year, monthIndex, day);
+            const value = rangeDateValue(date);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "date-range-day";
+            button.textContent = String(day);
+            button.dataset.rangeDate = value;
+            button.setAttribute("aria-label", new Intl.DateTimeFormat(undefined, {
+                dateStyle: "full"
+            }).format(date));
+
+            const isStart = value === from;
+            const isEnd = value === to;
+            const isBetween = from && to && value >= from && value <= to;
+            if (isStart) button.classList.add("is-range-start");
+            if (isEnd) button.classList.add("is-range-end");
+            if (isBetween) button.classList.add("is-in-range");
+            if (value === rangeDateValue(new Date())) button.classList.add("is-today");
+            button.setAttribute("aria-pressed", String(isStart || isEnd));
+
+            if (mode === "end" && from && value < from) {
+                button.disabled = true;
+            }
+            days.append(button);
+        }
+    }
+
+    function closeDateRange(range, returnFocus) {
+        const toggle = range.querySelector("[data-range-toggle]");
+        const popover = range.querySelector(".date-range-popover");
+        popover.hidden = true;
+        range.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        if (returnFocus) toggle.focus();
+    }
+
+    function openDateRange(range) {
+        document.querySelectorAll("[data-date-range].is-open").forEach(function (openRange) {
+            if (openRange !== range) closeDateRange(openRange, false);
+        });
+
+        const from = range.querySelector("[data-range-from]").value;
+        const to = range.querySelector("[data-range-to]").value;
+        const viewDate = parseRangeDate(from) || new Date();
+        range.dataset.rangeMode = from && !to ? "end" : "start";
+        range.dataset.viewYear = String(viewDate.getFullYear());
+        range.dataset.viewMonth = String(viewDate.getMonth());
+        renderDateRangeCalendar(range);
+        range.querySelector(".date-range-popover").hidden = false;
+        range.classList.add("is-open");
+        range.querySelector("[data-range-toggle]").setAttribute("aria-expanded", "true");
+        const firstEnabledDay = range.querySelector("[data-range-days] button:not(:disabled)");
+        if (firstEnabledDay) firstEnabledDay.focus();
+    }
+
+    document.addEventListener("click", function (event) {
+        const target = event.target;
+        if (!(target instanceof Element)) {
             return;
         }
 
-        window.clearTimeout(searchTimers.get(input));
-        const form = input.form;
-        searchTimers.set(input, window.setTimeout(function () {
-            if (form && form.isConnected) {
-                form.requestSubmit();
+        const range = target.closest("[data-date-range]");
+        const toggle = target.closest("[data-range-toggle]");
+        if (toggle && range) {
+            if (range.classList.contains("is-open")) {
+                closeDateRange(range, false);
+            } else {
+                openDateRange(range);
             }
-        }, 350));
+            return;
+        }
+
+        if (range) {
+            const clear = target.closest("[data-range-clear]");
+            if (clear) {
+                range.querySelector("[data-range-from]").value = "";
+                range.querySelector("[data-range-to]").value = "";
+                range.dataset.rangeMode = "start";
+                updateDateRangeDisplay(range);
+                if (range.classList.contains("is-open")) {
+                    renderDateRangeCalendar(range);
+                }
+                return;
+            }
+
+            const monthStep = target.closest("[data-range-month-step]");
+            if (monthStep) {
+                const month = new Date(
+                    Number(range.dataset.viewYear),
+                    Number(range.dataset.viewMonth) + Number(monthStep.dataset.rangeMonthStep),
+                    1
+                );
+                range.dataset.viewYear = String(month.getFullYear());
+                range.dataset.viewMonth = String(month.getMonth());
+                renderDateRangeCalendar(range);
+                return;
+            }
+
+            const day = target.closest("[data-range-date]");
+            if (day && !day.disabled) {
+                const start = range.querySelector("[data-range-from]");
+                const end = range.querySelector("[data-range-to]");
+                if (range.dataset.rangeMode === "end") {
+                    if (day.dataset.rangeDate < start.value) {
+                        return;
+                    }
+                    end.value = day.dataset.rangeDate;
+                    updateDateRangeDisplay(range);
+                    renderDateRangeCalendar(range);
+                    closeDateRange(range, true);
+                } else {
+                    start.value = day.dataset.rangeDate;
+                    if (end.value && end.value < start.value) {
+                        end.value = "";
+                    }
+                    range.dataset.rangeMode = "end";
+                    updateDateRangeDisplay(range);
+                    renderDateRangeCalendar(range);
+                    const firstValidEnd = range.querySelector("[data-range-days] button:not(:disabled)");
+                    if (firstValidEnd) firstValidEnd.focus();
+                }
+                return;
+            }
+
+            if (target.closest("[data-range-done]")) {
+                closeDateRange(range, true);
+                return;
+            }
+        }
+
+        document.querySelectorAll("[data-date-range].is-open").forEach(function (openRange) {
+            if (!openRange.contains(target)) closeDateRange(openRange, false);
+        });
     });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") {
+            return;
+        }
+        const openRange = document.querySelector("[data-date-range].is-open");
+        if (openRange) {
+            event.stopPropagation();
+            closeDateRange(openRange, true);
+        }
+    });
+
+    document.querySelectorAll("[data-date-range]").forEach(updateDateRangeDisplay);
+
     document.addEventListener("submit", function (event) {
         const form = event.target;
-        if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-search-debounce")) {
+        if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-search-form")) {
             return;
         }
 
-        form.querySelectorAll('input[type="search"]').forEach(function (input) {
-            window.clearTimeout(searchTimers.get(input));
-        });
+        if (form.dataset.searchSubmitting === "true") {
+            event.preventDefault();
+            return;
+        }
+
+        form.dataset.searchSubmitting = "true";
         form.setAttribute("aria-busy", "true");
-        const submitButton = form.querySelector('button[type="submit"]');
+        const submitButton = event.submitter instanceof HTMLButtonElement &&
+            event.submitter.matches("[data-search-submit]")
+            ? event.submitter
+            : form.querySelector("[data-search-submit]");
         if (submitButton) {
-            submitButton.textContent = "Loading results...";
+            submitButton.textContent = submitButton.classList.contains("search-submit")
+                ? "Searching..."
+                : "Applying...";
             submitButton.disabled = true;
         }
     });
@@ -49,6 +282,15 @@
     const confirmDelete = document.getElementById("confirmDelete");
     let pendingDeleteForm = null;
     let confirmedDeleteForm = null;
+
+    document.addEventListener("click", function (event) {
+        const printButton = event.target instanceof Element
+            ? event.target.closest("[data-print-page]")
+            : null;
+        if (printButton) {
+            window.print();
+        }
+    });
 
     if (deleteDialog && deleteTitle && deleteMessage && cancelDelete && confirmDelete) {
         document.addEventListener("submit", function (event) {
@@ -118,27 +360,66 @@
         });
     });
 
+    document.querySelectorAll("[data-profile-picture-picker]").forEach(function (button) {
+        const input = document.getElementById(
+            button.getAttribute("data-profile-picture-picker")
+        );
+        if (!input) {
+            return;
+        }
+
+        button.addEventListener("click", function () {
+            input.click();
+        });
+        input.addEventListener("change", function () {
+            const name = button.parentElement.querySelector("[data-profile-picture-name]");
+            if (name) {
+                name.textContent = input.files.length
+                    ? input.files[0].name
+                    : "No new photo selected";
+            }
+        });
+    });
+
     if (menuToggle && sidebar) {
         menuToggle.addEventListener("click", function () {
-            sidebar.classList.toggle("open");
+            const isOpen = sidebar.classList.toggle("open");
+            menuToggle.setAttribute("aria-expanded", String(isOpen));
         });
 
         document.addEventListener("click", function (event) {
+            if (window.innerWidth > 800) {
+                return;
+            }
+            const target = event.target;
+            const selectedLink = target instanceof Element
+                ? target.closest(".nav-links a")
+                : null;
             if (
-                window.innerWidth <= 800 &&
-                !sidebar.contains(event.target) &&
-                !menuToggle.contains(event.target)
+                selectedLink ||
+                (!sidebar.contains(target) && !menuToggle.contains(target))
             ) {
                 sidebar.classList.remove("open");
+                menuToggle.setAttribute("aria-expanded", "false");
+            }
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && sidebar.classList.contains("open")) {
+                sidebar.classList.remove("open");
+                menuToggle.setAttribute("aria-expanded", "false");
+                menuToggle.focus();
             }
         });
     }
 
     (function enableClientNavigation() {
         const main = document.querySelector("main.content");
+        const mainArea = document.querySelector(".main-area");
         const navigation = document.querySelector(".nav-links");
         if (
             !main ||
+            !mainArea ||
             !navigation ||
             !window.fetch ||
             !window.AbortController ||
@@ -300,7 +581,15 @@
                 window.clearTimeout(skeletonTimer);
                 window.clearTimeout(requestTimeout);
                 main.innerHTML = nextMain.innerHTML;
+                main.querySelectorAll("[data-date-range]").forEach(updateDateRangeDisplay);
                 main.setAttribute("aria-busy", "false");
+                main.classList.remove("navigation-enter");
+                window.requestAnimationFrame(function () {
+                    main.classList.add("navigation-enter");
+                    window.setTimeout(function () {
+                        main.classList.remove("navigation-enter");
+                    }, 240);
+                });
 
                 const nextTitle = page.querySelector(".topbar h2");
                 const title = document.querySelector(".topbar h2");
@@ -316,7 +605,7 @@
                 activeUrl = null;
                 activeController = null;
                 if (window.lucide) window.lucide.createIcons();
-                if (addHistory) window.scrollTo(0, 0);
+                if (addHistory) mainArea.scrollTo(0, 0);
             } catch (error) {
                 if (controller.signal.aborted || currentNavigationId !== navigationId) {
                     if (!navigationTimedOut) return;

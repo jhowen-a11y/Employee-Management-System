@@ -53,10 +53,12 @@ def attendance_list():
     date_to = parse_date(date_to_value) if date_to_value else None
     if (date_from_value and date_from is None) or (date_to_value and date_to is None):
         abort(400, description="Enter valid attendance date filters.")
+    if date_from and date_to and date_to < date_from:
+        abort(400, description="The end date cannot be earlier than the start date.")
     statuses = ("Present", "Absent", "Late", "On Leave")
     if status and status not in statuses:
         abort(400, description="Select a valid attendance status.")
-    sort = request.args.get("sort", "date").strip()
+    sort = request.args.get("sort", "employee").strip()
     direction = request.args.get("direction", "desc").strip().lower()
     sort_fields = {
         "employee": (Employee.last_name, Employee.first_name),
@@ -66,7 +68,7 @@ def attendance_list():
         "status": (Attendance.status,),
     }
     if sort not in sort_fields:
-        sort = "date"
+        sort = "employee"
     if direction not in {"asc", "desc"}:
         direction = "desc"
     sort_expressions = [

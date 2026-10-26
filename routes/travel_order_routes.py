@@ -51,9 +51,11 @@ def my_travel_orders():
     date_to = parse_date(date_to_value) if date_to_value else None
     if (date_from_value and date_from is None) or (date_to_value and date_to is None):
         abort(400, description="Enter valid departure date filters.")
+    if date_from and date_to and date_to < date_from:
+        abort(400, description="The end date cannot be earlier than the start date.")
     if status and status not in TravelOrder.STATUSES:
         abort(400, description="Select a valid travel order status.")
-    sort = request.args.get("sort", "departure").strip()
+    sort = request.args.get("sort", "submission").strip()
     direction = request.args.get("direction", "desc").strip().lower()
     sort_fields = {
         "destination": (TravelOrder.destination,),
@@ -63,7 +65,7 @@ def my_travel_orders():
         "status": (TravelOrder.status,),
     }
     if sort not in sort_fields:
-        sort = "departure"
+        sort = "submission"
     if direction not in {"asc", "desc"}:
         direction = "desc"
     sort_expressions = [
@@ -185,6 +187,8 @@ def manage_travel_orders():
     date_to = parse_date(date_to_value) if date_to_value else None
     if (date_from_value and date_from is None) or (date_to_value and date_to is None):
         abort(400, description="Enter valid departure date filters.")
+    if date_from and date_to and date_to < date_from:
+        abort(400, description="The end date cannot be earlier than the start date.")
     sort = request.args.get("sort", "submission").strip()
     direction = request.args.get("direction", "desc").strip().lower()
     sort_fields = {

@@ -14,39 +14,54 @@
     <a class="button button-primary" href="{{ url_for('employee.add_employee') }}">Add employee</a>
     {% endif %}
 </div>
-<form class="table-filters" method="get" data-search-debounce>
-    <label class="visually-hidden" for="employee-search">Search employees</label>
-    <input id="employee-search" type="search" name="q" value="{{ search }}" placeholder="Search name, employee ID, email, username, or department">
-    <label for="employee-department">Department</label>
-    <select id="employee-department" name="department">
-        <option value="">All departments</option>
-        {% for department in departments %}
-        <option value="{{ department.id }}" {% if selected_department == department.id|string %}selected{% endif %}>{{ department.department_name }}</option>
-        {% endfor %}
-    </select>
-    <label for="employee-role">Role</label>
-    <select id="employee-role" name="role">
-        <option value="">All roles</option>
-        {% for role in ('admin', 'hr', 'employee') %}
-        <option value="{{ role }}" {% if selected_role == role %}selected{% endif %}>{{ role|capitalize }}</option>
-        {% endfor %}
-    </select>
-    <label for="employee-sort">Sort</label>
-    <select id="employee-sort" name="sort">
-        <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
-        <option value="employee_id" {% if sort == 'employee_id' %}selected{% endif %}>Employee ID</option>
-        <option value="department" {% if sort == 'department' %}selected{% endif %}>Department</option>
-        <option value="role" {% if sort == 'role' %}selected{% endif %}>Role</option>
-        <option value="created_at" {% if sort == 'created_at' %}selected{% endif %}>Record created</option>
-        <option value="username" {% if sort == 'username' %}selected{% endif %}>Username</option>
-    </select>
-    <label for="employee-direction">Direction</label>
-    <select id="employee-direction" name="direction">
-        <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
-        <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
-    </select>
-    <button class="button button-secondary button-small" type="submit">Search / apply</button>
-    <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list') }}">Clear all</a>
+<form class="table-filters" method="get" data-search-form>
+    <div class="table-search-group">
+        <label class="visually-hidden" for="employee-search">Search employees</label>
+        <input id="employee-search" type="search" name="q" value="{{ search }}" placeholder="Search name, employee ID, email, username, or department">
+        <button class="button button-primary button-small search-submit" type="submit" data-search-submit>Search</button>
+    </div>
+    <div class="filter-controls">
+        <div class="filter-control">
+            <label for="employee-department">Department</label>
+            <select id="employee-department" name="department">
+                <option value="">All departments</option>
+                {% for department in departments %}
+                <option value="{{ department.id }}" {% if selected_department == department.id|string %}selected{% endif %}>{{ department.department_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="employee-role">Role</label>
+            <select id="employee-role" name="role">
+                <option value="">All roles</option>
+                {% for role in ('admin', 'hr', 'employee') %}
+                <option value="{{ role }}" {% if selected_role == role %}selected{% endif %}>{{ role|capitalize }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="employee-sort">Sort by</label>
+            <select id="employee-sort" name="sort">
+                <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
+                <option value="employee_id" {% if sort == 'employee_id' %}selected{% endif %}>Employee ID</option>
+                <option value="department" {% if sort == 'department' %}selected{% endif %}>Department</option>
+                <option value="role" {% if sort == 'role' %}selected{% endif %}>Role</option>
+                <option value="created_at" {% if sort == 'created_at' %}selected{% endif %}>Record created</option>
+                <option value="username" {% if sort == 'username' %}selected{% endif %}>Username</option>
+            </select>
+        </div>
+        <div class="filter-control">
+            <label for="employee-direction">Order</label>
+            <select id="employee-direction" name="direction">
+                <option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option>
+                <option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option>
+            </select>
+        </div>
+    </div>
+    <div class="filter-actions">
+        <button class="button button-primary button-small" type="submit" data-search-submit>Apply filters</button>
+        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list') }}">Reset filters</a>
+    </div>
 </form>
 <section class="panel table-panel">
     <div class="table-scroll">

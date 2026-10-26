@@ -95,11 +95,6 @@
                 <i data-lucide="map-pin-plus"></i>
                 Submit Travel Order
             </a>
-            <a href="{{ url_for('users.edit_profile') }}"
-               class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
-                <i data-lucide="user-round-pen"></i>
-                Edit Profile
-            </a>
             {% else %}
             <a href="{{ url_for('index') }}"
                class="{% if request.endpoint == 'index' or (current_user.role == 'hr' and request.endpoint == 'auth.hr_home') %}active{% endif %}">
@@ -148,26 +143,40 @@
                 <i data-lucide="user-cog"></i>
                 Users &amp; Roles
             </a>
-            <a href="{{ url_for('users.edit_profile') }}"
-               class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
-                <i data-lucide="user-round-pen"></i>
-                Edit Profile
-            </a>
-            {% endif %}
-            {% if current_user.role == 'hr' %}
-            <a href="{{ url_for('users.edit_profile') }}"
-               class="{% if request.endpoint == 'users.edit_profile' %}active{% endif %}">
-                <i data-lucide="user-round-pen"></i>
-                Edit Profile
-            </a>
             {% endif %}
             {% endif %}
 
         </nav>
 
-        <div class="sidebar-bottom">
-            <strong>MCM Employee System</strong>
-            <p>Employee records and management</p>
+        {% if current_user.employee %}
+            {% set signed_in_name = current_user.employee.first_name ~ ' ' ~ current_user.employee.last_name %}
+        {% else %}
+            {% set signed_in_name = current_user.username %}
+        {% endif %}
+        <div class="sidebar-account">
+            <a href="{{ url_for('users.edit_profile') }}"
+               class="sidebar-account-profile {% if request.endpoint == 'users.edit_profile' %}active{% endif %}"
+               {% if request.endpoint == 'users.edit_profile' %}aria-current="page"{% endif %}>
+                {{ person_avatar(
+                    profile_picture_url(current_user.employee.profile_picture)
+                    if current_user.employee and current_user.employee.profile_picture
+                    else none,
+                    signed_in_name,
+                    'sidebar-avatar'
+                ) }}
+                <span class="sidebar-account-copy">
+                    <strong>{{ signed_in_name }}</strong>
+                    <small>{{ current_user.role|capitalize }}</small>
+                </span>
+                <i data-lucide="settings-2" aria-hidden="true"></i>
+            </a>
+            <form method="post" action="{{ url_for('auth.logout') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="sidebar-signout" type="submit">
+                    <i data-lucide="log-out" aria-hidden="true"></i>
+                    Sign out
+                </button>
+            </form>
         </div>
 
     </aside>
@@ -181,7 +190,9 @@
                 <button class="menu-toggle"
                         id="menuToggle"
                         type="button"
-                        aria-label="Toggle navigation">
+                        aria-label="Toggle navigation"
+                        aria-expanded="false"
+                        aria-controls="sidebar">
                     <i data-lucide="menu"></i>
                 </button>
 
@@ -198,27 +209,6 @@
                     <span class="status-dot"></span>
                     System Online
                 </div>
-
-                {% set signed_in_name = current_user.username %}
-                <a class="topbar-profile" href="{{ url_for('users.edit_profile') }}">
-                    {{ person_avatar(
-                        profile_picture_url(current_user.employee.profile_picture)
-                        if current_user.employee and current_user.employee.profile_picture
-                        else none,
-                        signed_in_name,
-                        'topbar-avatar'
-                    ) }}
-                    <span class="account-label">
-                        {{ signed_in_name }}<br>
-                        <small>{{ current_user.role|capitalize }}</small>
-                    </span>
-                </a>
-                <form method="post" action="{{ url_for('auth.logout') }}">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <button class="button button-secondary button-small" type="submit">
-                        Sign out
-                    </button>
-                </form>
 
             </div>
 
