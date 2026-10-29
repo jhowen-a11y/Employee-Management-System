@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/date_range_picker.html" import date_range_picker %}
 
 {% block title %}Submit Travel Order | MCM EMS{% endblock %}
 {% block header_title %}Submit Travel Order{% endblock %}
@@ -7,11 +8,11 @@
 <div class="page-heading page-heading-row">
     <div>
         <h1>Submit Travel Order</h1>
-        <p>Provide your travel details for HR or administrator review.</p>
+        <p>Share your destination, purpose, and travel dates for HR or administrator review.</p>
     </div>
     <a class="button button-secondary" href="{{ url_for('travel_order.my_travel_orders') }}">My Travel Orders</a>
 </div>
-<section class="panel form-panel">
+<section class="panel form-panel travel-order-panel">
     <form method="post" class="form-grid">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-field payslip-full-width">
@@ -22,16 +23,22 @@
             <label for="purpose">Purpose of travel</label>
             <textarea id="purpose" name="purpose" rows="4" maxlength="{{ max_purpose_length }}" required>{{ request.form.get('purpose', '') }}</textarea>
         </div>
-        <div class="form-field">
-            <label for="departure_date">Departure date</label>
-            <input id="departure_date" name="departure_date" type="date" value="{{ request.form.get('departure_date', '') }}" required>
-        </div>
-        <div class="form-field">
-            <label for="return_date">Return date</label>
-            <input id="return_date" name="return_date" type="date" value="{{ request.form.get('return_date', '') }}" required>
-        </div>
+        {{ date_range_picker(
+            'travel-date-range',
+            'Travel Date Range',
+            request.form.get('departure_date', ''),
+            request.form.get('return_date', ''),
+            'departure_date',
+            'return_date',
+            true,
+            'form-field travel-date-field',
+            'Select both a departure date and a return date.'
+        ) }}
         <div class="form-actions">
-            <button class="button button-primary" type="submit">Submit for approval</button>
+            <button class="button button-primary" type="submit">
+                <i data-lucide="send" aria-hidden="true"></i>
+                Submit for approval
+            </button>
             <a class="button button-secondary" href="{{ url_for('travel_order.my_travel_orders') }}">Cancel</a>
         </div>
     </form>

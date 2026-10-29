@@ -14,6 +14,7 @@
     <a class="button button-primary" href="{{ url_for('employee.add_employee') }}">Add employee</a>
     {% endif %}
 </div>
+{% if current_user.role != 'employee' %}
 <form class="table-filters" method="get" data-search-form>
     <div class="table-search-group">
         <label class="visually-hidden" for="employee-search">Search employees</label>
@@ -63,6 +64,64 @@
         <a class="button button-secondary button-small" href="{{ url_for('employee.employee_list') }}">Reset filters</a>
     </div>
 </form>
+{% endif %}
+{% if current_user.role == 'employee' %}
+{% if employees.items %}
+{% set employee = employees.items[0] %}
+<section class="panel my-information-panel">
+    <div class="my-information-header">
+        <div class="my-information-person">
+            {{ person_avatar(
+                profile_picture_urls.get(employee.profile_picture),
+                employee.first_name ~ ' ' ~ employee.last_name,
+                'my-information-avatar'
+            ) }}
+            <div>
+                <span class="my-information-eyebrow">EMPLOYEE PROFILE</span>
+                <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
+                <p>{{ employee.position }}</p>
+            </div>
+        </div>
+        <a class="button button-secondary" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">
+            <i data-lucide="user-round" aria-hidden="true"></i>
+            View full profile
+        </a>
+    </div>
+    <div class="profile-info-grid my-information-grid">
+        <div class="profile-info-item">
+            <span>Employee ID</span>
+            <strong>EMP-{{ "%04d"|format(employee.id) }}</strong>
+        </div>
+        <div class="profile-info-item">
+            <span>Position</span>
+            <strong>{{ employee.position }}</strong>
+        </div>
+        <div class="profile-info-item">
+            <span>Department</span>
+            <strong>{{ employee.department.department_name }}</strong>
+        </div>
+        <div class="profile-info-item">
+            <span>Email address</span>
+            <strong>{{ employee.user.email }}</strong>
+        </div>
+        <div class="profile-info-item">
+            <span>Username</span>
+            <strong>{{ employee.user.username }}</strong>
+        </div>
+        <div class="profile-info-item">
+            <span>Employment record created</span>
+            <strong>{{ employee.created_at.strftime('%B %d, %Y') if employee.created_at else 'Not available' }}</strong>
+        </div>
+    </div>
+</section>
+{% else %}
+<section class="panel my-information-empty">
+    <span class="my-information-empty-icon" aria-hidden="true"><i data-lucide="user-round-search"></i></span>
+    <h2>No employee record found</h2>
+    <p>Your account is not linked to an employee record. Please contact your HR administrator.</p>
+</section>
+{% endif %}
+{% else %}
 <section class="panel table-panel">
     <div class="table-scroll">
             {% if current_user.role in ('admin', 'hr') %}
@@ -175,6 +234,7 @@
         {% endif %}
     </div>
 </section>
+{% endif %}
 {% if users and users.pages > 1 %}
 <nav class="pagination" aria-label="Employee directory pages">
     {% if users.has_prev %}

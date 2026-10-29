@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/date_range_picker.html" import date_range_picker %}
 
 {% block title %}Submit Leave Request | MCM EMS{% endblock %}
 {% block header_title %}Submit Leave Request{% endblock %}
@@ -31,8 +32,16 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="form-field"><label for="start_date">Start date</label><input id="start_date" name="start_date" type="date" value="{{ request.form.get('start_date', '') }}" required></div>
-        <div class="form-field"><label for="end_date">End date</label><input id="end_date" name="end_date" type="date" value="{{ request.form.get('end_date', '') }}" required></div>
+        {{ date_range_picker(
+            'leave-date-range',
+            'Leave date range',
+            request.form.get('start_date', ''),
+            request.form.get('end_date', ''),
+            'start_date',
+            'end_date',
+            true,
+            'form-field date-range-form-field'
+        ) }}
         <div class="form-field"><label for="reason">Reason</label><textarea id="reason" name="reason" rows="4">{{ request.form.get('reason', '') }}</textarea></div>
         <div class="form-actions">
             <button class="button button-primary" type="submit"

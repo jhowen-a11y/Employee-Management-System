@@ -295,6 +295,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn("hr-task-grid", html)
         self.assertIn("Users &amp; roles", html)
         self.assertIn("Review leave requests", html)
+        self.assertNotIn("hr-task-primary", html)
         self.assertIn('id="skeleton-dashboard"', html)
         self.assertIn("Server-Timing", dashboard.headers)
         self.assertIn("database;dur=", dashboard.headers["Server-Timing"])
@@ -334,6 +335,102 @@ class RoleManagementTests(unittest.TestCase):
             "/travel-orders/?from=2026-10-02&to=2026-10-01"
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_employee_information_uses_profile_layout_without_directory_controls(self):
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Employee information")
+            self.db.session.add(department)
+            self.db.session.flush()
+            self.db.session.add(
+                self.Employee(
+                    user_id=self.employee_id,
+                    first_name="Jamie",
+                    last_name="Staff",
+                    position="Analyst",
+                    salary=Decimal("50000.00"),
+                    department_id=department.id,
+                )
+            )
+            self.db.session.commit()
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        response = employee_client.get("/employees/?sort=department")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn("Jamie Staff", html)
+        self.assertIn("Employee information", html)
+        self.assertIn("View full profile", html)
+        self.assertNotIn('id="employee-sort"', html)
+        self.assertNotIn('id="employee-direction"', html)
+        self.assertNotIn('class="table-filters"', html)
+
+        admin_client = self.app.test_client()
+        self.login(admin_client, "admin", "AdminPass123")
+        admin_directory = admin_client.get("/employees/")
+        self.assertIn(b'id="employee-sort"', admin_directory.data)
+
+    def test_date_range_forms_reuse_picker_and_single_date_fields_remain_single(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Date range forms")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            payroll = self.Payroll(
+                employee_id=employee.id,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 15),
+                basic_salary=Decimal("4000.00"),
+                allowances=Decimal("0.00"),
+                deductions=Decimal("0.00"),
+                net_pay=Decimal("4000.00"),
+            )
+            self.db.session.add(payroll)
+            self.db.session.commit()
+            payroll_id = payroll.id
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        for path, start_name, end_name in (
+            ("/leaves/add", "start_date", "end_date"),
+            ("/travel-orders/submit", "departure_date", "return_date"),
+            ("/payslips/requests", "pay_period_start", "pay_period_end"),
+        ):
+            with self.subTest(path=path):
+                response = employee_client.get(path)
+                self.assertEqual(response.status_code, 200)
+                html = response.get_data(as_text=True)
+                self.assertEqual(html.count('data-date-range'), 1)
+                self.assertIn(f'name="{start_name}"', html)
+                self.assertIn(f'name="{end_name}"', html)
+                self.assertNotIn('type="date"', html)
+
+        admin_client = self.app.test_client()
+        self.login(admin_client, "admin", "AdminPass123")
+        for path in ("/payroll/add", f"/payroll/{payroll_id}/edit"):
+            with self.subTest(path=path):
+                response = admin_client.get(path)
+                self.assertEqual(response.status_code, 200)
+                html = response.get_data(as_text=True)
+                self.assertEqual(html.count('data-date-range'), 1)
+                self.assertIn('name="pay_period_start"', html)
+                self.assertIn('name="pay_period_end"', html)
+                self.assertIn('id="payment_date"', html)
+                self.assertIn('type="date"', html)
 
     def test_payroll_list_avoids_separate_employee_queries(self):
         from datetime import date
@@ -2259,6 +2356,13 @@ class RoleManagementTests(unittest.TestCase):
 
         form = self.client.get("/travel-orders/submit")
         self.assertEqual(form.status_code, 200)
+        form_html = form.get_data(as_text=True)
+        self.assertIn("Travel Date Range", form_html)
+        self.assertIn('name="departure_date"', form_html)
+        self.assertIn('name="return_date"', form_html)
+        self.assertIn("data-range-required", form_html)
+        self.assertEqual(form_html.count('data-date-range'), 1)
+        self.assertNotIn('type="date"', form_html)
         incomplete = self.client.post(
             "/travel-orders/submit",
             data={
@@ -2305,6 +2409,8 @@ class RoleManagementTests(unittest.TestCase):
             order = self.TravelOrder.query.one()
             order_id = order.id
             self.assertEqual(order.employee_id, employee_id)
+            self.assertEqual(str(order.departure_date), "2026-11-10")
+            self.assertEqual(str(order.return_date), "2026-11-12")
             self.assertEqual(order.status, self.TravelOrder.PENDING)
             self.assertIsNotNone(order.created_at)
 

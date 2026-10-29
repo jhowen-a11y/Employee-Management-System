@@ -1,19 +1,21 @@
-{% macro date_range_picker(id, label, from_value, to_value, from_name='from', to_name='to') -%}
-<div class="filter-control date-range-filter"
+{% macro date_range_picker(id, label, from_value, to_value, from_name='from', to_name='to', required=false, wrapper_class='filter-control', required_message='Select both a start date and an end date.') -%}
+<div class="{{ wrapper_class }} date-range-filter"
      data-date-range
      data-date-from="{{ from_value }}"
-     data-date-to="{{ to_value }}">
-    <label id="{{ id }}-label">{{ label }}</label>
+     data-date-to="{{ to_value }}"
+     {% if required %}data-range-required{% endif %}>
+    <label id="{{ id }}-label" for="{{ id }}">{{ label }}</label>
     <div class="date-range-control">
         <button class="date-range-trigger"
                 id="{{ id }}"
                 type="button"
                 data-range-toggle
+                aria-describedby="{{ id }}-display{% if required %} {{ id }}-error{% endif %}"
                 aria-haspopup="dialog"
                 aria-expanded="false"
                 aria-controls="{{ id }}-calendar">
             <i data-lucide="calendar-days" aria-hidden="true"></i>
-            <span data-range-display>Choose dates</span>
+            <span id="{{ id }}-display" data-range-display>Choose dates</span>
             <i class="date-range-chevron" data-lucide="chevron-down" aria-hidden="true"></i>
         </button>
         <button class="date-range-clear"
@@ -27,6 +29,11 @@
     </div>
     <input type="hidden" name="{{ from_name }}" value="{{ from_value }}" data-range-from>
     <input type="hidden" name="{{ to_name }}" value="{{ to_value }}" data-range-to>
+    {% if required %}
+    <p class="date-range-error" id="{{ id }}-error" data-range-error role="alert" hidden>
+        {{ required_message }}
+    </p>
+    {% endif %}
     <div class="date-range-popover"
          id="{{ id }}-calendar"
          role="dialog"

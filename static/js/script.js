@@ -62,9 +62,11 @@
             done.hidden = true;
         }
         clear.hidden = !from.value && !to.value;
-        toggle.setAttribute("aria-label", from.value && to.value
-            ? "Date range: " + display.textContent
-            : "Choose date range");
+        const error = range.querySelector("[data-range-error]");
+        if (error && from.value && to.value) {
+            error.hidden = true;
+            toggle.removeAttribute("aria-invalid");
+        }
     }
 
     function renderDateRangeCalendar(range) {
@@ -121,6 +123,7 @@
             if (isBetween) button.classList.add("is-in-range");
             if (value === rangeDateValue(new Date())) button.classList.add("is-today");
             button.setAttribute("aria-pressed", String(isStart || isEnd));
+            button.tabIndex = value === range.dataset.focusDate ? 0 : -1;
 
             if (mode === "end" && from && value < from) {
                 button.disabled = true;
@@ -138,6 +141,21 @@
         if (returnFocus) toggle.focus();
     }
 
+    function focusDateRangeDay(range, value) {
+        const date = parseRangeDate(value);
+        if (!date) {
+            return;
+        }
+        range.dataset.focusDate = value;
+        range.dataset.viewYear = String(date.getFullYear());
+        range.dataset.viewMonth = String(date.getMonth());
+        renderDateRangeCalendar(range);
+        const day = range.querySelector('[data-range-date="' + value + '"]');
+        if (day && !day.disabled) {
+            day.focus();
+        }
+    }
+
     function openDateRange(range) {
         document.querySelectorAll("[data-date-range].is-open").forEach(function (openRange) {
             if (openRange !== range) closeDateRange(openRange, false);
@@ -149,12 +167,14 @@
         range.dataset.rangeMode = from && !to ? "end" : "start";
         range.dataset.viewYear = String(viewDate.getFullYear());
         range.dataset.viewMonth = String(viewDate.getMonth());
+        range.dataset.focusDate = rangeDateValue(viewDate);
         renderDateRangeCalendar(range);
         range.querySelector(".date-range-popover").hidden = false;
         range.classList.add("is-open");
         range.querySelector("[data-range-toggle]").setAttribute("aria-expanded", "true");
-        const firstEnabledDay = range.querySelector("[data-range-days] button:not(:disabled)");
-        if (firstEnabledDay) firstEnabledDay.focus();
+        const focusedDay = range.querySelector("[data-range-days] button[tabindex='0']:not(:disabled)") ||
+            range.querySelector("[data-range-days] button:not(:disabled)");
+        if (focusedDay) focusedDay.focus();
     }
 
     document.addEventListener("click", function (event) {
@@ -197,6 +217,9 @@
                 range.dataset.viewYear = String(month.getFullYear());
                 range.dataset.viewMonth = String(month.getMonth());
                 renderDateRangeCalendar(range);
+                range.querySelector(
+                    '[data-range-month-step="' + monthStep.dataset.rangeMonthStep + '"]'
+                ).focus();
                 return;
             }
 
@@ -214,14 +237,15 @@
                     closeDateRange(range, true);
                 } else {
                     start.value = day.dataset.rangeDate;
-                    if (end.value && end.value < start.value) {
-                        end.value = "";
-                    }
+                    end.value = "";
                     range.dataset.rangeMode = "end";
+                    range.dataset.focusDate = day.dataset.rangeDate;
                     updateDateRangeDisplay(range);
                     renderDateRangeCalendar(range);
-                    const firstValidEnd = range.querySelector("[data-range-days] button:not(:disabled)");
-                    if (firstValidEnd) firstValidEnd.focus();
+                    const selectedStart = range.querySelector(
+                        '[data-range-date="' + day.dataset.rangeDate + '"]'
+                    );
+                    if (selectedStart) selectedStart.focus();
                 }
                 return;
             }
@@ -238,13 +262,53 @@
     });
 
     document.addEventListener("keydown", function (event) {
-        if (event.key !== "Escape") {
+        const openRange = document.querySelector("[data-date-range].is-open");
+        if (!openRange) {
             return;
         }
-        const openRange = document.querySelector("[data-date-range].is-open");
-        if (openRange) {
+        if (event.key === "Escape") {
             event.stopPropagation();
             closeDateRange(openRange, true);
+            return;
+        }
+
+        const focusedDay = event.target instanceof Element
+            ? event.target.closest("[data-range-date]")
+            : null;
+        if (!focusedDay || !openRange.contains(focusedDay)) {
+            return;
+        }
+
+        const currentDate = parseRangeDate(focusedDay.dataset.rangeDate);
+        if (!currentDate) {
+            return;
+        }
+
+        let nextDate = new Date(currentDate);
+        if (event.key === "ArrowLeft") nextDate.setDate(nextDate.getDate() - 1);
+        else if (event.key === "ArrowRight") nextDate.setDate(nextDate.getDate() + 1);
+        else if (event.key === "ArrowUp") nextDate.setDate(nextDate.getDate() - 7);
+        else if (event.key === "ArrowDown") nextDate.setDate(nextDate.getDate() + 7);
+        else if (event.key === "Home") nextDate.setDate(nextDate.getDate() - nextDate.getDay());
+        else if (event.key === "End") nextDate.setDate(nextDate.getDate() + (6 - nextDate.getDay()));
+        else if (event.key === "PageUp" || event.key === "PageDown") {
+            const dayOfMonth = nextDate.getDate();
+            nextDate.setDate(1);
+            nextDate.setMonth(nextDate.getMonth() + (event.key === "PageUp" ? -1 : 1));
+            nextDate.setDate(Math.min(
+                dayOfMonth,
+                new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate()
+            ));
+        }
+        else return;
+
+        event.preventDefault();
+        focusDateRangeDay(openRange, rangeDateValue(nextDate));
+        const nextFocusedDay = openRange.querySelector(
+            '[data-range-date="' + rangeDateValue(nextDate) + '"]'
+        );
+        if (nextFocusedDay && nextFocusedDay.disabled) {
+            focusDateRangeDay(openRange, openRange.querySelector("[data-range-from]").value);
         }
     });
 
@@ -252,7 +316,28 @@
 
     document.addEventListener("submit", function (event) {
         const form = event.target;
-        if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-search-form")) {
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+
+        const requiredRange = form.querySelector("[data-date-range][data-range-required]");
+        if (requiredRange) {
+            const from = requiredRange.querySelector("[data-range-from]").value;
+            const to = requiredRange.querySelector("[data-range-to]").value;
+            const error = requiredRange.querySelector("[data-range-error]");
+            const toggle = requiredRange.querySelector("[data-range-toggle]");
+            if (!from || !to || to < from) {
+                event.preventDefault();
+                error.hidden = false;
+                toggle.setAttribute("aria-invalid", "true");
+                toggle.focus();
+                return;
+            }
+            error.hidden = true;
+            toggle.removeAttribute("aria-invalid");
+        }
+
+        if (!form.hasAttribute("data-search-form")) {
             return;
         }
 
