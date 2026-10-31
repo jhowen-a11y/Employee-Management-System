@@ -1,19 +1,15 @@
 {% extends "base.html" %}
-{% from "components/avatar.html" import person_avatar with context %}
+{% from "components/record_details.html" import record_employee_header, record_detail_field, record_status_badge %}
 
 {% block title %}Attendance Details | MCM EMS{% endblock %}
 {% block header_title %}Attendance Details{% endblock %}
 
 {% block content %}
-<div class="page-heading page-heading-row">
-    <div class="page-heading-person">
-        {{ person_avatar(
-            profile_picture_url(record.employee.profile_picture)
-            if record.employee.profile_picture else none,
-            record.employee.first_name ~ ' ' ~ record.employee.last_name,
-            'detail-person-avatar'
-        ) }}
-        <div><h1>Attendance details</h1><p>{{ record.employee.first_name }} {{ record.employee.last_name }}</p></div>
+<div class="page-heading page-heading-row record-page-heading">
+    <div>
+        <span class="record-page-eyebrow">Attendance</span>
+        <h1>Attendance details</h1>
+        <p>Review this employee attendance record.</p>
     </div>
     {% if current_user.role != 'employee' %}
     <div class="page-heading-actions">
@@ -29,11 +25,33 @@
     </div>
     {% endif %}
 </div>
-<section class="panel">
-    <p><strong>Date:</strong> {{ record.attendance_date }}</p>
-    <p><strong>Time in:</strong> {{ record.time_in or '—' }}</p>
-    <p><strong>Time out:</strong> {{ record.time_out or '—' }}</p>
-    <p><strong>Status:</strong> {{ record.status }}</p>
-    <p><a class="button button-secondary" href="{{ url_for('attendance.attendance_list') }}">Back to attendance</a></p>
+<section class="panel record-detail-panel">
+    {{ record_employee_header(
+        profile_picture_url(record.employee.profile_picture)
+        if record.employee.profile_picture else none,
+        record.employee.first_name ~ ' ' ~ record.employee.last_name,
+        record.employee.position,
+        record.employee.id
+    ) }}
+    <section class="record-detail-section" aria-labelledby="attendance-detail-heading">
+        <div class="record-section-heading">
+            <div>
+                <h2 id="attendance-detail-heading">Attendance information</h2>
+                <p>Recorded workday and attendance times.</p>
+            </div>
+            {{ record_status_badge(record.status) }}
+        </div>
+        <dl class="record-detail-grid">
+            {{ record_detail_field('Attendance date', record.attendance_date.strftime('%B %d, %Y')) }}
+            {{ record_detail_field('Time in', record.time_in.strftime('%I:%M %p') if record.time_in else 'Not recorded') }}
+            {{ record_detail_field('Time out', record.time_out.strftime('%I:%M %p') if record.time_out else 'Not recorded') }}
+        </dl>
+    </section>
+    <div class="record-detail-actions">
+        <a class="button button-secondary" href="{{ url_for('attendance.attendance_list') }}">
+            <i data-lucide="arrow-left" aria-hidden="true"></i>
+            Back to attendance
+        </a>
+    </div>
 </section>
 {% endblock %}

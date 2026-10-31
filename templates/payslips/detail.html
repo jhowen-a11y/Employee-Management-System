@@ -24,7 +24,7 @@
 <div class="page-heading page-heading-row">
     <div>
         <h1>Finalized payslip</h1>
-        <p>Pay period {{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</p>
+        <p>Pay period {{ payroll.pay_period_start.strftime('%B %d, %Y') }} – {{ payroll.pay_period_end.strftime('%B %d, %Y') }}</p>
     </div>
     <div class="payslip-actions">
         <button class="button button-secondary" type="button" data-print-page>Print</button>
@@ -40,16 +40,16 @@
         </div>
         <div class="payslip-period">
             <span>PAY PERIOD</span>
-            <strong>{{ payroll.pay_period_start }} – {{ payroll.pay_period_end }}</strong>
-            <small>Paid {{ payroll.payment_date }}</small>
+            <strong>{{ payroll.pay_period_start.strftime('%B %d, %Y') }} – {{ payroll.pay_period_end.strftime('%B %d, %Y') }}</strong>
+            <small>Paid {{ payroll.payment_date.strftime('%B %d, %Y') }}</small>
         </div>
     </div>
     <dl class="payslip-amounts">
-        <div><dt>Basic salary</dt><dd>{{ "%.2f"|format(payroll.basic_salary) }}</dd></div>
-        <div><dt>Allowances</dt><dd>{{ "%.2f"|format(payroll.allowances) }}</dd></div>
-        <div><dt>Gross salary</dt><dd>{{ "%.2f"|format(payroll.basic_salary + payroll.allowances) }}</dd></div>
-        <div><dt>Deductions</dt><dd>− {{ "%.2f"|format(payroll.deductions) }}</dd></div>
-        <div class="payslip-net"><dt>Net salary</dt><dd>{{ "%.2f"|format(payroll.net_pay) }}</dd></div>
+        <div><dt>Basic salary</dt><dd>{{ "{:,.2f}".format(payroll.basic_salary) }}</dd></div>
+        <div><dt>Allowances</dt><dd>{{ "{:,.2f}".format(payroll.allowances) }}</dd></div>
+        <div><dt>Gross salary</dt><dd>{{ "{:,.2f}".format(payroll.basic_salary + payroll.allowances) }}</dd></div>
+        <div><dt>Deductions</dt><dd>− {{ "{:,.2f}".format(payroll.deductions) }}</dd></div>
+        <div class="payslip-net"><dt>Net salary</dt><dd>{{ "{:,.2f}".format(payroll.net_pay) }}</dd></div>
     </dl>
     <p class="payslip-finalized-note">This payslip reflects the finalized values recorded for this pay period.</p>
 </section>

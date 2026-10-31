@@ -1,31 +1,60 @@
 {% extends "base.html" %}
-{% from "components/avatar.html" import person_avatar with context %}
+{% from "components/record_details.html" import record_employee_header, record_detail_field, record_status_badge %}
 
 {% block title %}Payroll Details | MCM EMS{% endblock %}
 {% block header_title %}Payroll Details{% endblock %}
 
 {% block content %}
-<div class="page-heading page-heading-row">
-    <div class="page-heading-person">
-        {{ person_avatar(
-            profile_picture_url(payroll.employee.profile_picture)
-            if payroll.employee.profile_picture else none,
-            payroll.employee.first_name ~ ' ' ~ payroll.employee.last_name,
-            'detail-person-avatar'
-        ) }}
-        <div><h1>Payroll details</h1><p>{{ payroll.employee.first_name }} {{ payroll.employee.last_name }}</p></div>
+<div class="page-heading page-heading-row record-page-heading">
+    <div>
+        <span class="record-page-eyebrow">Payroll</span>
+        <h1>Payroll details</h1>
+        <p>Compensation breakdown and payment information.</p>
     </div>
     {% if current_user.role != 'employee' %}
     <a class="button button-primary" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit payroll</a>
     {% endif %}
 </div>
-<section class="panel">
-    <p><strong>Pay period:</strong> {{ payroll.pay_period_start }} to {{ payroll.pay_period_end }}</p>
-    <p><strong>Basic salary:</strong> {{ payroll.basic_salary }}</p>
-    <p><strong>Allowances:</strong> {{ payroll.allowances }}</p>
-    <p><strong>Deductions:</strong> {{ payroll.deductions }}</p>
-    <p><strong>Net pay:</strong> {{ payroll.net_pay }}</p>
-    <p><strong>Payment status:</strong> {% if payroll.payment_date %}Paid on {{ payroll.payment_date }}{% else %}Pending payment{% endif %}</p>
-    <p><a class="button button-secondary" href="{{ url_for('payroll.payroll_list') }}">Back to payroll</a></p>
+<section class="panel record-detail-panel">
+    {{ record_employee_header(
+        profile_picture_url(payroll.employee.profile_picture)
+        if payroll.employee.profile_picture else none,
+        payroll.employee.first_name ~ ' ' ~ payroll.employee.last_name,
+        payroll.employee.position,
+        payroll.employee.id
+    ) }}
+    <section class="record-detail-section" aria-labelledby="payroll-detail-heading">
+        <div class="record-section-heading">
+            <div>
+                <h2 id="payroll-detail-heading">Pay breakdown</h2>
+                <p>
+                    {{ payroll.pay_period_start.strftime('%B %d, %Y') }}
+                    – {{ payroll.pay_period_end.strftime('%B %d, %Y') }}
+                </p>
+            </div>
+        </div>
+        <dl class="record-detail-grid">
+            {{ record_detail_field('Basic salary', "{:,.2f}".format(payroll.basic_salary)) }}
+            {{ record_detail_field('Allowances', "{:,.2f}".format(payroll.allowances)) }}
+            {{ record_detail_field('Deductions', "{:,.2f}".format(payroll.deductions)) }}
+            {{ record_detail_field('Net pay', "{:,.2f}".format(payroll.net_pay), emphasized=true) }}
+        </dl>
+    </section>
+    <section class="record-payment-summary" aria-label="Payment status">
+        <div>
+            <span>Payment status</span>
+            <strong>{% if payroll.payment_date %}Paid{% else %}Pending payment{% endif %}</strong>
+        </div>
+        {{ record_status_badge('Paid' if payroll.payment_date else 'Pending') }}
+        {% if payroll.payment_date %}
+        <p>Paid on {{ payroll.payment_date.strftime('%B %d, %Y') }}</p>
+        {% endif %}
+    </section>
+    <div class="record-detail-actions">
+        <a class="button button-secondary" href="{{ url_for('payroll.payroll_list') }}">
+            <i data-lucide="arrow-left" aria-hidden="true"></i>
+            Back to payroll
+        </a>
+    </div>
 </section>
 {% endblock %}

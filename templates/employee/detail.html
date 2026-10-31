@@ -89,7 +89,7 @@
 
             <div class="profile-info-item">
                 <span>Salary</span>
-                <strong>{{ "%.2f"|format(employee.salary) }}</strong>
+                <strong>{{ "{:,.2f}".format(employee.salary) }}</strong>
             </div>
 
             <div class="profile-info-item">

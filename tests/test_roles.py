@@ -153,6 +153,89 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn("2026-02-20", dashboard_content)
         self.assertNotIn("2026-01-01", dashboard_content)
 
+    def test_record_detail_pages_render_structured_data_and_missing_values(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Record details")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            leave = self.Leave(
+                employee_id=employee.id,
+                leave_type="Personal",
+                start_date=date(2026, 10, 20),
+                end_date=date(2026, 10, 24),
+                reason="Family care\nAdditional context",
+            )
+            attendance = self.Attendance(
+                employee_id=employee.id,
+                attendance_date=date(2026, 10, 20),
+                status="Absent",
+            )
+            payroll = self.Payroll(
+                employee_id=employee.id,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31),
+                basic_salary=Decimal("125000.00"),
+                allowances=Decimal("1500.00"),
+                deductions=Decimal("250.00"),
+                net_pay=Decimal("126250.00"),
+            )
+            payslip_request = self.PayslipRequest(
+                employee=employee,
+                pay_period_start=date(2026, 8, 1),
+                pay_period_end=date(2026, 8, 31),
+                reason="Payslip not received",
+            )
+            self.db.session.add_all([leave, attendance, payroll, payslip_request])
+            self.db.session.commit()
+            leave_id = leave.id
+            attendance_id = attendance.id
+            payroll_id = payroll.id
+            payslip_request_id = payslip_request.id
+
+        self.login(self.client, "admin", "AdminPass123")
+        leave_detail = self.client.get(f"/leaves/{leave_id}")
+        self.assertEqual(leave_detail.status_code, 200)
+        self.assertIn(b"Leave details", leave_detail.data)
+        self.assertIn(b"October 20, 2026", leave_detail.data)
+        self.assertIn(b"Family care", leave_detail.data)
+        self.assertIn(b"employee-status-badge pending", leave_detail.data)
+
+        attendance_detail = self.client.get(
+            f"/attendance/{attendance_id}"
+        )
+        self.assertEqual(attendance_detail.status_code, 200)
+        self.assertIn(b"Not recorded", attendance_detail.data)
+        self.assertIn(b"employee-status-badge absent", attendance_detail.data)
+
+        payroll_detail = self.client.get(f"/payroll/{payroll_id}")
+        self.assertEqual(payroll_detail.status_code, 200)
+        self.assertIn(b"125,000.00", payroll_detail.data)
+        self.assertIn(b"126,250.00", payroll_detail.data)
+        self.assertIn(b"Pending payment", payroll_detail.data)
+
+        hr_client = self.app.test_client()
+        self.login(hr_client, "hrstaff", "HrPass123")
+        review_detail = hr_client.get(
+            f"/payslips/manage/{payslip_request_id}"
+        )
+        self.assertEqual(review_detail.status_code, 200)
+        self.assertIn(b"Request details", review_detail.data)
+        self.assertIn(b"No payroll record exists", review_detail.data)
+        self.assertIn(b"employee-status-badge pending", review_detail.data)
+
     def test_login_required_and_admin_can_manage_accounts(self):
         self.assertEqual(self.client.get("/users/").status_code, 302)
         self.assertEqual(
@@ -362,7 +445,12 @@ class RoleManagementTests(unittest.TestCase):
         html = response.get_data(as_text=True)
         self.assertIn("Jamie Staff", html)
         self.assertIn("Employee information", html)
-        self.assertIn("View full profile", html)
+        self.assertNotIn("View full profile", html)
+        self.assertIn("Employment information", html)
+        self.assertIn("Account information", html)
+        self.assertIn("50,000.00", html)
+        self.assertIn("EMPLOYEE ID", html)
+        self.assertIn("October", html)
         self.assertNotIn('id="employee-sort"', html)
         self.assertNotIn('id="employee-direction"', html)
         self.assertNotIn('class="table-filters"', html)
@@ -629,6 +717,11 @@ class RoleManagementTests(unittest.TestCase):
 
         form = self.client.get(f"/users/{hr_user_id}/edit")
         self.assertEqual(form.status_code, 200)
+        self.assertIn(b"Account information", form.data)
+        self.assertIn(b"Employee record", form.data)
+        self.assertIn(b"No employee record is currently linked", form.data)
+        self.assertIn(b"data-password-toggle", form.data)
+        self.assertIn(b"Leave blank to keep the current password", form.data)
         response = self.client.post(
             f"/users/{hr_user_id}/edit",
             data={
@@ -669,6 +762,15 @@ class RoleManagementTests(unittest.TestCase):
             employee_id = employee.id
             department_id = department.id
 
+        employee_account_form = self.client.get(
+            f"/users/{self.employee_id}/edit"
+        )
+        self.assertEqual(employee_account_form.status_code, 200)
+        self.assertIn(b"Linked to Employee Profile", employee_account_form.data)
+        self.assertIn(
+            f'href="/employees/{employee_id}/edit"'.encode(),
+            employee_account_form.data,
+        )
         employee_form = self.client.get(f"/employees/{employee_id}/edit")
         self.assertEqual(employee_form.status_code, 200)
         response = self.client.post(

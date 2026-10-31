@@ -5,7 +5,7 @@
 {% block header_title %}Employees{% endblock %}
 
 {% block content %}
-<div class="page-heading page-heading-row">
+<div class="page-heading page-heading-row{% if current_user.role == 'employee' %} my-information-heading{% endif %}">
     <div>
             <h1>{% if current_user.role == 'employee' %}My Information{% elif current_user.role == 'admin' %}Users and Employees{% elif current_user.role == 'hr' %}HR Employee Directory{% else %}Employees{% endif %}</h1>
             <p>{% if current_user.role == 'employee' %}Your employee record.{% elif current_user.role in ('admin', 'hr') %}User accounts and linked employee records.{% else %}Employee directory and records.{% endif %}</p>
@@ -80,39 +80,74 @@
                 <span class="my-information-eyebrow">EMPLOYEE PROFILE</span>
                 <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
                 <p>{{ employee.position }}</p>
+                <a class="my-information-department"
+                   href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                    <i data-lucide="building-2" aria-hidden="true"></i>
+                    {{ employee.department.department_name }}
+                </a>
             </div>
         </div>
-        <a class="button button-secondary" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">
-            <i data-lucide="user-round" aria-hidden="true"></i>
-            View full profile
-        </a>
-    </div>
-    <div class="profile-info-grid my-information-grid">
-        <div class="profile-info-item">
-            <span>Employee ID</span>
+        <div class="my-information-id">
+            <span>EMPLOYEE ID</span>
             <strong>EMP-{{ "%04d"|format(employee.id) }}</strong>
         </div>
-        <div class="profile-info-item">
-            <span>Position</span>
-            <strong>{{ employee.position }}</strong>
-        </div>
-        <div class="profile-info-item">
-            <span>Department</span>
-            <strong>{{ employee.department.department_name }}</strong>
-        </div>
-        <div class="profile-info-item">
-            <span>Email address</span>
-            <strong>{{ employee.user.email }}</strong>
-        </div>
-        <div class="profile-info-item">
-            <span>Username</span>
-            <strong>{{ employee.user.username }}</strong>
-        </div>
-        <div class="profile-info-item">
-            <span>Employment record created</span>
-            <strong>{{ employee.created_at.strftime('%B %d, %Y') if employee.created_at else 'Not available' }}</strong>
-        </div>
     </div>
+
+    <section class="my-information-section" aria-labelledby="my-employment-heading">
+        <div class="my-information-section-heading">
+            <span class="my-information-section-icon" aria-hidden="true">
+                <i data-lucide="briefcase-business"></i>
+            </span>
+            <div>
+                <h3 id="my-employment-heading">Employment information</h3>
+                <p>Your current role and employment record.</p>
+            </div>
+        </div>
+        <div class="my-information-grid">
+            <div class="profile-info-item">
+                <span>Position</span>
+                <strong>{{ employee.position }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Department</span>
+                <strong>
+                    <a href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                        {{ employee.department.department_name }}
+                    </a>
+                </strong>
+            </div>
+            <div class="profile-info-item my-information-salary">
+                <span>Salary</span>
+                <strong>{{ "{:,.2f}".format(employee.salary) }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Employment record created</span>
+                <strong>{{ employee.created_at.strftime('%B %d, %Y') if employee.created_at else 'Not available' }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="my-information-section" aria-labelledby="my-account-heading">
+        <div class="my-information-section-heading">
+            <span class="my-information-section-icon account" aria-hidden="true">
+                <i data-lucide="contact-round"></i>
+            </span>
+            <div>
+                <h3 id="my-account-heading">Account information</h3>
+                <p>Your sign-in and contact details.</p>
+            </div>
+        </div>
+        <div class="my-information-grid">
+            <div class="profile-info-item">
+                <span>Email address</span>
+                <strong>{{ employee.user.email }}</strong>
+            </div>
+            <div class="profile-info-item">
+                <span>Username</span>
+                <strong>{{ employee.user.username }}</strong>
+            </div>
+        </div>
+    </section>
 </section>
 {% else %}
 <section class="panel my-information-empty">

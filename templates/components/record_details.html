@@ -1,0 +1,23 @@
+{% from "components/avatar.html" import person_avatar with context %}
+
+{% macro record_employee_header(photo_url, name, subtitle, employee_id) -%}
+<div class="record-person-summary">
+    {{ person_avatar(photo_url, name, 'record-person-avatar') }}
+    <div class="record-person-copy">
+        <h2>{{ name }}</h2>
+        <p>{{ subtitle }}</p>
+    </div>
+    <span class="record-person-id">EMP-{{ "%04d"|format(employee_id) }}</span>
+</div>
+{%- endmacro %}
+
+{% macro record_detail_field(label, value, wide=false, emphasized=false) -%}
+<div class="record-detail-field{% if wide %} record-detail-field-wide{% endif %}{% if emphasized %} record-detail-field-emphasized{% endif %}">
+    <dt>{{ label }}</dt>
+    <dd>{{ value }}</dd>
+</div>
+{%- endmacro %}
+
+{% macro record_status_badge(status) -%}
+<span class="employee-status-badge {{ status|lower|replace(' ', '-') }}">{{ status }}</span>
+{%- endmacro %}

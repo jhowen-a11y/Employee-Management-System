@@ -1,45 +1,69 @@
 {% extends "base.html" %}
-{% from "components/avatar.html" import person_avatar with context %}
+{% from "components/record_details.html" import record_employee_header, record_detail_field, record_status_badge %}
 
 {% block title %}Leave Request Details | MCM EMS{% endblock %}
 {% block header_title %}Leave Request Details{% endblock %}
 
 {% block content %}
-<div class="page-heading page-heading-row">
-    <div class="page-heading-person">
-        {{ person_avatar(
-            profile_picture_url(leave.employee.profile_picture)
-            if leave.employee.profile_picture else none,
-            leave.employee.first_name ~ ' ' ~ leave.employee.last_name,
-            'detail-person-avatar'
-        ) }}
-        <div><h1>Leave request</h1><p>{{ leave.employee.first_name }} {{ leave.employee.last_name }}</p></div>
-    </div>
-    {% if current_user.role != 'employee' %}
-    <form method="post" action="{{ url_for('leave.delete_leave', leave_id=leave.id) }}"
-          data-confirm-delete data-delete-title="Delete leave request?"
-          data-delete-message="This leave request will be permanently removed.">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button class="button button-danger" type="submit">
-            <i data-lucide="trash-2" aria-hidden="true"></i>Delete request
-        </button>
-    </form>
-    {% endif %}
+<div class="page-heading record-page-heading">
+    <span class="record-page-eyebrow">Leave management</span>
+    <h1>Leave request details</h1>
+    <p>Review the request information and current approval status.</p>
 </div>
-<section class="panel">
-    <p><strong>Type:</strong> {{ leave.leave_type }}</p>
-    <p><strong>Dates:</strong> {{ leave.start_date }} to {{ leave.end_date }}</p>
-    <p><strong>Reason:</strong> {{ leave.reason or 'No reason provided.' }}</p>
-    <p><strong>Status:</strong> {{ leave.status }}</p>
+
+<section class="panel record-detail-panel">
+    {{ record_employee_header(
+        profile_picture_url(leave.employee.profile_picture)
+        if leave.employee.profile_picture else none,
+        leave.employee.first_name ~ ' ' ~ leave.employee.last_name,
+        leave.employee.position,
+        leave.employee.id
+    ) }}
+
+    <section class="record-detail-section" aria-labelledby="leave-detail-heading">
+        <div class="record-section-heading">
+            <div>
+                <h2 id="leave-detail-heading">Leave details</h2>
+                <p>Requested leave type, dates, reason, and approval status.</p>
+            </div>
+            {{ record_status_badge(leave.status) }}
+        </div>
+        <dl class="record-detail-grid">
+            {{ record_detail_field('Leave type', leave.leave_type) }}
+            {{ record_detail_field('Start date', leave.start_date.strftime('%B %d, %Y')) }}
+            {{ record_detail_field('End date', leave.end_date.strftime('%B %d, %Y')) }}
+            {{ record_detail_field('Reason', leave.reason or 'No reason provided.', true) }}
+        </dl>
+    </section>
+
+    <div class="record-detail-actions">
+        <a class="button button-secondary" href="{{ url_for('leave.leave_list') }}">
+            <i data-lucide="arrow-left" aria-hidden="true"></i>
+            Back to leave requests
+        </a>
+        <div class="record-detail-action-group">
     {% if current_user.role != 'employee' and leave.status == 'Pending' %}
-    <form method="post" action="{{ url_for('leave.update_leave_status', leave_id=leave.id) }}" class="role-form">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button class="button button-primary button-small" type="submit"
-                name="status" value="Approved">Approve</button>
-        <button class="button button-danger button-small" type="submit"
-                name="status" value="Rejected">Reject</button>
-    </form>
+            <form method="post" action="{{ url_for('leave.update_leave_status', leave_id=leave.id) }}" class="record-detail-action-group">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-primary" type="submit" name="status" value="Approved">
+                    <i data-lucide="check" aria-hidden="true"></i>Approve
+                </button>
+                <button class="button button-danger" type="submit" name="status" value="Rejected">
+                    <i data-lucide="x" aria-hidden="true"></i>Decline
+                </button>
+            </form>
     {% endif %}
-    <p><a class="button button-secondary" href="{{ url_for('leave.leave_list') }}">Back to leave requests</a></p>
+    {% if current_user.role != 'employee' %}
+            <form method="post" action="{{ url_for('leave.delete_leave', leave_id=leave.id) }}"
+                  data-confirm-delete data-delete-title="Delete leave request?"
+                  data-delete-message="This leave request will be permanently removed.">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-danger button-outline-danger" type="submit">
+                    <i data-lucide="trash-2" aria-hidden="true"></i>Delete request
+                </button>
+            </form>
+    {% endif %}
+        </div>
+    </div>
 </section>
 {% endblock %}

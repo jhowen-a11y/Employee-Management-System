@@ -4,86 +4,131 @@
 {% block header_title %}Edit User Account{% endblock %}
 
 {% block content %}
-<div class="page-heading">
+<div class="page-heading user-edit-heading">
+    <span class="user-edit-eyebrow">Account management</span>
     <h1>Edit {{ user.username }}'s account</h1>
     <p>Update login details, role, or set a temporary password.</p>
 </div>
-<section class="panel form-panel">
-    <form method="post" class="form-grid">
+
+<section class="panel form-panel user-edit-panel">
+    <form method="post" class="user-edit-form">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div class="form-field">
-            <label for="username">Username</label>
-            <input id="username" name="username" maxlength="50"
-                   value="{{ request.form.get('username', user.username) }}"
-                   required>
-        </div>
-        <div class="form-field">
-            <label for="email">Email</label>
-            <input id="email" name="email" type="email" maxlength="120"
-                   value="{{ request.form.get('email', user.email) }}"
-                   required>
-        </div>
-        <div class="form-field">
-            <label for="role">Role</label>
-            <select id="role" name="role" required>
-                {% for role in roles %}
-                <option value="{{ role }}"
-                        {% if request.form.get('role', selected_role) == role %}selected{% endif %}>
-                    {{ role|capitalize }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-field">
-            <label for="new_password">Set a new password</label>
-            <input id="new_password" name="new_password" type="password"
-                   minlength="8" autocomplete="new-password">
-            <small>Leave blank to keep the current password. At least 8 characters if set.</small>
-        </div>
-        <div class="employee-fields form-grid" id="employeeFields">
-            <h2 class="form-section-heading">Employee profile</h2>
-            <div class="form-field">
-                <label for="first_name">First name</label>
-                <input id="first_name" name="first_name" maxlength="50"
-                       value="{{ request.form.get('first_name', user.employee.first_name if user.employee else '') }}">
+
+        <section class="user-edit-section" aria-labelledby="account-information-heading">
+            <div class="user-edit-section-heading">
+                <h2 id="account-information-heading">Account information</h2>
+                <p>Manage sign-in details and account access.</p>
             </div>
-            <div class="form-field">
-                <label for="last_name">Last name</label>
-                <input id="last_name" name="last_name" maxlength="50"
-                       value="{{ request.form.get('last_name', user.employee.last_name if user.employee else '') }}">
+            <div class="user-edit-fields">
+                <div class="form-field">
+                    <label for="username">Username</label>
+                    <input id="username" name="username" maxlength="50"
+                           autocomplete="username"
+                           value="{{ request.form.get('username', user.username) }}"
+                           required>
+                </div>
+                <div class="form-field">
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" maxlength="120"
+                           autocomplete="email"
+                           value="{{ request.form.get('email', user.email) }}"
+                           required>
+                </div>
+                <div class="form-field">
+                    <label for="role">Role</label>
+                    <select id="role" name="role" required>
+                        {% for role in roles %}
+                        <option value="{{ role }}"
+                                {% if request.form.get('role', selected_role) == role %}selected{% endif %}>
+                            {{ role|capitalize }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="new_password">Set a new password</label>
+                    <div class="auth-password-field user-edit-password-field">
+                        <input id="new_password" name="new_password" type="password"
+                               minlength="8" autocomplete="new-password"
+                               aria-describedby="new-password-help">
+                        <button class="auth-password-toggle" type="button"
+                                data-password-toggle aria-controls="new_password"
+                                aria-label="Show password" aria-pressed="false">
+                            <i data-lucide="eye-off" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <small id="new-password-help">Leave blank to keep the current password. At least 8 characters if set.</small>
+                </div>
             </div>
-            <div class="form-field">
-                <label for="position">Position</label>
-                <input id="position" name="position" maxlength="100"
-                       value="{{ request.form.get('position', user.employee.position if user.employee else '') }}">
+        </section>
+
+        <section class="employee-fields user-edit-section" id="employeeFields"
+                 aria-labelledby="employee-profile-heading">
+            <div class="user-edit-section-heading">
+                <h2 id="employee-profile-heading">Employee profile</h2>
+                <p>Required when this account has the Employee role.</p>
             </div>
-            <div class="form-field">
-                <label for="department_id">Department</label>
-                <select id="department_id" name="department_id">
-                    <option value="">Select department</option>
-                    {% for department in departments %}
-                    <option value="{{ department.id }}"
-                            {% if request.form.get('department_id', user.employee.department_id if user.employee else 0)|int == department.id %}selected{% endif %}>
-                        {{ department.department_name }}
-                    </option>
-                    {% endfor %}
-                </select>
+            <div class="user-edit-fields">
+                <div class="form-field">
+                    <label for="first_name">First name</label>
+                    <input id="first_name" name="first_name" maxlength="50"
+                           value="{{ request.form.get('first_name', user.employee.first_name if user.employee else '') }}">
+                </div>
+                <div class="form-field">
+                    <label for="last_name">Last name</label>
+                    <input id="last_name" name="last_name" maxlength="50"
+                           value="{{ request.form.get('last_name', user.employee.last_name if user.employee else '') }}">
+                </div>
+                <div class="form-field">
+                    <label for="position">Position</label>
+                    <input id="position" name="position" maxlength="100"
+                           value="{{ request.form.get('position', user.employee.position if user.employee else '') }}">
+                </div>
+                <div class="form-field">
+                    <label for="department_id">Department</label>
+                    <select id="department_id" name="department_id">
+                        <option value="">Select department</option>
+                        {% for department in departments %}
+                        <option value="{{ department.id }}"
+                                {% if request.form.get('department_id', user.employee.department_id if user.employee else 0)|int == department.id %}selected{% endif %}>
+                            {{ department.department_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="salary">Annual salary</label>
+                    <input id="salary" name="salary" type="number" min="0" step="0.01"
+                           value="{{ request.form.get('salary', user.employee.salary if user.employee else '') }}">
+                </div>
             </div>
-            <div class="form-field">
-                <label for="salary">Annual salary</label>
-                <input id="salary" name="salary" type="number" min="0" step="0.01"
-                       value="{{ request.form.get('salary', user.employee.salary if user.employee else '') }}">
+        </section>
+
+        <section class="user-edit-employee-record" aria-labelledby="employee-record-heading">
+            <div class="user-edit-record-icon" aria-hidden="true">
+                <i data-lucide="{% if user.employee %}badge-check{% else %}info{% endif %}"></i>
             </div>
-        </div>
-        {% if user.employee %}
-        <div class="form-field">
-            <span>Employee record</span>
-            <a href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
+            <div class="user-edit-record-copy">
+                <h2 id="employee-record-heading">Employee record</h2>
+                {% if user.employee %}
+                <p>
+                    Linked to {{ user.employee.first_name }} {{ user.employee.last_name }}
+                    · {{ user.employee.position }}
+                </p>
+                {% else %}
+                <p>No employee record is currently linked to this account.</p>
+                {% endif %}
+            </div>
+            {% if user.employee %}
+            <a class="button button-secondary user-edit-record-action"
+               href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
+                <i data-lucide="external-link" aria-hidden="true"></i>
                 Edit employee details
             </a>
-        </div>
-        {% endif %}
-        <div class="form-actions">
+            {% endif %}
+        </section>
+
+        <div class="form-actions user-edit-actions">
             <button class="button button-primary" type="submit">Save account</button>
             <a class="button button-secondary" href="{{ url_for('users.user_list') }}">Cancel</a>
         </div>
