@@ -13,11 +13,13 @@
     </div>
     {% if current_user.role != 'employee' %}
     <div class="page-heading-actions">
-        <a class="button button-primary" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit record</a>
+        <a class="button button-primary" data-record-modal data-modal-size="small" href="{{ url_for('attendance.edit_attendance', attendance_id=record.id) }}">Edit record</a>
         <form method="post" action="{{ url_for('attendance.delete_attendance', attendance_id=record.id) }}"
               data-confirm-delete data-delete-title="Delete attendance record?"
+              data-delete-reason
               data-delete-message="This attendance entry will be permanently removed.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="reason" value="">
             <button class="button button-danger" type="submit">
                 <i data-lucide="trash-2" aria-hidden="true"></i>Delete
             </button>
@@ -47,8 +49,34 @@
             {{ record_detail_field('Time out', record.time_out.strftime('%I:%M %p') if record.time_out else 'Not recorded') }}
         </dl>
     </section>
+    {% if attendance_audits %}
+    <section class="record-detail-section" aria-labelledby="attendance-audit-heading">
+        <div class="record-section-heading">
+            <div>
+                <h2 id="attendance-audit-heading">Change history</h2>
+                <p>Corrections and deletions are recorded with their original values.</p>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Changed by / on</th><th>Action</th><th>Reason</th><th>Previous values</th><th>New values</th></tr></thead>
+                <tbody>
+                {% for audit in attendance_audits %}
+                <tr>
+                    <td>{{ audit.actor_username }}<small class="table-secondary-text">{{ audit.created_at.strftime('%Y-%m-%d %H:%M') if audit.created_at else '' }}</small></td>
+                    <td>{{ audit.action|capitalize }}</td>
+                    <td>{{ audit.reason }}</td>
+                    <td><small>Employee #{{ audit.before_values.employee_id }} · {{ audit.before_values.attendance_date }} · {{ audit.before_values.status }} · {{ audit.before_values.time_in or '—' }}–{{ audit.before_values.time_out or '—' }}</small></td>
+                    <td><small>{% if audit.after_values.deleted %}Deleted · {% endif %}Employee #{{ audit.after_values.employee_id or audit.before_values.employee_id }} · {{ audit.after_values.attendance_date or '' }} · {{ audit.after_values.status or '' }} · {{ audit.after_values.time_in or '—' }}–{{ audit.after_values.time_out or '—' }}</small></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
     <div class="record-detail-actions">
-        <a class="button button-secondary" href="{{ url_for('attendance.attendance_list') }}">
+        <a class="button button-secondary" data-modal-close href="{{ url_for('attendance.attendance_list') }}">
             <i data-lucide="arrow-left" aria-hidden="true"></i>
             Back to attendance
         </a>

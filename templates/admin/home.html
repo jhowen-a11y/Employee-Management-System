@@ -34,19 +34,75 @@
             <h2 id="admin-overview-title">Organization overview</h2>
         </div>
     </div>
-    <div class="hr-stat-grid">
-        <a class="hr-stat-card hr-stat-employees" href="{{ url_for('employee.employee_list') }}">
-            <span class="hr-stat-icon"><i data-lucide="users-round" aria-hidden="true"></i></span>
-            <strong>{{ employee_count }}</strong>
-            <span class="hr-stat-label">Employee records</span>
-            <small>People in your directory</small>
-        </a>
-        <a class="hr-stat-card hr-stat-accounts" href="{{ url_for('employee.employee_list') }}">
+    <div class="admin-overview-feature-grid">
+        <a class="hr-stat-card hr-stat-people" href="{{ url_for('employee.employee_list') }}">
             <span class="hr-stat-icon"><i data-lucide="contact-round" aria-hidden="true"></i></span>
-            <strong>{{ user_count }}</strong>
-            <span>Accounts (all roles)</span>
-            <small>Employee, HR, and admin logins</small>
+            <span class="hr-stat-label">People &amp; Accounts</span>
+            <span class="hr-stat-people-counts">
+                <span><strong>{{ employee_count }}</strong><small>Employee records</small></span>
+                <span><strong>{{ user_count }}</strong><small>User accounts</small></span>
+            </span>
+            <small>Manage the directory and all account roles</small>
         </a>
+        <section class="admin-role-chart" aria-labelledby="admin-role-chart-title">
+            <div class="admin-role-chart-heading">
+                <div>
+                    <span class="hr-eyebrow">ACCOUNT ACCESS</span>
+                    <h3 id="admin-role-chart-title">User Accounts by Role</h3>
+                </div>
+                <span class="admin-role-chart-total">{{ user_count }} total {{ 'account' if user_count == 1 else 'accounts' }}</span>
+            </div>
+            <div class="admin-role-chart-content">
+                <div class="admin-role-donut-wrap">
+                    <svg class="admin-role-donut" viewBox="0 0 100 100"
+                         role="group" aria-labelledby="admin-role-donut-title admin-role-donut-description">
+                        <title id="admin-role-donut-title">User account distribution</title>
+                        <desc id="admin-role-donut-description">{{ user_count }} total accounts, grouped by role.</desc>
+                        <circle class="admin-role-donut-track" cx="50" cy="50" r="33.5"></circle>
+                        {% for item in role_distribution %}
+                        <a href="{{ url_for('users.role_accounts', role=item.role) }}"
+                           data-record-modal data-modal-size="small"
+                           class="admin-role-donut-segment-link admin-role-segment-link-{{ item.role }}"
+                           data-role="{{ item.role }}"
+                           data-count="{{ item.count }}"
+                           aria-label="View {{ item.count }} {{ item.label }} {{ 'account' if item.count == 1 else 'accounts' }}, {{ '%.1f'|format(item.percentage) }} percent">
+                            <title>{{ item.label }}: {{ item.count }} accounts ({{ '%.1f'|format(item.percentage) }}%)</title>
+                            {% if item.path %}
+                            <path class="admin-role-donut-segment admin-role-segment-{{ item.role }}"
+                                  d="{{ item.path }}"></path>
+                            {% endif %}
+                        </a>
+                        {% endfor %}
+                    </svg>
+                    <span class="admin-role-donut-center" aria-hidden="true">
+                        <strong>{{ user_count }}</strong>
+                        <small>accounts</small>
+                    </span>
+                </div>
+                <div class="admin-role-legend" aria-label="Account roles">
+                    {% for item in role_distribution %}
+                    <a class="admin-role-legend-item admin-role-legend-{{ item.role }}"
+                       href="{{ url_for('users.role_accounts', role=item.role) }}"
+                       data-record-modal data-modal-size="small"
+                       data-role="{{ item.role }}"
+                       data-count="{{ item.count }}"
+                       aria-label="View {{ item.count }} {{ item.label }} {{ 'account' if item.count == 1 else 'accounts' }}, {{ '%.1f'|format(item.percentage) }} percent">
+                        <span class="admin-role-legend-dot" aria-hidden="true"></span>
+                        <span class="admin-role-legend-copy">
+                            <strong>{{ item.label }}</strong>
+                            <small>{{ '%.1f'|format(item.percentage) }}%</small>
+                        </span>
+                        <span class="admin-role-legend-count">{{ item.count }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% if user_count == 0 %}
+            <p class="admin-role-chart-empty">No user accounts to display yet.</p>
+            {% endif %}
+        </section>
+    </div>
+    <div class="hr-stat-grid admin-stat-grid">
         <a class="hr-stat-card" href="{{ url_for('department.department_list') }}">
             <span class="hr-stat-icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
             <strong>{{ department_count }}</strong>

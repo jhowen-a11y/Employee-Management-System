@@ -18,3 +18,4 @@ from .payslip_request import PayslipRequest
 from .travel_order import TravelOrder
 from .employee import Employee
 from .attendance import Attendance
+from .record_audit import RecordAudit

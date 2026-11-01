@@ -32,6 +32,13 @@ user_bp = Blueprint("users", __name__, url_prefix="/users")
 ACCOUNT_CREATION_ROLES = User.ROLES
 
 
+def mask_email(email):
+    local, separator, domain = email.rpartition("@")
+    if not separator:
+        return email[:1] + "*" * max(4, min(len(email) - 1, 16))
+    return f"{local[:1]}{'*' * max(4, min(len(local) - 1, 16))}@{domain}"
+
+
 @user_bp.before_request
 def require_admin():
     # Allow only administrators, except when users edit their own profile.
@@ -95,12 +102,40 @@ def user_list():
         "users/list.html",
         users=users,
         roles=User.ROLES,
+        masked_emails={
+            user.id: mask_email(user.email) for user in users.items
+        },
         search=search,
         selected_role=selected_role,
         sort=sort,
         direction=direction,
         admin_count=User.query.filter_by(role=User.ADMIN).count(),
         profile_picture_urls=picture_urls,
+    )
+
+
+@user_bp.route("/role/<role>/accounts")
+def role_accounts(role):
+    if role not in User.ROLES:
+        abort(404)
+
+    users = User.query.filter_by(role=role).order_by(
+        User.username.asc(),
+        User.id.asc(),
+    ).all()
+    role_labels = {
+        User.EMPLOYEE: "Employee",
+        User.HR: "HR",
+        User.ADMIN: "Admin",
+    }
+    return render_template(
+        "users/role_accounts.html",
+        users=users,
+        role=role,
+        role_label=role_labels[role],
+        masked_emails={
+            user.id: mask_email(user.email) for user in users
+        },
     )
 
 
@@ -403,14 +438,14 @@ def update_user_role(user_id):
     user = db.get_or_404(User, user_id)
     role = request.form.get("role", "").strip()
 
-    if role not in User.ROLES:
+    if user.id == current_user.id:
+        flash("You cannot change your own role.", "error")
+    elif role not in User.ROLES:
         flash("Select a valid role.", "error")
     elif role == User.EMPLOYEE and user.employee is None:
         return redirect(
             url_for("users.edit_user", user_id=user.id, role=User.EMPLOYEE)
         )
-    elif user.id == current_user.id:
-        flash("You cannot change your own role.", "error")
     elif user.role == User.ADMIN and role != User.ADMIN:
         admin_count = db.session.query(func.count(User.id)).filter_by(
             role=User.ADMIN

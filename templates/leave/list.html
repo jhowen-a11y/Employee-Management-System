@@ -85,7 +85,7 @@
                 <td>{{ leave.status }}</td>
                 <td>
                     <div class="table-actions">
-                        <a class="button button-secondary button-small" href="{{ url_for('leave.leave_detail', leave_id=leave.id) }}">View</a>
+                        <a class="button button-secondary button-small" data-record-modal href="{{ url_for('leave.leave_detail', leave_id=leave.id) }}">View</a>
                         {% if current_user.role != 'employee' %}
                         <form method="post" action="{{ url_for('leave.delete_leave', leave_id=leave.id) }}"
                               class="inline-form" data-confirm-delete

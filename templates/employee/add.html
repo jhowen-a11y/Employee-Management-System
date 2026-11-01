@@ -16,7 +16,7 @@
             <select id="department_id" name="department_id" required>
                 <option value="">Select department</option>
                 {% for department in departments %}
-                <option value="{{ department.id }}" {% if request.form.get('department_id', '0')|int == department.id %}selected{% endif %}>{{ department.department_name }}</option>
+                <option value="{{ department.id }}" {% if request.form.get('department_id', '0')|int == department.id %}selected{% endif %}>{{ department.department_name|upper }}</option>
                 {% endfor %}
             </select>
         </div>

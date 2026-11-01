@@ -77,10 +77,19 @@
                 <td>{{ payroll.allowances }}</td>
                 <td>{{ payroll.deductions }}</td>
                 <td>{{ payroll.net_pay }}</td>
-                <td>{% if payroll.payment_date %}Paid {{ payroll.payment_date }}{% else %}Pending payment{% endif %}</td>
                 <td>
-                    <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_detail', payroll_id=payroll.id) }}">View</a>
-                    <a class="button button-secondary button-small" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit</a>
+                    {% if payroll.payment_date %}
+                    <span class="employee-status-badge approved">Paid</span>
+                    <small class="table-secondary-text">{{ payroll.payment_date }} · Locked</small>
+                    {% else %}
+                    <span class="employee-status-badge pending">Pending payment</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a class="button button-secondary button-small" data-record-modal href="{{ url_for('payroll.payroll_detail', payroll_id=payroll.id) }}">View</a>
+                    {% if not payroll.payment_date %}
+                    <a class="button button-secondary button-small" data-record-modal data-modal-size="small" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit</a>
+                    {% endif %}
                 </td>
             </tr>
             {% else %}

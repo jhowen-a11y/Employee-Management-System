@@ -31,6 +31,7 @@ class RoleManagementTests(unittest.TestCase):
         from models.leave import Leave
         from models.payroll import Payroll
         from models.payslip_request import PayslipRequest
+        from models.record_audit import RecordAudit
         from models.travel_order import TravelOrder
         from models.user import User
 
@@ -41,6 +42,7 @@ class RoleManagementTests(unittest.TestCase):
         cls.Leave = Leave
         cls.Payroll = Payroll
         cls.PayslipRequest = PayslipRequest
+        cls.RecordAudit = RecordAudit
         cls.TravelOrder = TravelOrder
         cls.User = User
         cls.app = create_app(
@@ -107,6 +109,229 @@ class RoleManagementTests(unittest.TestCase):
                 "password": password,
             },
         )
+
+    def test_admin_dashboard_combines_people_counts_and_shows_role_distribution(self):
+        with self.app.app_context():
+            department = self.Department(
+                department_name="Operations",
+                description="Business operations team",
+            )
+            self.db.session.add(department)
+            self.db.session.flush()
+            self.db.session.add(
+                self.Employee(
+                    user_id=self.employee_id,
+                    first_name="Jamie",
+                    last_name="Staff",
+                    position="Analyst",
+                    salary=60000,
+                    department_id=department.id,
+                )
+            )
+            self.db.session.get(self.User, self.hr_id).role = self.User.EMPLOYEE
+            self.db.session.commit()
+
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        content = response.get_data(as_text=True)
+        self.assertEqual(content.count('class="hr-stat-card hr-stat-people"'), 1)
+        self.assertIn("People &amp; Accounts", content)
+        self.assertIn("Employee records", content)
+        self.assertIn("User accounts", content)
+        self.assertRegex(content, r'data-role="employee"\s+data-count="2"')
+        self.assertRegex(content, r'data-role="hr"\s+data-count="0"')
+        self.assertRegex(content, r'data-role="admin"\s+data-count="1"')
+        self.assertIn("66.7%", content)
+        self.assertIn("33.3%", content)
+        self.assertIn("admin-overview-feature-grid", content)
+        self.assertIn("admin-role-donut", content)
+        self.assertIn('href="/users/role/employee/accounts"', content)
+        self.assertIn('href="/users/role/hr/accounts"', content)
+        self.assertIn('href="/users/role/admin/accounts"', content)
+        self.assertEqual(content.count('class="hr-stat-card'), 5)
+
+    def test_role_chart_account_lists_are_fresh_masked_and_admin_only(self):
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/users/role/admin/accounts")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Admin Accounts", response.data)
+        self.assertIn(b"admin", response.data)
+        self.assertIn(b"a****@example.test", response.data)
+        self.assertNotIn(b"admin@example.test</span>", response.data)
+
+        for username, password in (
+            ("staff", "StaffPass123"),
+            ("hrstaff", "HrPass123"),
+        ):
+            client = self.app.test_client()
+            self.login(client, username, password)
+            self.assertEqual(
+                client.get("/users/role/admin/accounts").status_code,
+                403,
+            )
+
+        with self.app.app_context():
+            hr_user = self.db.session.get(self.User, self.hr_id)
+            hr_user.role = self.User.ADMIN
+            self.db.session.commit()
+        updated_admins = self.client.get("/users/role/admin/accounts")
+        self.assertEqual(updated_admins.status_code, 200)
+        self.assertIn(b"2 accounts assigned the Admin role", updated_admins.data)
+        no_hr_accounts = self.client.get("/users/role/hr/accounts")
+        self.assertEqual(no_hr_accounts.status_code, 200)
+        self.assertIn(b"No HR accounts yet", no_hr_accounts.data)
+
+        self.assertEqual(
+            self.client.get("/users/role/unknown/accounts").status_code,
+            404,
+        )
+
+    def test_department_directory_cards_open_the_existing_detail_modal(self):
+        with self.app.app_context():
+            assigned = self.Department(
+                department_name="Operations",
+                description="Business operations team",
+            )
+            empty = self.Department(
+                department_name="Research",
+                description="Research and development",
+            )
+            self.db.session.add_all([assigned, empty])
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=60000,
+                department_id=assigned.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.commit()
+            assigned_id = assigned.id
+
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/departments/")
+        self.assertEqual(response.status_code, 200)
+        content = response.get_data(as_text=True)
+        self.assertIn("department-directory-grid", content)
+        self.assertIn("Business operations team", content)
+        self.assertIn("Research and development", content)
+        self.assertIn('data-record-modal', content)
+        self.assertIn(f'href="/departments/{assigned_id}"', content)
+        self.assertIn("1</strong>", content)
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        employee_page = employee_client.get("/departments/")
+        self.assertEqual(employee_page.status_code, 200)
+        employee_content = employee_page.get_data(as_text=True)
+        self.assertIn("OPERATIONS", employee_content)
+        self.assertNotIn("Research", employee_content)
+        self.assertNotIn("department-directory-summary", employee_content)
+        self.assertNotIn(">Edit</a>", employee_content)
+
+    def test_department_names_are_trimmed_uppercased_and_checked_without_case(self):
+        self.login(self.client, "admin", "AdminPass123")
+        form = self.client.get("/departments/add")
+        response = self.client.post(
+            "/departments/add",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "department_name": "  hr department  ",
+                "description": "A Description With Mixed Case",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        with self.app.app_context():
+            department = self.Department.query.one()
+            self.assertEqual(department.department_name, "HR DEPARTMENT")
+            self.assertEqual(department.description, "A Description With Mixed Case")
+            department_id = department.id
+
+        duplicate_form = self.client.get("/departments/add")
+        duplicate_response = self.client.post(
+            "/departments/add",
+            data={
+                "_csrf_token": self.csrf_token(duplicate_form),
+                "department_name": "Hr Department",
+                "description": "Do not replace the original",
+            },
+        )
+        self.assertEqual(duplicate_response.status_code, 200)
+        self.assertIn(b"This department already exists.", duplicate_response.data)
+
+        edit_form = self.client.get(f"/departments/{department_id}/edit")
+        edit_response = self.client.post(
+            f"/departments/{department_id}/edit",
+            data={
+                "_csrf_token": self.csrf_token(edit_form),
+                "department_name": "  department of babae ro ",
+                "description": "Description stays Mixed Case",
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+        with self.app.app_context():
+            department = self.db.session.get(self.Department, department_id)
+            self.assertEqual(department.department_name, "DEPARTMENT OF BABAE RO")
+            self.assertEqual(department.description, "Description stays Mixed Case")
+            model_created = self.Department(department_name="  people team  ")
+            self.assertEqual(model_created.department_name, "PEOPLE TEAM")
+
+    def test_legacy_department_names_render_uppercase_and_search_case_insensitively(self):
+        from sqlalchemy import update
+
+        with self.app.app_context():
+            department = self.Department(
+                department_name="Legacy department",
+                description="Keep this description Mixed Case",
+            )
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=60000,
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            self.db.session.execute(
+                update(self.Department)
+                .where(self.Department.id == department.id)
+                .values(department_name="department of babae ro")
+            )
+            self.db.session.commit()
+            department_id = department.id
+            employee_id = employee.id
+
+        self.login(self.client, "admin", "AdminPass123")
+        for path in (
+            "/departments/",
+            f"/departments/{department_id}",
+            "/employees/?q=Department%20Of%20Babae%20Ro",
+            f"/employees/{employee_id}",
+            "/employees/add",
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                content = response.get_data(as_text=True)
+                self.assertIn("DEPARTMENT OF BABAE RO", content)
+                if path in ("/departments/", f"/departments/{department_id}"):
+                    self.assertIn("Keep this description Mixed Case", content)
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        for path in ("/employee/home", "/employees/", "/users/profile"):
+            with self.subTest(path=path):
+                response = employee_client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(b"DEPARTMENT OF BABAE RO", response.data)
 
     def test_attendance_pages_and_employee_dashboard_limit_records(self):
         from datetime import date, timedelta
@@ -809,6 +1034,7 @@ class RoleManagementTests(unittest.TestCase):
         )
 
     def test_admin_can_complete_management_workflows(self):
+        from datetime import date
         from decimal import Decimal
 
         self.login(self.client, "admin", "AdminPass123")
@@ -828,7 +1054,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             department = self.Department.query.filter_by(
-                department_name="Engineering"
+                department_name="ENGINEERING"
             ).one()
             department_id = department.id
 
@@ -899,6 +1125,7 @@ class RoleManagementTests(unittest.TestCase):
                 "time_in": "09:15",
                 "time_out": "17:00",
                 "status": "Late",
+                "reason": "Corrected the recorded late arrival time.",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -932,6 +1159,19 @@ class RoleManagementTests(unittest.TestCase):
                 self.db.session.get(self.Leave, leave_id).status,
                 "Approved",
             )
+            leave_audit = self.RecordAudit.query.filter_by(
+                record_type="leave",
+                record_id=leave_id,
+            ).one()
+            self.assertEqual(leave_audit.actor_username, "admin")
+            self.assertEqual(leave_audit.after_values["status"], "Approved")
+        self.assertEqual(
+            self.client.post(
+                f"/leaves/{leave_id}/status",
+                data={"_csrf_token": token, "status": "Rejected"},
+            ).status_code,
+            409,
+        )
 
         response = self.client.post(
             "/payroll/add",
@@ -940,7 +1180,6 @@ class RoleManagementTests(unittest.TestCase):
                 "employee_id": str(employee_id),
                 "pay_period_start": "2026-10-01",
                 "pay_period_end": "2026-10-15",
-                "payment_date": "2026-10-16",
                 "basic_salary": "3000.00",
                 "allowances": "100.00",
                 "deductions": "50.00",
@@ -959,7 +1198,6 @@ class RoleManagementTests(unittest.TestCase):
                 "employee_id": str(employee_id),
                 "pay_period_start": "2026-10-01",
                 "pay_period_end": "2026-10-15",
-                "payment_date": "2026-10-17",
                 "basic_salary": "3200.00",
                 "allowances": "100.00",
                 "deductions": "50.00",
@@ -977,7 +1215,6 @@ class RoleManagementTests(unittest.TestCase):
                 "employee_id": str(employee_id),
                 "pay_period_start": "2026-10-01",
                 "pay_period_end": "2026-10-15",
-                "payment_date": "2026-10-17",
                 "basic_salary": "3200.00",
                 "allowances": "100.00",
                 "deductions": "5000.00",
@@ -987,6 +1224,24 @@ class RoleManagementTests(unittest.TestCase):
         with self.app.app_context():
             payroll = self.db.session.get(self.Payroll, payroll_id)
             self.assertEqual(payroll.net_pay, Decimal("3250.00"))
+
+        response = self.client.post(
+            f"/payroll/{payroll_id}/edit",
+            data={
+                "_csrf_token": token,
+                "employee_id": str(employee_id),
+                "pay_period_start": "2026-10-01",
+                "pay_period_end": "2026-10-15",
+                "payment_date": "2026-10-17",
+                "basic_salary": "3200.00",
+                "allowances": "100.00",
+                "deductions": "50.00",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            payroll = self.db.session.get(self.Payroll, payroll_id)
+            self.assertEqual(payroll.payment_date, date(2026, 10, 17))
 
         response = self.client.post(
             f"/employees/{employee_id}/edit",
@@ -1016,7 +1271,10 @@ class RoleManagementTests(unittest.TestCase):
             f"/attendance/{attendance_id}/delete",
             f"/leaves/{leave_id}/delete",
         ):
-            response = self.client.post(path, data={"_csrf_token": token})
+            data = {"_csrf_token": token}
+            if path.startswith("/attendance/"):
+                data["reason"] = "Duplicate attendance record."
+            response = self.client.post(path, data=data)
             with self.subTest(path=path):
                 self.assertEqual(response.status_code, 302)
 
@@ -1063,7 +1321,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             department = self.Department.query.filter_by(
-                department_name="People Operations"
+                department_name="PEOPLE OPERATIONS"
             ).one()
             department_id = department.id
 
@@ -1112,7 +1370,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             finance_department_id = self.Department.query.filter_by(
-                department_name="Finance"
+                department_name="FINANCE"
             ).one().id
 
         form = self.client.get(f"/employees/{employee_id}/edit")
@@ -1527,7 +1785,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             department_id = self.Department.query.filter_by(
-                department_name="Operations"
+                department_name="OPERATIONS"
             ).one().id
 
         response = self.client.post(
@@ -1548,7 +1806,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"Assign department", listing.get_data())
         form = self.client.get(f"/employees/link-user/{user_id}")
         self.assertEqual(form.status_code, 200)
-        self.assertIn(b"Operations", form.get_data())
+        self.assertIn(b"OPERATIONS", form.get_data())
         response = self.client.post(
             f"/employees/link-user/{user_id}",
             data={
@@ -1571,7 +1829,9 @@ class RoleManagementTests(unittest.TestCase):
 
         def account_total(response):
             match = re.search(
-                rb"<strong>(\d+)</strong>\s*<span>Accounts \(all roles\)</span>",
+                rb"<strong>(\d+)</strong>\s*"
+                rb"(?:<small>User accounts</small>|"
+                rb"<span>Accounts \(all roles\)</span>)",
                 response.data,
             )
             self.assertIsNotNone(match)
@@ -1766,7 +2026,7 @@ class RoleManagementTests(unittest.TestCase):
 
         self.login(self.client, "staff", "StaffPass123")
         home = self.client.get("/employee/home")
-        self.assertIn(b"Engineering", home.get_data())
+        self.assertIn(b"ENGINEERING", home.get_data())
         self.assertIn(b"5000.00", home.get_data())
         self.assertIn(b"My Department", home.get_data())
         self.assertIn(b"My Attendance", home.get_data())
@@ -2016,6 +2276,300 @@ class RoleManagementTests(unittest.TestCase):
                 self.db.session.get(self.User, self.admin_id).role,
                 self.User.ADMIN,
             )
+
+    def test_user_emails_are_masked_and_role_changes_remain_admin_only(self):
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/users/")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        email_cells = re.findall(
+            r'<span class="user-email-value"[^>]*>([^<]*)</span>',
+            html,
+        )
+        self.assertEqual(len(email_cells), 3)
+        self.assertIn("s****@example.test", email_cells)
+        self.assertNotIn("staff@example.test", email_cells)
+        self.assertEqual(html.count('data-email-toggle'), 3)
+        self.assertEqual(html.count('aria-label="Show email"'), 3)
+        self.assertIn('data-email="staff@example.test"', html)
+
+        hr_client = self.app.test_client()
+        self.login(hr_client, "hrstaff", "HrPass123")
+        with hr_client.session_transaction() as session:
+            csrf_token = session["_csrf_token"]
+        response = hr_client.post(
+            f"/users/{self.employee_id}/role",
+            data={"_csrf_token": csrf_token, "role": self.User.ADMIN},
+        )
+        self.assertEqual(response.status_code, 403)
+        with self.app.app_context():
+            self.assertEqual(
+                self.db.session.get(self.User, self.employee_id).role,
+                self.User.EMPLOYEE,
+            )
+
+    def test_travel_manage_hides_action_column_and_keeps_approval_actions(self):
+        from datetime import date
+
+        with self.app.app_context():
+            department = self.Department(department_name="Travel review")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Travel",
+                last_name="Staff",
+                position="Analyst",
+                salary=50000,
+                department=department,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            order = self.TravelOrder(
+                employee_id=employee.id,
+                destination="Manila",
+                purpose="Client meeting",
+                departure_date=date(2026, 11, 5),
+                return_date=date(2026, 11, 6),
+            )
+            self.db.session.add(order)
+            self.db.session.commit()
+            order_id = order.id
+
+        self.login(self.client, "admin", "AdminPass123")
+        response = self.client.get("/travel-orders/manage")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        headers = re.search(r"<thead>.*?</thead>", html, re.DOTALL).group(0)
+        self.assertNotIn("<th>Action</th>", headers)
+        self.assertIn("TO-", html)
+        self.assertIn("Approve", html)
+        self.assertIn("Decline", html)
+
+        form = self.client.get("/travel-orders/manage")
+        response = self.client.post(
+            f"/travel-orders/manage/{order_id}/status",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "status": self.TravelOrder.APPROVED,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            self.assertEqual(
+                self.db.session.get(self.TravelOrder, order_id).status,
+                self.TravelOrder.APPROVED,
+            )
+        self.assertEqual(
+            self.client.post(
+                f"/travel-orders/manage/{order_id}/status",
+                data={
+                    "_csrf_token": self.csrf_token(form),
+                    "status": self.TravelOrder.DECLINED,
+                },
+            ).status_code,
+            409,
+        )
+
+    def test_paid_payroll_is_locked_and_admin_corrections_are_audited(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Payroll correction")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Payroll",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department=department,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            payroll = self.Payroll(
+                employee_id=employee.id,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31),
+                basic_salary=Decimal("4000.00"),
+                allowances=Decimal("100.00"),
+                deductions=Decimal("50.00"),
+                net_pay=Decimal("4050.00"),
+                payment_date=date(2026, 11, 1),
+            )
+            self.db.session.add(payroll)
+            self.db.session.commit()
+            payroll_id = payroll.id
+            payroll_employee_id = employee.id
+
+        self.login(self.client, "hrstaff", "HrPass123")
+        self.assertEqual(self.client.get(f"/payroll/{payroll_id}/edit").status_code, 409)
+        response = self.client.post(
+            f"/payroll/{payroll_id}/edit",
+            data={
+                "_csrf_token": self.csrf_token(self.client.get("/payroll/add")),
+                "employee_id": str(payroll_employee_id),
+                "pay_period_start": "2026-10-01",
+                "pay_period_end": "2026-10-31",
+                "payment_date": "2026-11-01",
+                "basic_salary": "9999.00",
+                "allowances": "100.00",
+                "deductions": "50.00",
+            },
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            self.client.get(f"/payroll/{payroll_id}/correct").status_code,
+            403,
+        )
+        with self.app.app_context():
+            self.assertEqual(
+                self.db.session.get(self.Payroll, payroll_id).net_pay,
+                Decimal("4050.00"),
+            )
+            self.assertEqual(self.RecordAudit.query.count(), 0)
+
+        admin_client = self.app.test_client()
+        self.login(admin_client, "admin", "AdminPass123")
+        form = admin_client.get(f"/payroll/{payroll_id}/correct")
+        self.assertEqual(form.status_code, 200)
+        response = admin_client.post(
+            f"/payroll/{payroll_id}/correct",
+            data={
+                "_csrf_token": self.csrf_token(form),
+                "employee_id": str(payroll_employee_id),
+                "pay_period_start": "2026-10-01",
+                "pay_period_end": "2026-10-31",
+                "payment_date": "2026-11-01",
+                "basic_salary": "4200.00",
+                "allowances": "100.00",
+                "deductions": "50.00",
+                "reason": "Corrected the verified base salary amount.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            payroll = self.db.session.get(self.Payroll, payroll_id)
+            audit = self.RecordAudit.query.filter_by(
+                record_type="payroll",
+                record_id=payroll_id,
+            ).one()
+            self.assertEqual(payroll.net_pay, Decimal("4250.00"))
+            self.assertEqual(audit.actor_username, "admin")
+            self.assertEqual(audit.before_values["net_pay"], "4050.00")
+            self.assertEqual(audit.after_values["net_pay"], "4250.00")
+
+    def test_attendance_corrections_and_deletions_are_authorized_and_audited(self):
+        from datetime import date, time
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Attendance audit")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Attendance",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department=department,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            attendance = self.Attendance(
+                employee_id=employee.id,
+                attendance_date=date(2026, 10, 1),
+                time_in=time(9, 0),
+                time_out=time(17, 0),
+                status="Present",
+            )
+            self.db.session.add(attendance)
+            self.db.session.commit()
+            attendance_id = attendance.id
+            employee_record_id = employee.id
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        with employee_client.session_transaction() as session:
+            employee_csrf_token = session["_csrf_token"]
+        for path in (
+            f"/attendance/{attendance_id}/edit",
+            f"/attendance/{attendance_id}/delete",
+        ):
+            response = employee_client.post(
+                path,
+                data={
+                    "_csrf_token": employee_csrf_token,
+                    "reason": "Unauthorized record change attempt.",
+                    "employee_id": str(employee_record_id),
+                    "attendance_date": "2026-10-02",
+                    "time_in": "09:00",
+                    "time_out": "17:00",
+                    "status": "Late",
+                },
+            )
+            self.assertEqual(response.status_code, 403)
+
+        self.login(self.client, "hrstaff", "HrPass123")
+        form = self.client.get(f"/attendance/{attendance_id}/edit")
+        edit_data = {
+            "_csrf_token": self.csrf_token(form),
+            "employee_id": str(employee_record_id),
+            "attendance_date": "2026-10-02",
+            "time_in": "09:15",
+            "time_out": "17:00",
+            "status": "Late",
+        }
+        response = self.client.post(
+            f"/attendance/{attendance_id}/edit",
+            data=edit_data,
+        )
+        self.assertEqual(response.status_code, 200)
+        with self.app.app_context():
+            self.assertEqual(
+                self.db.session.get(self.Attendance, attendance_id).status,
+                "Present",
+            )
+
+        edit_data["reason"] = "Corrected the recorded late arrival."
+        response = self.client.post(
+            f"/attendance/{attendance_id}/edit",
+            data=edit_data,
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            audit = self.RecordAudit.query.filter_by(
+                record_type="attendance",
+                record_id=attendance_id,
+            ).one()
+            self.assertEqual(audit.actor_username, "hrstaff")
+            self.assertEqual(audit.before_values["status"], "Present")
+            self.assertEqual(audit.after_values["status"], "Late")
+
+        response = self.client.post(
+            f"/attendance/{attendance_id}/delete",
+            data={"_csrf_token": edit_data["_csrf_token"]},
+        )
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post(
+            f"/attendance/{attendance_id}/delete",
+            data={
+                "_csrf_token": edit_data["_csrf_token"],
+                "reason": "Duplicate imported attendance entry.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            self.assertIsNone(self.db.session.get(self.Attendance, attendance_id))
+            deletion = self.RecordAudit.query.filter_by(
+                record_type="attendance",
+                record_id=attendance_id,
+                action="deleted",
+            ).one()
+            self.assertEqual(deletion.before_values["status"], "Late")
 
     def test_external_post_login_redirect_is_ignored(self):
         path = "/login?next=https://example.invalid/"

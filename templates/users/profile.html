@@ -114,7 +114,7 @@
                 <div class="profile-info-item">
                     <span>Department</span>
                     <strong>
-                        {{ employee.department.department_name
+                        {{ employee.department.department_name|upper
                            if employee.department else 'Not assigned' }}
                     </strong>
                 </div>

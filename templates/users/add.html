@@ -68,7 +68,7 @@
                     {% for department in departments %}
                     <option value="{{ department.id }}"
                             {% if request.form.get('department_id', '0')|int == department.id %}selected{% endif %}>
-                        {{ department.department_name }}
+                        {{ department.department_name|upper }}
                     </option>
                     {% endfor %}
                 </select>

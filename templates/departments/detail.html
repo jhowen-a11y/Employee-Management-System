@@ -8,11 +8,11 @@
 <div class="page-heading page-heading-row department-page-heading">
     <div>
         <span class="department-page-label">Department profile</span>
-        <h1>{{ department.department_name }}</h1>
+        <h1>{{ department.department_name|upper }}</h1>
         <p>Department details and team information.</p>
     </div>
     {% if current_user.role != 'employee' %}
-    <a class="button button-primary" href="{{ url_for('department.edit_department', department_id=department.id) }}">
+    <a class="button button-primary" data-record-modal data-modal-size="small" href="{{ url_for('department.edit_department', department_id=department.id) }}">
         <i data-lucide="pencil" aria-hidden="true"></i>
         Edit department
     </a>
@@ -49,7 +49,7 @@
     <ul class="department-employee-list">
         {% for employee in department.employees %}
         <li class="department-employee-row">
-            <a class="department-employee-person" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">
+            <a class="department-employee-person" data-record-modal href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">
                 {{ person_avatar(
                     profile_picture_urls.get(employee.profile_picture),
                     employee.first_name ~ ' ' ~ employee.last_name,
@@ -71,14 +71,14 @@
     {% endif %}
 
     <div class="department-detail-actions">
-        <a class="button button-secondary" href="{{ url_for('department.department_list') }}">
+        <a class="button button-secondary" data-modal-close href="{{ url_for('department.department_list') }}">
             <i data-lucide="arrow-left" aria-hidden="true"></i>
             Back to departments
         </a>
         {% if current_user.role != 'employee' %}
         <form method="post" action="{{ url_for('department.delete_department', department_id=department.id) }}"
               data-confirm-delete data-delete-title="Delete department?"
-              data-delete-message="The {{ department.department_name }} department will be permanently removed.">
+              data-delete-message="The {{ department.department_name|upper }} department will be permanently removed.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="button button-danger" type="submit" {% if department.employees %}disabled title="Move employees out of this department first."{% endif %}>
                 <i data-lucide="trash-2" aria-hidden="true"></i>

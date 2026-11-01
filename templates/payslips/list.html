@@ -37,7 +37,7 @@
                     <td>{{ "%.2f"|format(payroll.net_pay) }}</td>
                     <td><span class="employee-status-badge approved">Paid {{ payroll.payment_date }}</span></td>
                     <td class="payslip-actions">
-                        <a class="button button-secondary button-small" href="{{ url_for('payslip.payslip_detail', payroll_id=payroll.id) }}">View</a>
+                        <a class="button button-secondary button-small" data-record-modal href="{{ url_for('payslip.payslip_detail', payroll_id=payroll.id) }}">View</a>
                         <a class="button button-secondary button-small" href="{{ url_for('payslip.download_payslip', payroll_id=payroll.id) }}">Download PDF</a>
                     </td>
                 </tr>

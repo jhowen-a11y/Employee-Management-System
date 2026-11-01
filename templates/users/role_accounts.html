@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}{{ role_label }} Accounts | MCM EMS{% endblock %}
+{% block header_title %}{{ role_label }} Accounts{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <span class="user-edit-eyebrow">Account access</span>
+    <h1>{{ role_label }} Accounts</h1>
+    <p>{{ users|length }} {{ 'account' if users|length == 1 else 'accounts' }} assigned the {{ role_label }} role.</p>
+</div>
+{% if users %}
+<section class="panel table-panel role-accounts-panel" aria-label="{{ role_label }} accounts">
+    <div class="table-scroll">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>
+                        <div class="user-email-display">
+                            <span class="user-email-value" data-email="{{ user.email }}"
+                                  data-masked-email="{{ masked_emails[user.id] }}">{{ masked_emails[user.id] }}</span>
+                            <button class="user-email-toggle" type="button" data-email-toggle
+                                    aria-label="Show email" aria-expanded="false" title="Show email">
+                                <i data-lucide="eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td>{{ role_label }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<section class="panel role-accounts-empty">
+    <span class="department-directory-empty-icon" aria-hidden="true">
+        <i data-lucide="users-round"></i>
+    </span>
+    <h2>No {{ role_label }} accounts yet</h2>
+    <p>Accounts assigned this role will appear here.</p>
+</section>
+{% endif %}
+{% endblock %}

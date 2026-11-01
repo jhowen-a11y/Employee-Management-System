@@ -11,8 +11,10 @@
         <h1>Payroll details</h1>
         <p>Compensation breakdown and payment information.</p>
     </div>
-    {% if current_user.role != 'employee' %}
-    <a class="button button-primary" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit payroll</a>
+    {% if current_user.role == 'admin' and payroll.payment_date %}
+    <a class="button button-primary" href="{{ url_for('payroll.correct_paid_payroll', payroll_id=payroll.id) }}">Correct paid payroll</a>
+    {% elif current_user.role != 'employee' and not payroll.payment_date %}
+    <a class="button button-primary" data-record-modal data-modal-size="small" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll.id) }}">Edit payroll</a>
     {% endif %}
 </div>
 <section class="panel record-detail-panel">
@@ -50,8 +52,59 @@
         <p>Paid on {{ payroll.payment_date.strftime('%B %d, %Y') }}</p>
         {% endif %}
     </section>
+    {% if payroll_audits %}
+    <section class="record-detail-section" aria-labelledby="payroll-audit-heading">
+        <div class="record-section-heading">
+            <div>
+                <h2 id="payroll-audit-heading">Correction history</h2>
+                <p>Prior values and administrator-recorded corrections.</p>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Changed by / on</th><th>Reason</th><th>Previous values</th><th>Corrected values</th></tr></thead>
+                <tbody>
+                {% for audit in payroll_audits %}
+                <tr>
+                    <td>{{ audit.actor_username }}<small class="table-secondary-text">{{ audit.created_at.strftime('%Y-%m-%d %H:%M') if audit.created_at else '' }}</small></td>
+                    <td>{{ audit.reason }}</td>
+                    <td>
+                        <details>
+                            <summary>View previous values</summary>
+                            <small>
+                                Employee #{{ audit.before_values.employee_id }} ·
+                                {{ audit.before_values.pay_period_start }}–{{ audit.before_values.pay_period_end }}<br>
+                                Basic {{ audit.before_values.basic_salary }} ·
+                                Allowances {{ audit.before_values.allowances }} ·
+                                Deductions {{ audit.before_values.deductions }} ·
+                                Net {{ audit.before_values.net_pay }} ·
+                                Paid {{ audit.before_values.payment_date }}
+                            </small>
+                        </details>
+                    </td>
+                    <td>
+                        <details>
+                            <summary>View corrected values</summary>
+                            <small>
+                                Employee #{{ audit.after_values.employee_id }} ·
+                                {{ audit.after_values.pay_period_start }}–{{ audit.after_values.pay_period_end }}<br>
+                                Basic {{ audit.after_values.basic_salary }} ·
+                                Allowances {{ audit.after_values.allowances }} ·
+                                Deductions {{ audit.after_values.deductions }} ·
+                                Net {{ audit.after_values.net_pay }} ·
+                                Paid {{ audit.after_values.payment_date }}
+                            </small>
+                        </details>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
     <div class="record-detail-actions">
-        <a class="button button-secondary" href="{{ url_for('payroll.payroll_list') }}">
+        <a class="button button-secondary" data-modal-close href="{{ url_for('payroll.payroll_list') }}">
             <i data-lucide="arrow-left" aria-hidden="true"></i>
             Back to payroll
         </a>

@@ -7,47 +7,69 @@
 <div class="page-heading page-heading-row">
     <div>
         <h1>{% if current_user.role == 'employee' %}My Department{% else %}Departments{% endif %}</h1>
-        <p>View department information.</p>
+        <p>Explore organization groups and the teams assigned to them.</p>
     </div>
     {% if current_user.role != 'employee' %}
     <a class="button button-primary" href="{{ url_for('department.add_department') }}">Add department</a>
     {% endif %}
 </div>
-<section class="panel table-panel">
-    <div class="table-scroll">
-        <table class="data-table">
-            <thead><tr><th>Department</th><th>Description</th>{% if current_user.role != 'employee' %}<th>Employees</th>{% endif %}<th>Actions</th></tr></thead>
-            <tbody>
-            {% for department in departments %}
-            <tr>
-                <td>{{ department.department_name }}</td>
-                <td>{{ department.description or '—' }}</td>
-                {% if current_user.role != 'employee' %}<td>{{ department.employees|length }}</td>{% endif %}
-                <td>
-                    <div class="table-actions">
-                        <a class="button button-secondary button-small" href="{{ url_for('department.department_detail', department_id=department.id) }}">View</a>
-                        {% if current_user.role != 'employee' %}
-                        <a class="button button-secondary button-small" href="{{ url_for('department.edit_department', department_id=department.id) }}">Edit</a>
-                        <form method="post" action="{{ url_for('department.delete_department', department_id=department.id) }}"
-                              class="inline-form" data-confirm-delete
-                              data-delete-title="Delete department?"
-                              data-delete-message="The {{ department.department_name }} department will be permanently removed.">
-                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                            <button class="button button-danger button-small" type="submit"
-                                    {% if department.employees %}disabled title="Move employees out of this department first."{% endif %}>
-                                <i data-lucide="trash-2" aria-hidden="true"></i>
-                                Delete
-                            </button>
-                        </form>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="{% if current_user.role == 'employee' %}3{% else %}4{% endif %}" class="empty-state">No departments found.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+{% if current_user.role != 'employee' %}
+<div class="department-directory-summary" aria-label="Department summary">
+    <span><strong>{{ departments|length }}</strong> {{ 'department' if departments|length == 1 else 'departments' }}</span>
+    <span><strong>{{ employee_count }}</strong> {{ 'employee record' if employee_count == 1 else 'employee records' }} assigned</span>
+</div>
+{% endif %}
+{% if departments %}
+<section class="department-directory-grid" aria-label="Department directory">
+    {% for department in departments %}
+    <article class="department-directory-card">
+        <a class="department-directory-link" data-record-modal
+           href="{{ url_for('department.department_detail', department_id=department.id) }}"
+           aria-label="View {{ department.department_name|upper }} department details">
+            <span class="department-directory-icon" aria-hidden="true">
+                <i data-lucide="building-2"></i>
+            </span>
+            <span class="department-directory-copy">
+                <strong>{{ department.department_name|upper }}</strong>
+                <span>{{ department.description or 'No description provided.' }}</span>
+            </span>
+            {% if current_user.role != 'employee' %}
+            <span class="department-directory-count">
+                <strong>{{ department.employees|length }}</strong>
+                <span>{{ 'employee' if department.employees|length == 1 else 'employees' }}</span>
+            </span>
+            {% endif %}
+            <span class="department-directory-open" aria-hidden="true">
+                <i data-lucide="arrow-up-right"></i>
+            </span>
+        </a>
+        {% if current_user.role != 'employee' %}
+        <div class="department-directory-actions">
+            <a class="button button-secondary button-small" data-record-modal
+               data-modal-size="small"
+               href="{{ url_for('department.edit_department', department_id=department.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('department.delete_department', department_id=department.id) }}"
+                  data-confirm-delete data-delete-title="Delete department?"
+                  data-delete-message="The {{ department.department_name|upper }} department will be permanently removed.">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button class="button button-danger button-small" type="submit"
+                        {% if department.employees %}disabled title="Move employees out of this department first."{% endif %}>
+                    <i data-lucide="trash-2" aria-hidden="true"></i>
+                    Delete
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </article>
+    {% endfor %}
 </section>
+{% else %}
+<section class="panel department-directory-empty">
+    <span class="department-directory-empty-icon" aria-hidden="true">
+        <i data-lucide="building-2"></i>
+    </span>
+    <h2>No departments found</h2>
+    <p>{% if current_user.role != 'employee' %}Add a department to organize employee records.{% else %}Your employee record is not assigned to a department yet.{% endif %}</p>
+</section>
+{% endif %}
 {% endblock %}

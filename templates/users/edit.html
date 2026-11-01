@@ -63,6 +63,7 @@
         </section>
 
         <section class="employee-fields user-edit-section" id="employeeFields"
+                 {% if request.form.get('role', selected_role) != 'employee' %}hidden{% endif %}
                  aria-labelledby="employee-profile-heading">
             <div class="user-edit-section-heading">
                 <h2 id="employee-profile-heading">Employee profile</h2>
@@ -91,7 +92,7 @@
                         {% for department in departments %}
                         <option value="{{ department.id }}"
                                 {% if request.form.get('department_id', user.employee.department_id if user.employee else 0)|int == department.id %}selected{% endif %}>
-                            {{ department.department_name }}
+                            {{ department.department_name|upper }}
                         </option>
                         {% endfor %}
                     </select>
@@ -121,6 +122,7 @@
             </div>
             {% if user.employee %}
             <a class="button button-secondary user-edit-record-action"
+               data-record-modal data-modal-size="large"
                href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
                 <i data-lucide="external-link" aria-hidden="true"></i>
                 Edit employee details
@@ -130,26 +132,24 @@
 
         <div class="form-actions user-edit-actions">
             <button class="button button-primary" type="submit">Save account</button>
-            <a class="button button-secondary" href="{{ url_for('users.user_list') }}">Cancel</a>
+            <a class="button button-secondary" data-modal-close href="{{ url_for('users.user_list') }}">Cancel</a>
         </div>
     </form>
 </section>
 <script>
     const roleSelect = document.getElementById("role");
     const employeeFields = document.getElementById("employeeFields");
-    const employeeInputs = employeeFields.querySelectorAll(
-        "input, select"
-    );
-
-    function updateEmployeeFields() {
-        const isEmployee = roleSelect.value === "employee";
-        employeeFields.hidden = !isEmployee;
-        employeeInputs.forEach((input) => {
-            input.required = isEmployee;
-        });
+    if (roleSelect && employeeFields) {
+        const employeeInputs = employeeFields.querySelectorAll("input, select");
+        function updateEmployeeFields() {
+            const isEmployee = roleSelect.value === "employee";
+            employeeFields.hidden = !isEmployee;
+            employeeInputs.forEach((input) => {
+                input.required = isEmployee;
+            });
+        }
+        roleSelect.addEventListener("change", updateEmployeeFields);
+        updateEmployeeFields();
     }
-
-    roleSelect.addEventListener("change", updateEmployeeFields);
-    updateEmployeeFields();
 </script>
 {% endblock %}

@@ -27,9 +27,14 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="form-field form-field-wide">
+            <label for="reason">Correction reason</label>
+            <textarea id="reason" name="reason" minlength="10" maxlength="1000" required>{{ request.form.get('reason', '') }}</textarea>
+            <small>The previous values, new values, your account, and the time of this correction are recorded.</small>
+        </div>
         <div class="form-actions">
             <button class="button button-primary" type="submit">Save changes</button>
-            <a class="button button-secondary" href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">Cancel</a>
+            <a class="button button-secondary" data-record-modal href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">Cancel</a>
         </div>
     </form>
 </section>

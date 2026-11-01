@@ -2,12 +2,15 @@
 from flask import abort, Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from sqlalchemy import String, cast, or_
+from flask_login import current_user
+from sqlalchemy import String, cast, or_, update
 from sqlalchemy.orm import joinedload
 
 from models import db
 from models.payroll import Payroll
 from models.employee import Employee
+from models.record_audit import RecordAudit
+from models.user import User
 from profile_storage import profile_picture_urls
 from routes.employee_access import management_required
 
@@ -47,6 +50,21 @@ def read_date(value):
         return date.fromisoformat(value)
     except (ValueError, TypeError):
         return None
+
+
+def payroll_snapshot(payroll):
+    return {
+        "employee_id": payroll.employee_id,
+        "pay_period_start": payroll.pay_period_start.isoformat(),
+        "pay_period_end": payroll.pay_period_end.isoformat(),
+        "basic_salary": str(payroll.basic_salary),
+        "allowances": str(payroll.allowances),
+        "deductions": str(payroll.deductions),
+        "net_pay": str(payroll.net_pay),
+        "payment_date": (
+            payroll.payment_date.isoformat() if payroll.payment_date else None
+        ),
+    }
 
 
 # View all payroll records
@@ -149,10 +167,15 @@ def payroll_list():
 @management_required
 def payroll_detail(payroll_id):
     payroll = db.get_or_404(Payroll, payroll_id)
+    payroll_audits = RecordAudit.query.filter_by(
+        record_type="payroll",
+        record_id=payroll.id,
+    ).order_by(RecordAudit.created_at.desc(), RecordAudit.id.desc()).all()
 
     return render_template(
         "payroll/detail.html",
-        payroll=payroll
+        payroll=payroll,
+        payroll_audits=payroll_audits,
     )
 
 
@@ -228,6 +251,14 @@ def add_payroll():
 @management_required
 def edit_payroll(payroll_id):
     payroll = db.get_or_404(Payroll, payroll_id)
+    if payroll.payment_date is not None:
+        abort(
+            409,
+            description=(
+                "Paid payroll records are locked. An administrator must use "
+                "the audited correction workflow."
+            ),
+        )
     employees = Employee.query.order_by(Employee.last_name).all()
 
     if request.method == "POST":
@@ -235,15 +266,12 @@ def edit_payroll(payroll_id):
         period_start = read_date(request.form.get("pay_period_start"))
         period_end = read_date(request.form.get("pay_period_end"))
         payment_date_value = request.form.get("payment_date", "").strip()
-
         basic_salary = read_money(request.form.get("basic_salary"))
         allowances = read_money(request.form.get("allowances"), Decimal("0.00"))
         deductions = read_money(request.form.get("deductions"), Decimal("0.00"))
-
         payment_date = (
             read_date(payment_date_value) if payment_date_value else None
         )
-
         employee = db.session.get(Employee, employee_id) if employee_id else None
 
         if employee is None:
@@ -261,28 +289,151 @@ def edit_payroll(payroll_id):
         elif basic_salary + allowances > MAX_PAYROLL_AMOUNT:
             flash("Salary plus allowances exceeds the supported amount.", "error")
         else:
-            payroll.employee_id = employee.id
-            payroll.pay_period_start = period_start
-            payroll.pay_period_end = period_end
-            payroll.basic_salary = basic_salary
-            payroll.allowances = allowances
-            payroll.deductions = deductions
-            payroll.net_pay = basic_salary + allowances - deductions
-            payroll.payment_date = payment_date
-
+            result = db.session.execute(
+                update(Payroll)
+                .where(
+                    Payroll.id == payroll.id,
+                    Payroll.payment_date.is_(None),
+                    Payroll.employee_id == payroll.employee_id,
+                    Payroll.pay_period_start == payroll.pay_period_start,
+                    Payroll.pay_period_end == payroll.pay_period_end,
+                    Payroll.basic_salary == payroll.basic_salary,
+                    Payroll.allowances == payroll.allowances,
+                    Payroll.deductions == payroll.deductions,
+                    Payroll.net_pay == payroll.net_pay,
+                )
+                .values(
+                    employee_id=employee.id,
+                    pay_period_start=period_start,
+                    pay_period_end=period_end,
+                    basic_salary=basic_salary,
+                    allowances=allowances,
+                    deductions=deductions,
+                    net_pay=basic_salary + allowances - deductions,
+                    payment_date=payment_date,
+                )
+            )
+            if result.rowcount != 1:
+                db.session.rollback()
+                abort(
+                    409,
+                    description="This payroll record changed. Reload before editing.",
+                )
             db.session.commit()
-
             flash("Payroll record updated successfully!", "success")
             return redirect(url_for("payroll.payroll_list"))
-
-        return render_template(
-            "payroll/edit.html",
-            payroll=payroll,
-            employees=employees
-        )
 
     return render_template(
         "payroll/edit.html",
         payroll=payroll,
-        employees=employees
+        employees=employees,
+    )
+
+
+@payroll_bp.route("/<int:payroll_id>/correct", methods=["GET", "POST"])
+@management_required
+def correct_paid_payroll(payroll_id):
+    if current_user.role != User.ADMIN:
+        abort(403)
+
+    payroll = db.get_or_404(Payroll, payroll_id)
+    if payroll.payment_date is None:
+        abort(409, description="Only paid payroll records can be corrected here.")
+    employees = Employee.query.order_by(Employee.last_name).all()
+
+    if request.method == "POST":
+        employee_id = request.form.get("employee_id", type=int)
+        period_start = read_date(request.form.get("pay_period_start"))
+        period_end = read_date(request.form.get("pay_period_end"))
+        payment_date = read_date(request.form.get("payment_date", "").strip())
+        basic_salary = read_money(request.form.get("basic_salary"))
+        allowances = read_money(request.form.get("allowances"), Decimal("0.00"))
+        deductions = read_money(request.form.get("deductions"), Decimal("0.00"))
+        reason = request.form.get("reason", "").strip()
+        employee = db.session.get(Employee, employee_id) if employee_id else None
+
+        if employee is None:
+            flash("Please select a valid employee.", "error")
+        elif not period_start or not period_end or not payment_date:
+            flash("Enter valid pay period and payment dates.", "error")
+        elif period_end < period_start:
+            flash("Pay period end cannot be before its start.", "error")
+        elif basic_salary is None or allowances is None or deductions is None:
+            flash("Enter valid payroll amounts with at most two decimals.", "error")
+        elif deductions > basic_salary + allowances:
+            flash("Deductions cannot exceed salary plus allowances.", "error")
+        elif basic_salary + allowances > MAX_PAYROLL_AMOUNT:
+            flash("Salary plus allowances exceeds the supported amount.", "error")
+        elif not 10 <= len(reason) <= 1000:
+            flash("Enter a correction reason between 10 and 1000 characters.", "error")
+        else:
+            before_values = payroll_snapshot(payroll)
+            after_values = {
+                "employee_id": employee.id,
+                "pay_period_start": period_start.isoformat(),
+                "pay_period_end": period_end.isoformat(),
+                "basic_salary": str(basic_salary),
+                "allowances": str(allowances),
+                "deductions": str(deductions),
+                "net_pay": str(basic_salary + allowances - deductions),
+                "payment_date": payment_date.isoformat(),
+            }
+
+            if before_values == after_values:
+                flash("Change at least one payroll value before submitting.", "error")
+            else:
+                result = db.session.execute(
+                    update(Payroll)
+                    .where(
+                        Payroll.id == payroll.id,
+                        Payroll.payment_date == payroll.payment_date,
+                        Payroll.employee_id == payroll.employee_id,
+                        Payroll.pay_period_start == payroll.pay_period_start,
+                        Payroll.pay_period_end == payroll.pay_period_end,
+                        Payroll.basic_salary == payroll.basic_salary,
+                        Payroll.allowances == payroll.allowances,
+                        Payroll.deductions == payroll.deductions,
+                        Payroll.net_pay == payroll.net_pay,
+                    )
+                    .values(
+                        employee_id=employee.id,
+                        pay_period_start=period_start,
+                        pay_period_end=period_end,
+                        basic_salary=basic_salary,
+                        allowances=allowances,
+                        deductions=deductions,
+                        net_pay=basic_salary + allowances - deductions,
+                        payment_date=payment_date,
+                    )
+                )
+                if result.rowcount != 1:
+                    db.session.rollback()
+                    abort(
+                        409,
+                        description=(
+                            "This payroll record changed. Reload before correcting it."
+                        ),
+                    )
+                db.session.add(
+                    RecordAudit(
+                        record_type="payroll",
+                        record_id=payroll.id,
+                        action="corrected",
+                        reason=reason,
+                        before_values=before_values,
+                        after_values=after_values,
+                        actor_id=current_user.id,
+                        actor_username=current_user.username,
+                    )
+                )
+                db.session.commit()
+                flash("Paid payroll correction recorded successfully.", "success")
+                return redirect(
+                    url_for("payroll.payroll_detail", payroll_id=payroll.id)
+                )
+
+    return render_template(
+        "payroll/correct.html",
+        payroll=payroll,
+        employees=employees,
     )

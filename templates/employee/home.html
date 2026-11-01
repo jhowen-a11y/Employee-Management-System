@@ -30,9 +30,10 @@
             <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
             <p>{{ employee.position }}</p>
             <a class="employee-department-chip"
+               data-record-modal
                href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
                 <i data-lucide="building-2" aria-hidden="true"></i>
-                {{ employee.department.department_name }}
+                {{ employee.department.department_name|upper }}
                 <i data-lucide="arrow-up-right" aria-hidden="true"></i>
             </a>
         </div>
@@ -47,6 +48,7 @@
             <strong>EMP-{{ "%04d"|format(employee.id) }}</strong>
         </div>
         <a class="button button-primary"
+           data-record-modal
            href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">
             View my information
             <i data-lucide="arrow-right" aria-hidden="true"></i>
@@ -106,6 +108,7 @@
             {% for record in attendance_records[:5] %}
             <li>
                 <a class="employee-activity-row"
+                   data-record-modal
                    href="{{ url_for('attendance.attendance_detail', attendance_id=record.id) }}">
                     <time class="employee-activity-date"
                           datetime="{{ record.attendance_date.isoformat() }}"
@@ -158,6 +161,7 @@
             {% for leave in leave_requests[:5] %}
             <li>
                 <a class="employee-activity-row"
+                   data-record-modal
                    href="{{ url_for('leave.leave_detail', leave_id=leave.id) }}">
                     <span class="employee-activity-date leave-date">
                         <strong>{{ leave.start_date.strftime('%d') }}</strong>
@@ -204,6 +208,7 @@
             {% for payroll in payroll_records[:5] %}
             <li>
                 <a class="employee-activity-row"
+                   data-record-modal
                    href="{{ url_for('payslip.payslip_detail', payroll_id=payroll.id) }}">
                     <span class="employee-activity-date payroll-date">
                         <i data-lucide="receipt" aria-hidden="true"></i>

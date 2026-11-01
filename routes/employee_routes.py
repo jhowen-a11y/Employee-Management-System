@@ -346,7 +346,7 @@ def link_user_to_employee(user_id):
             db.session.commit()
 
             flash(
-                f"{user.username} was assigned to {department.department_name}.",
+                f"{user.username} was assigned to {department.department_name.upper()}.",
                 "success",
             )
 

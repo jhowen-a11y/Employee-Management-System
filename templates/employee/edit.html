@@ -51,6 +51,7 @@
                         id="profile_picture"
                         name="profile_picture"
                         type="file"
+                        data-profile-picture-input
                         accept=".png,.jpg,.jpeg,.webp"
                         class="profile-picture-input"
                         tabindex="-1"
@@ -106,7 +107,7 @@
                     selected
                     {% endif %}
                 >
-                    {{ department.department_name }}
+                    {{ department.department_name|upper }}
                 </option>
                 {% endfor %}
             </select>
@@ -157,6 +158,7 @@
 
             <a
                 class="button button-secondary"
+                data-record-modal
                 href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}"
             >
                 Cancel

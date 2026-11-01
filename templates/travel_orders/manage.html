@@ -64,7 +64,6 @@
                     <th>Submitted</th>
                     <th>Status</th>
                     <th>Reviewed by / on</th>
-                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,14 +76,8 @@
                     <td>{{ travel_order.departure_date }}</td>
                     <td>{{ travel_order.return_date }}</td>
                     <td>{{ travel_order.created_at.strftime('%Y-%m-%d %H:%M') if travel_order.created_at else '—' }}</td>
-                    <td><span class="employee-status-badge {{ travel_order.status|lower }}">{{ travel_order.status }}</span></td>
                     <td>
-                        {% if travel_order.reviewer %}
-                            {{ travel_order.reviewer.username }}
-                            {% if travel_order.approval_date %}<small class="table-secondary-text">{{ travel_order.approval_date.strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}
-                        {% else %}—{% endif %}
-                    </td>
-                    <td>
+                        <span class="employee-status-badge {{ travel_order.status|lower }}">{{ travel_order.status }}</span>
                         {% if travel_order.status == 'Pending' %}
                         <div class="travel-order-actions">
                             <form method="post" action="{{ url_for('travel_order.update_travel_order_status', travel_order_id=travel_order.id) }}">
@@ -98,11 +91,17 @@
                                 <button class="button button-danger button-small" type="submit">Decline</button>
                             </form>
                         </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if travel_order.reviewer %}
+                            {{ travel_order.reviewer.username }}
+                            {% if travel_order.approval_date %}<small class="table-secondary-text">{{ travel_order.approval_date.strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}
                         {% else %}—{% endif %}
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="10" class="empty-state">No travel orders match your search and filters.</td></tr>
+                <tr><td colspan="9" class="empty-state">No travel orders match your search and filters.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

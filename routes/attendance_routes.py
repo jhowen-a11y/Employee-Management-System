@@ -2,12 +2,13 @@
 from flask import abort, Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date, time
 from flask_login import current_user
-from sqlalchemy import String, cast, or_
+from sqlalchemy import String, cast, delete, or_, update
 from sqlalchemy.orm import joinedload
 
 from models import db
 from models.attendance import Attendance
 from models.employee import Employee
+from models.record_audit import RecordAudit
 from models.user import User
 from profile_storage import profile_picture_urls
 from routes.employee_access import (
@@ -40,6 +41,16 @@ def parse_time(value):
         return time.fromisoformat(value)
     except (ValueError, TypeError):
         return None
+
+
+def attendance_snapshot(record):
+    return {
+        "employee_id": record.employee_id,
+        "attendance_date": record.attendance_date.isoformat(),
+        "time_in": record.time_in.isoformat() if record.time_in else None,
+        "time_out": record.time_out.isoformat() if record.time_out else None,
+        "status": record.status,
+    }
 
 
 # View all attendance records
@@ -139,10 +150,19 @@ def attendance_detail(attendance_id):
             employee_id=employee.id if employee else None
         )
     record = record_query.first_or_404()
+    audits = (
+        RecordAudit.query.filter_by(
+            record_type="attendance",
+            record_id=record.id,
+        ).order_by(RecordAudit.created_at.desc(), RecordAudit.id.desc()).all()
+        if current_user.role in (User.ADMIN, User.HR)
+        else []
+    )
 
     return render_template(
         "attendance/detail.html",
-        record=record
+        record=record,
+        attendance_audits=audits,
     )
 
 
@@ -222,6 +242,7 @@ def edit_attendance(attendance_id):
     employees = Employee.query.order_by(Employee.last_name).all()
 
     if request.method == "POST":
+        reason = request.form.get("reason", "").strip()
         employee_id = request.form.get("employee_id", type=int)
         attendance_date = parse_date(
             request.form.get("attendance_date", "")
@@ -254,17 +275,61 @@ def edit_attendance(attendance_id):
             flash("Please enter a valid time-out.", "error")
         elif time_in and time_out and time_out < time_in:
             flash("Time-out cannot be earlier than time-in.", "error")
+        elif not 10 <= len(reason) <= 1000:
+            flash("Enter a correction reason between 10 and 1000 characters.", "error")
         else:
-            record.employee_id = employee.id
-            record.attendance_date = attendance_date
-            record.time_in = time_in
-            record.time_out = time_out
-            record.status = status
-
-            db.session.commit()
-
-            flash("Attendance updated successfully!", "success")
-            return redirect(url_for("attendance.attendance_list"))
+            before_values = attendance_snapshot(record)
+            after_values = {
+                "employee_id": employee.id,
+                "attendance_date": attendance_date.isoformat(),
+                "time_in": time_in.isoformat() if time_in else None,
+                "time_out": time_out.isoformat() if time_out else None,
+                "status": status,
+            }
+            if before_values == after_values:
+                flash("Change at least one attendance value before submitting.", "error")
+            else:
+                result = db.session.execute(
+                    update(Attendance)
+                    .where(
+                        Attendance.id == record.id,
+                        Attendance.employee_id == record.employee_id,
+                        Attendance.attendance_date == record.attendance_date,
+                        Attendance.time_in == record.time_in,
+                        Attendance.time_out == record.time_out,
+                        Attendance.status == record.status,
+                    )
+                    .values(
+                        employee_id=employee.id,
+                        attendance_date=attendance_date,
+                        time_in=time_in,
+                        time_out=time_out,
+                        status=status,
+                    )
+                )
+                if result.rowcount != 1:
+                    db.session.rollback()
+                    abort(
+                        409,
+                        description=(
+                            "This attendance record changed. Reload before correcting it."
+                        ),
+                    )
+                db.session.add(
+                    RecordAudit(
+                        record_type="attendance",
+                        record_id=record.id,
+                        action="corrected",
+                        reason=reason,
+                        before_values=before_values,
+                        after_values=after_values,
+                        actor_id=current_user.id,
+                        actor_username=current_user.username,
+                    )
+                )
+                db.session.commit()
+                flash("Attendance correction recorded successfully!", "success")
+                return redirect(url_for("attendance.attendance_list"))
 
         return render_template(
             "attendance/edit.html",
@@ -287,8 +352,42 @@ def edit_attendance(attendance_id):
 @management_required
 def delete_attendance(attendance_id):
     record = db.get_or_404(Attendance, attendance_id)
+    reason = request.form.get("reason", "").strip()
+    if not 10 <= len(reason) <= 1000:
+        abort(
+            400,
+            description="A deletion reason between 10 and 1000 characters is required.",
+        )
 
-    db.session.delete(record)
+    before_values = attendance_snapshot(record)
+    result = db.session.execute(
+        delete(Attendance).where(
+            Attendance.id == record.id,
+            Attendance.employee_id == record.employee_id,
+            Attendance.attendance_date == record.attendance_date,
+            Attendance.time_in == record.time_in,
+            Attendance.time_out == record.time_out,
+            Attendance.status == record.status,
+        )
+    )
+    if result.rowcount != 1:
+        db.session.rollback()
+        abort(
+            409,
+            description="This attendance record changed. Reload before deleting it.",
+        )
+    db.session.add(
+        RecordAudit(
+            record_type="attendance",
+            record_id=record.id,
+            action="deleted",
+            reason=reason,
+            before_values=before_values,
+            after_values={"deleted": True},
+            actor_id=current_user.id,
+            actor_username=current_user.username,
+        )
+    )
     db.session.commit()
 
     flash("Attendance deleted successfully!", "success")

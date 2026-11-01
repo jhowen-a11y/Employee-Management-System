@@ -12,7 +12,7 @@
     </div>
     {% if current_user.role in ('admin', 'hr') %}
     <div class="page-heading-actions">
-        <a class="button button-primary" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit
+        <a class="button button-primary" data-record-modal data-modal-size="large" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit
             employee</a>
         {% if current_user.role == 'admin' %}
         <form method="post" action="{{ url_for('employee.delete_employee', employee_id=employee.id) }}"
@@ -43,9 +43,10 @@
             <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
             <p>{{ employee.position }}</p>
             <a class="profile-role"
+                data-record-modal
                 href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
                 <span class="profile-status-dot"></span>
-                {{ employee.department.department_name }}
+                {{ employee.department.department_name|upper }}
             </a>
         </div>
     </div>
@@ -71,8 +72,8 @@
             <div class="profile-info-item">
                 <span>Department</span>
                 <strong>
-                    <a href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
-                        {{ employee.department.department_name }}
+                    <a data-record-modal href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                        {{ employee.department.department_name|upper }}
                     </a>
                 </strong>
             </div>
@@ -104,7 +105,7 @@
 
     <div class="profile-divider"></div>
 
-    <a class="button button-secondary" href="{{ url_for('employee.employee_list') }}">
+    <a class="button button-secondary" data-modal-close href="{{ url_for('employee.employee_list') }}">
         <i data-lucide="arrow-left" aria-hidden="true"></i>
         Back to employees
     </a>

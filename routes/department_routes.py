@@ -1,9 +1,11 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
+from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 from models import db
-from models.department import Department
+from models.department import Department, normalize_department_name
 from models.user import User
 from routes.employee_access import current_employee, management_required
 from profile_storage import profile_picture_urls
@@ -24,13 +26,17 @@ def department_list():
         department_query = department_query.filter_by(
             id=employee.department_id if employee else None
         )
-    departments = department_query.order_by(
+    departments = department_query.options(
+        selectinload(Department.employees)
+    ).order_by(
         Department.department_name.asc()
     ).all()
+    employee_count = sum(len(department.employees) for department in departments)
 
     return render_template(
         "departments/list.html",
-        departments=departments
+        departments=departments,
+        employee_count=employee_count,
     )
 
 
@@ -64,9 +70,9 @@ def department_detail(department_id):
 @management_required
 def add_department():
     if request.method == "POST":
-        department_name = request.form.get(
-            "department_name", ""
-        ).strip()
+        department_name = normalize_department_name(
+            request.form.get("department_name", "")
+        )
 
         description = request.form.get(
             "description", ""
@@ -80,8 +86,8 @@ def add_department():
             return render_template("departments/add.html")
 
         # Prevent duplicate department names
-        existing_department = Department.query.filter_by(
-            department_name=department_name
+        existing_department = Department.query.filter(
+            func.upper(func.trim(Department.department_name)) == department_name
         ).first()
 
         if existing_department:
@@ -109,9 +115,9 @@ def edit_department(department_id):
     department = db.get_or_404(Department, department_id)
 
     if request.method == "POST":
-        department_name = request.form.get(
-            "department_name", ""
-        ).strip()
+        department_name = normalize_department_name(
+            request.form.get("department_name", "")
+        )
 
         description = request.form.get(
             "description", ""
@@ -129,7 +135,7 @@ def edit_department(department_id):
             )
 
         existing_department = Department.query.filter(
-            Department.department_name == department_name,
+            func.upper(func.trim(Department.department_name)) == department_name,
             Department.id != department.id
         ).first()
 

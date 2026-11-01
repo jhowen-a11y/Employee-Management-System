@@ -78,7 +78,15 @@
                             <span>{{ user.username }}</span>
                         </div>
                     </td>
-                    <td>{{ user.email }}</td>
+                    <td>
+                        <div class="user-email-display">
+                            <span class="user-email-value" data-email="{{ user.email }}" data-masked-email="{{ masked_emails[user.id] }}">{{ masked_emails[user.id] }}</span>
+                            <button class="user-email-toggle" type="button" data-email-toggle
+                                    aria-label="Show email" aria-expanded="false" title="Show email">
+                                <i data-lucide="eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </td>
                     <td>
                         {% if user.id == current_user.id %}
                             <span class="role-label">{{ user.role|capitalize }} (you)</span>
@@ -102,11 +110,13 @@
                     <td>
                         <div class="table-actions">
                             <a class="button button-secondary button-small"
+                               data-record-modal data-modal-size="large"
                                href="{{ url_for('users.edit_user', user_id=user.id) }}">
                                 Edit account
                             </a>
                             {% if user.employee %}
                             <a class="button button-secondary button-small"
+                               data-record-modal data-modal-size="large"
                                href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">
                                 Edit employee details
                             </a>

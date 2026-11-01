@@ -2,12 +2,14 @@
 from flask import abort, Blueprint, render_template, request, redirect, url_for, flash
 from datetime import date
 from flask_login import current_user
-from sqlalchemy import String, cast, or_
+from sqlalchemy import String, cast, or_, update
 from sqlalchemy.orm import joinedload
 
 from models import db
 from models.employee import Employee
 from models.leave import Leave
+from models.record_audit import RecordAudit
+from models.record_audit import RecordAudit
 from models.user import User
 from profile_storage import profile_picture_urls
 from routes.employee_access import (
@@ -207,10 +209,19 @@ def leave_detail(leave_id):
             employee_id=employee.id if employee else None
         )
     leave = leave_query.first_or_404()
+    leave_audits = (
+        RecordAudit.query.filter_by(
+            record_type="leave",
+            record_id=leave.id,
+        ).order_by(RecordAudit.created_at.desc(), RecordAudit.id.desc()).all()
+        if current_user.role != User.EMPLOYEE
+        else []
+    )
 
     return render_template(
         "leave/detail.html",
-        leave=leave
+        leave=leave,
+        leave_audits=leave_audits,
     )
 
 
@@ -221,14 +232,35 @@ def update_leave_status(leave_id):
     leave = db.get_or_404(Leave, leave_id)
 
     new_status = request.form.get("status", "").strip()
+    if new_status not in {"Approved", "Rejected"}:
+        abort(400, description="Select Approved or Rejected.")
+    if leave.status != "Pending":
+        abort(409, description="Only pending leave requests can be reviewed.")
 
-    allowed_statuses = {"Pending", "Approved", "Rejected"}
-
-    if new_status not in allowed_statuses:
-        flash("Invalid leave status.", "error")
-        return redirect(url_for("leave.leave_detail", leave_id=leave.id))
-
-    leave.status = new_status
+    before_values = {"employee_id": leave.employee_id, "status": leave.status}
+    result = db.session.execute(
+        update(Leave)
+        .where(Leave.id == leave.id, Leave.status == "Pending")
+        .values(status=new_status)
+    )
+    if result.rowcount != 1:
+        db.session.rollback()
+        abort(409, description="Only pending leave requests can be reviewed.")
+    db.session.add(
+        RecordAudit(
+            record_type="leave",
+            record_id=leave.id,
+            action="reviewed",
+            reason=f"Status changed from Pending to {new_status}.",
+            before_values=before_values,
+            after_values={
+                "employee_id": leave.employee_id,
+                "status": new_status,
+            },
+            actor_id=current_user.id,
+            actor_username=current_user.username,
+        )
+    )
     db.session.commit()
 
     flash("Leave status updated successfully!", "success")

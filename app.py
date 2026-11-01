@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import math
 import os
 import secrets
 import time
@@ -243,6 +244,71 @@ def create_app(test_config=None):
                 .label("user_count"),
             )
         ).one()
+        role_counts = dict(
+            db.session.execute(
+                select(User.role, func.count(User.id))
+                .group_by(User.role)
+            ).all()
+        )
+        role_distribution = []
+        chart_offset = 0.0
+        chart_circumference = 2 * math.pi * 40
+        role_labels = {
+            User.EMPLOYEE: "Employee",
+            User.HR: "HR",
+            User.ADMIN: "Admin",
+        }
+
+        def point_on_circle(radius, angle):
+            angle_radians = math.radians(angle)
+            return (
+                50 + radius * math.cos(angle_radians),
+                50 + radius * math.sin(angle_radians),
+            )
+
+        for role in (User.EMPLOYEE, User.HR, User.ADMIN):
+            role_count = role_counts.get(role, 0)
+            percentage = (
+                role_count * 100 / counts.user_count
+                if counts.user_count
+                else 0
+            )
+            arc_length = (
+                chart_circumference * role_count / counts.user_count
+                if counts.user_count
+                else 0
+            )
+            start_angle = -90 + chart_offset / chart_circumference * 360
+            end_angle = start_angle + percentage * 3.6
+
+            segment_path = ""
+            if role_count == counts.user_count and counts.user_count:
+                segment_path = (
+                    "M 50 10 A 40 40 0 1 1 50 90 A 40 40 0 1 1 50 10 "
+                    "L 50 23 A 27 27 0 1 0 50 77 A 27 27 0 1 0 50 23 Z"
+                )
+            elif role_count:
+                outer_start = point_on_circle(40, start_angle)
+                outer_end = point_on_circle(40, end_angle)
+                inner_end = point_on_circle(27, end_angle)
+                inner_start = point_on_circle(27, start_angle)
+                large_arc = 1 if percentage > 50 else 0
+                segment_path = (
+                    f"M {outer_start[0]:.3f} {outer_start[1]:.3f} "
+                    f"A 40 40 0 {large_arc} 1 {outer_end[0]:.3f} {outer_end[1]:.3f} "
+                    f"L {inner_end[0]:.3f} {inner_end[1]:.3f} "
+                    f"A 27 27 0 {large_arc} 0 {inner_start[0]:.3f} {inner_start[1]:.3f} Z"
+                )
+            role_distribution.append(
+                {
+                    "role": role,
+                    "label": role_labels[role],
+                    "count": role_count,
+                    "percentage": percentage,
+                    "path": segment_path,
+                }
+            )
+            chart_offset += arc_length
         return render_template(
             "admin/home.html",
             employee_count=counts.employee_count,
@@ -251,6 +317,7 @@ def create_app(test_config=None):
             pending_leave_count=counts.pending_leave_count,
             payroll_count=counts.payroll_count,
             user_count=counts.user_count,
+            role_distribution=role_distribution,
         )
 
     @app.cli.command("create-admin")

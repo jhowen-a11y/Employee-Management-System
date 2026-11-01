@@ -36,8 +36,33 @@
         </dl>
     </section>
 
+    {% if leave_audits %}
+    <section class="record-detail-section" aria-labelledby="leave-audit-heading">
+        <div class="record-section-heading">
+            <div>
+                <h2 id="leave-audit-heading">Review history</h2>
+                <p>Request decisions are recorded with the reviewer and time.</p>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Reviewed by / on</th><th>Previous status</th><th>New status</th></tr></thead>
+                <tbody>
+                {% for audit in leave_audits %}
+                <tr>
+                    <td>{{ audit.actor_username }}<small class="table-secondary-text">{{ audit.created_at.strftime('%Y-%m-%d %H:%M') if audit.created_at else '' }}</small></td>
+                    <td>{{ audit.before_values.status }}</td>
+                    <td>{{ audit.after_values.status }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
     <div class="record-detail-actions">
-        <a class="button button-secondary" href="{{ url_for('leave.leave_list') }}">
+        <a class="button button-secondary" data-modal-close href="{{ url_for('leave.leave_list') }}">
             <i data-lucide="arrow-left" aria-hidden="true"></i>
             Back to leave requests
         </a>

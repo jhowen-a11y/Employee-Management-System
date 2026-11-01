@@ -1,8 +1,12 @@
 from . import db
 from sqlalchemy import String, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 from datetime import datetime
+
+
+def normalize_department_name(name: str) -> str:
+    return name.strip().upper()
 
 
 class Department(db.Model):
@@ -19,6 +23,10 @@ class Department(db.Model):
     employees: Mapped[list["Employee"]] = relationship(
         back_populates="department"
     )
+
+    @validates("department_name")
+    def normalize_name(self, _key: str, name: str) -> str:
+        return normalize_department_name(name)
 
     def __repr__(self):
         return f"<Department {self.department_name}>"

@@ -40,7 +40,7 @@
                         {% if payslip_request.reviewer %}{{ payslip_request.reviewer.username }}{% if payslip_request.reviewed_at %}<small class="table-secondary-text">{{ payslip_request.reviewed_at.strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}{% else %}—{% endif %}
                         {% if payslip_request.hr_remarks %}<small class="table-secondary-text">{{ payslip_request.hr_remarks }}</small>{% endif %}
                     </td>
-                    <td><a class="button button-secondary button-small" href="{{ url_for('payslip.review_payslip_request', request_id=payslip_request.id) }}">Review</a></td>
+                    <td><a class="button button-secondary button-small" data-record-modal data-modal-size="large" href="{{ url_for('payslip.review_payslip_request', request_id=payslip_request.id) }}">Review</a></td>
                 </tr>
                 {% else %}
                 <tr><td colspan="8" class="empty-state">No payslip requests match this filter.</td></tr>

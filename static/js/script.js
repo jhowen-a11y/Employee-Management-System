@@ -5,6 +5,102 @@
         window.lucide.createIcons();
     }
 
+    document.addEventListener("input", function (event) {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement) || !input.hasAttribute("data-uppercase")) {
+            return;
+        }
+
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = input.value.toUpperCase();
+        if (start !== null && end !== null) {
+            input.setSelectionRange(start, end);
+        }
+    });
+
+    function roleChartControl(target) {
+        return target instanceof Element
+            ? target.closest(".admin-role-chart [data-role]")
+            : null;
+    }
+
+    function setRoleChartHighlight(chart, role) {
+        if (role) {
+            chart.dataset.activeRole = role;
+        } else {
+            delete chart.dataset.activeRole;
+        }
+    }
+
+    document.addEventListener("pointerover", function (event) {
+        const control = roleChartControl(event.target);
+        if (!control) return;
+        setRoleChartHighlight(control.closest(".admin-role-chart"), control.dataset.role);
+    });
+
+    document.addEventListener("pointerout", function (event) {
+        const control = roleChartControl(event.target);
+        if (!control) return;
+        const chart = control.closest(".admin-role-chart");
+        const nextControl = roleChartControl(event.relatedTarget);
+        if (nextControl && nextControl.closest(".admin-role-chart") === chart) {
+            setRoleChartHighlight(chart, nextControl.dataset.role);
+            return;
+        }
+        const focusedControl = roleChartControl(document.activeElement);
+        setRoleChartHighlight(
+            chart,
+            focusedControl && focusedControl.closest(".admin-role-chart") === chart
+                ? focusedControl.dataset.role
+                : null
+        );
+    });
+
+    document.addEventListener("focusin", function (event) {
+        const control = roleChartControl(event.target);
+        if (!control) return;
+        setRoleChartHighlight(control.closest(".admin-role-chart"), control.dataset.role);
+    });
+
+    document.addEventListener("focusout", function (event) {
+        const control = roleChartControl(event.target);
+        if (!control) return;
+        const chart = control.closest(".admin-role-chart");
+        const nextControl = roleChartControl(event.relatedTarget);
+        if (nextControl && nextControl.closest(".admin-role-chart") === chart) {
+            setRoleChartHighlight(chart, nextControl.dataset.role);
+            return;
+        }
+        const hoveredControl = roleChartControl(
+            chart.querySelector(":hover")
+        );
+        setRoleChartHighlight(
+            chart,
+            hoveredControl ? hoveredControl.dataset.role : null
+        );
+    });
+
+    document.addEventListener("click", function (event) {
+        const toggle = event.target instanceof Element
+            ? event.target.closest("[data-email-toggle]")
+            : null;
+        if (!toggle) return;
+
+        const email = toggle.closest(".user-email-display")
+            ?.querySelector("[data-email]");
+        if (!email) return;
+
+        const isVisible = toggle.getAttribute("aria-expanded") !== "true";
+        email.textContent = isVisible ? email.dataset.email : email.dataset.maskedEmail;
+        toggle.setAttribute("aria-expanded", String(isVisible));
+        toggle.setAttribute("aria-label", isVisible ? "Hide email" : "Show email");
+        toggle.title = isVisible ? "Hide email" : "Show email";
+        toggle.innerHTML = '<i data-lucide="' +
+            (isVisible ? "eye-off" : "eye") + '" aria-hidden="true"></i>';
+        if (window.lucide) window.lucide.createIcons();
+    });
+
     function parseRangeDate(value) {
         const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
         if (!match) {
@@ -367,6 +463,7 @@
     const confirmDelete = document.getElementById("confirmDelete");
     let pendingDeleteForm = null;
     let confirmedDeleteForm = null;
+    let confirmedModalDeleteForm = null;
 
     document.addEventListener("click", function (event) {
         const printButton = event.target instanceof Element
@@ -384,8 +481,35 @@
                 return;
             }
 
+            if (
+                form.hasAttribute("data-delete-reason") &&
+                form.dataset.deleteReasonReady !== "true"
+            ) {
+                event.preventDefault();
+                const reason = window.prompt(
+                    "Enter a reason for deleting this attendance record (10–1000 characters):"
+                );
+                if (reason === null) return;
+                const trimmedReason = reason.trim();
+                if (trimmedReason.length < 10 || trimmedReason.length > 1000) {
+                    window.alert("Enter a reason between 10 and 1000 characters.");
+                    return;
+                }
+                const reasonField = form.querySelector('input[name="reason"]');
+                if (!reasonField) {
+                    throw new Error("The attendance deletion form is missing its reason field.");
+                }
+                reasonField.value = trimmedReason;
+                form.dataset.deleteReasonReady = "true";
+                form.requestSubmit();
+                return;
+            }
+
             if (confirmedDeleteForm === form) {
                 confirmedDeleteForm = null;
+                confirmedModalDeleteForm = form.closest("#recordModal")
+                    ? form
+                    : null;
                 return;
             }
 
@@ -405,11 +529,21 @@
         });
 
         cancelDelete.addEventListener("click", function () {
+            if (pendingDeleteForm) {
+                pendingDeleteForm.dataset.deleteReasonReady = "false";
+                const reasonField = pendingDeleteForm.querySelector('input[name="reason"]');
+                if (reasonField) reasonField.value = "";
+            }
             pendingDeleteForm = null;
             deleteDialog.close();
         });
 
         deleteDialog.addEventListener("cancel", function () {
+            if (pendingDeleteForm) {
+                pendingDeleteForm.dataset.deleteReasonReady = "false";
+                const reasonField = pendingDeleteForm.querySelector('input[name="reason"]');
+                if (reasonField) reasonField.value = "";
+            }
             pendingDeleteForm = null;
         });
 
@@ -424,6 +558,425 @@
             form.requestSubmit();
         });
     }
+
+    (function enableRecordModal() {
+        const modal = document.getElementById("recordModal");
+        const modalTitle = document.getElementById("recordModalTitle");
+        const modalContent = document.getElementById("recordModalContent");
+        const closeButton = document.getElementById("closeRecordModal");
+        const main = document.querySelector("main.content");
+        const mainArea = document.querySelector(".main-area");
+        if (!modal || !modalTitle || !modalContent || !closeButton || !main) {
+            return;
+        }
+
+        let returnFocus = null;
+        let modalUrl = null;
+        let modalRequest = null;
+        let closeTimer = null;
+        let priorBodyOverflow = "";
+        let isSubmitting = false;
+
+        function showMessage(title, message, retryUrl) {
+            const state = document.createElement("div");
+            state.className = "record-modal-message";
+            state.setAttribute("role", retryUrl ? "alert" : "status");
+            const heading = document.createElement("strong");
+            heading.textContent = title;
+            const description = document.createElement("p");
+            description.textContent = message;
+            state.append(heading, description);
+            if (retryUrl) {
+                const retry = document.createElement("button");
+                retry.className = "button button-primary";
+                retry.type = "button";
+                retry.dataset.modalRetry = retryUrl;
+                retry.textContent = "Try again";
+                state.append(retry);
+            }
+            modalContent.replaceChildren(state);
+            modalContent.setAttribute("aria-busy", "false");
+        }
+
+        function showPage(page, fallbackTitle, sourceUrl) {
+            const pageMain = page.querySelector("main.content");
+            if (!pageMain) {
+                throw new Error("The requested record page did not contain its content.");
+            }
+            if (sourceUrl) {
+                pageMain.querySelectorAll("form:not([action])").forEach(function (form) {
+                    form.setAttribute("action", sourceUrl);
+                });
+            }
+            const heading = pageMain.querySelector("h1");
+            modalTitle.textContent = heading && heading.textContent.trim()
+                ? heading.textContent.trim()
+                : fallbackTitle;
+            modalContent.replaceChildren(
+                ...Array.from(pageMain.childNodes, function (node) {
+                    return node.cloneNode(true);
+                })
+            );
+            modalContent.setAttribute("aria-busy", "false");
+            updateModalRoleFields();
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function updateModalRoleFields() {
+            const roleSelect = modalContent.querySelector("#role");
+            const employeeFields = modalContent.querySelector("#employeeFields");
+            if (!roleSelect || !employeeFields) return;
+
+            const isEmployee = roleSelect.value === "employee";
+            employeeFields.hidden = !isEmployee;
+            employeeFields.querySelectorAll("input, select").forEach(function (input) {
+                input.required = isEmployee;
+            });
+        }
+
+        function hasUnsavedChanges() {
+            return modal.dataset.dirty === "true";
+        }
+
+        function confirmDiscardChanges() {
+            if (!hasUnsavedChanges()) return true;
+            const shouldDiscard = window.confirm(
+                "You have unsaved changes. Discard them and close this window?"
+            );
+            if (shouldDiscard) modal.dataset.dirty = "false";
+            return shouldDiscard;
+        }
+
+        async function loadRecord(url) {
+            modalUrl = url.href;
+            modal.dataset.dirty = "false";
+            if (modalRequest) modalRequest.abort();
+            const controller = new AbortController();
+            modalRequest = controller;
+            modalTitle.textContent = "Loading record";
+            modalContent.setAttribute("aria-busy", "true");
+            showMessage("Loading record details", "Please wait…", null);
+            modalContent.setAttribute("aria-busy", "true");
+
+            try {
+                const response = await window.fetch(url.href, {
+                    method: "GET",
+                    credentials: "same-origin",
+                    cache: "no-store",
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                    signal: controller.signal
+                });
+                const destination = new URL(response.url || url.href);
+                if (destination.pathname === "/login") {
+                    window.location.assign(destination.href);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error("The record could not be loaded (HTTP " + response.status + ").");
+                }
+                const page = new DOMParser().parseFromString(
+                    await response.text(),
+                    "text/html"
+                );
+                showPage(page, "Record details", url.href);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                console.error("Record details could not be loaded:", error);
+                showMessage(
+                    "Unable to load this record",
+                    "Check your connection and try again.",
+                    url.href
+                );
+            } finally {
+                if (modalRequest === controller) modalRequest = null;
+            }
+        }
+
+        function closeModal(immediate) {
+            if (!modal.open) return;
+            if (!confirmDiscardChanges()) return;
+            window.clearTimeout(closeTimer);
+            modal.classList.add("is-closing");
+            const reducedMotion = window.matchMedia &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            if (immediate || reducedMotion) {
+                modal.close();
+                return;
+            }
+            closeTimer = window.setTimeout(function () {
+                if (modal.open) modal.close();
+            }, 190);
+        }
+
+        function openModal(trigger, url, size) {
+            if (modal.open && !confirmDiscardChanges()) return;
+            window.clearTimeout(closeTimer);
+            modal.classList.remove("is-closing");
+            modal.dataset.modalSize = size || "standard";
+            if (!modal.open) {
+                returnFocus = trigger;
+                priorBodyOverflow = document.body.style.overflow;
+                document.body.style.overflow = "hidden";
+                if (typeof modal.showModal !== "function") {
+                    window.location.assign(url.href);
+                    return;
+                }
+                modal.showModal();
+                closeButton.focus();
+            }
+            loadRecord(url);
+        }
+
+        modal.addEventListener("close", function () {
+            window.clearTimeout(closeTimer);
+            modal.classList.remove("is-closing");
+            document.body.style.overflow = priorBodyOverflow;
+            if (modalRequest) {
+                modalRequest.abort();
+                modalRequest = null;
+            }
+            modalUrl = null;
+            if (returnFocus && returnFocus.isConnected) {
+                returnFocus.focus();
+            } else {
+                const fallbackFocus = main.querySelector("h1");
+                if (fallbackFocus) {
+                    fallbackFocus.tabIndex = -1;
+                    fallbackFocus.focus();
+                }
+            }
+            returnFocus = null;
+        });
+
+        modal.addEventListener("cancel", function (event) {
+            event.preventDefault();
+            closeModal(false);
+        });
+
+        modal.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeModal(false);
+            }
+        });
+
+        closeButton.addEventListener("click", function () {
+            closeModal(false);
+        });
+
+        modal.addEventListener("click", function (event) {
+            if (event.target === modal) closeModal(false);
+        });
+
+        modalContent.addEventListener("input", function (event) {
+            if (event.target instanceof HTMLElement &&
+                event.target.closest("form")) {
+                modal.dataset.dirty = "true";
+            }
+        });
+
+        modalContent.addEventListener("change", function (event) {
+            if (!(event.target instanceof HTMLElement)) return;
+            if (event.target.matches("#role")) updateModalRoleFields();
+            if (event.target.closest("form")) modal.dataset.dirty = "true";
+
+            if (event.target.matches("[data-profile-picture-input]")) {
+                const picker = modalContent.querySelector("[data-profile-picture-name]");
+                if (picker) {
+                    picker.textContent = event.target.files.length
+                        ? event.target.files[0].name
+                        : "No new photo selected";
+                }
+            }
+        });
+
+        modalContent.addEventListener("click", function (event) {
+            const target = event.target instanceof Element ? event.target : null;
+            if (!target) return;
+            const passwordToggle = target.closest("[data-password-toggle]");
+            if (passwordToggle) {
+                const password = modalContent.querySelector(
+                    "#" + CSS.escape(passwordToggle.getAttribute("aria-controls"))
+                );
+                if (!password) return;
+                const isVisible = password.type === "text";
+                password.type = isVisible ? "password" : "text";
+                passwordToggle.innerHTML =
+                    '<i data-lucide="' + (isVisible ? "eye-off" : "eye") + '" aria-hidden="true"></i>';
+                passwordToggle.setAttribute(
+                    "aria-label",
+                    isVisible ? "Show password" : "Hide password"
+                );
+                passwordToggle.setAttribute("aria-pressed", String(!isVisible));
+                if (window.lucide) window.lucide.createIcons();
+                return;
+            }
+
+            const photoPicker = target.closest("[data-profile-picture-picker]");
+            if (photoPicker) {
+                const input = modalContent.querySelector(
+                    "#" + CSS.escape(photoPicker.dataset.profilePicturePicker)
+                );
+                if (input) input.click();
+            }
+        });
+
+        modal.addEventListener("keydown", function (event) {
+            if (event.key !== "Tab") return;
+            const focusable = Array.from(modal.querySelectorAll(
+                'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter(function (element) {
+                return !element.hidden && element.getClientRects().length > 0;
+            });
+            if (!focusable.length) {
+                event.preventDefault();
+                closeButton.focus();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        });
+
+        document.addEventListener("click", function (event) {
+            if (event.defaultPrevented || event.button !== 0 ||
+                event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            const target = event.target instanceof Element ? event.target : null;
+            if (!target) return;
+
+            const retry = target.closest("[data-modal-retry]");
+            if (retry) {
+                event.preventDefault();
+                if (!confirmDiscardChanges()) return;
+                loadRecord(new URL(retry.dataset.modalRetry, window.location.href));
+                return;
+            }
+
+            const link = target.closest("a");
+            if (!link || link.hasAttribute("target") || link.hasAttribute("download")) return;
+            if (link.hasAttribute("data-record-modal")) {
+                const url = new URL(
+                    link.getAttribute("href") || link.href,
+                    window.location.href
+                );
+                if (url.origin === window.location.origin) {
+                    event.preventDefault();
+                    openModal(link, url, link.dataset.modalSize);
+                }
+                return;
+            }
+            if (modal.open && modal.contains(link) && link.hasAttribute("data-modal-close")) {
+                event.preventDefault();
+                closeModal(false);
+                return;
+            }
+            if (modal.open && modal.contains(link)) {
+                if (!confirmDiscardChanges()) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    return;
+                }
+                closeModal(false);
+            }
+        });
+
+        async function refreshCurrentPage() {
+            const currentScrollTop = mainArea ? mainArea.scrollTop : 0;
+            const currentScrollY = window.scrollY;
+            const response = await window.fetch(window.location.href, {
+                method: "GET",
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            });
+            if (!response.ok) {
+                throw new Error("The current list could not be refreshed (HTTP " + response.status + ").");
+            }
+            const page = new DOMParser().parseFromString(await response.text(), "text/html");
+            const pageMain = page.querySelector("main.content");
+            if (!pageMain) throw new Error("The refreshed page did not contain its content.");
+            main.innerHTML = pageMain.innerHTML;
+            main.setAttribute("aria-busy", "false");
+            if (mainArea) mainArea.scrollTop = currentScrollTop;
+            window.scrollTo(window.scrollX, currentScrollY);
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        document.addEventListener("submit", async function (event) {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || !modal.contains(form)) return;
+            if (
+                form.hasAttribute("data-confirm-delete") &&
+                confirmedModalDeleteForm !== form
+            ) {
+                return;
+            }
+            if (confirmedModalDeleteForm === form) {
+                confirmedModalDeleteForm = null;
+            }
+            event.preventDefault();
+            if (isSubmitting) return;
+            isSubmitting = true;
+            modalContent.setAttribute("aria-busy", "true");
+
+            const formData = new FormData(form);
+            const submitter = event.submitter;
+            if (submitter instanceof HTMLButtonElement && submitter.name) {
+                formData.append(submitter.name, submitter.value);
+            }
+
+            try {
+                const response = await window.fetch(form.action || modalUrl, {
+                    method: (form.method || "POST").toUpperCase(),
+                    credentials: "same-origin",
+                    headers: { "X-Requested-With": "XMLHttpRequest" },
+                    body: formData
+                });
+                const resultUrl = new URL(response.url || modalUrl, window.location.href);
+                if (resultUrl.pathname === "/login") {
+                    window.location.assign(resultUrl.href);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error("The action could not be completed (HTTP " + response.status + ").");
+                }
+                const resultPage = new DOMParser().parseFromString(
+                    await response.text(),
+                    "text/html"
+                );
+                const resultFlashes = resultPage.querySelector(
+                    "main.content .flash-messages"
+                );
+                await refreshCurrentPage();
+                if (modalUrl && resultUrl.pathname === new URL(modalUrl).pathname) {
+                    showPage(resultPage, "Record details", modalUrl);
+                } else {
+                    if (resultFlashes && main) {
+                        main.prepend(resultFlashes.cloneNode(true));
+                    }
+                    modal.dataset.dirty = "false";
+                    closeModal(false);
+                }
+            } catch (error) {
+                console.error("Record action could not be completed:", error);
+                showMessage(
+                    "Unable to complete this action",
+                    "Please try again. If the problem continues, reload the page.",
+                    modalUrl
+                );
+            } finally {
+                isSubmitting = false;
+            }
+        });
+    })();
 
     document.querySelectorAll("[data-password-toggle]").forEach(function (toggle) {
         const password = document.getElementById(toggle.getAttribute("aria-controls"));
@@ -726,14 +1279,17 @@
                 : null;
             if (
                 !link ||
-                link.target ||
+                link.hasAttribute("target") ||
                 link.hasAttribute("download") ||
                 link.relList.contains("external")
             ) {
                 return;
             }
 
-            const url = new URL(link.href, window.location.href);
+            const url = new URL(
+                link.getAttribute("href") || link.href,
+                window.location.href
+            );
             if (
                 url.origin !== window.location.origin ||
                 url.href === window.location.href ||

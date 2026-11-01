@@ -27,7 +27,7 @@
             <select id="employee-department" name="department">
                 <option value="">All departments</option>
                 {% for department in departments %}
-                <option value="{{ department.id }}" {% if selected_department == department.id|string %}selected{% endif %}>{{ department.department_name }}</option>
+                <option value="{{ department.id }}" {% if selected_department == department.id|string %}selected{% endif %}>{{ department.department_name|upper }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -81,9 +81,10 @@
                 <h2>{{ employee.first_name }} {{ employee.last_name }}</h2>
                 <p>{{ employee.position }}</p>
                 <a class="my-information-department"
+                   data-record-modal
                    href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
                     <i data-lucide="building-2" aria-hidden="true"></i>
-                    {{ employee.department.department_name }}
+                    {{ employee.department.department_name|upper }}
                 </a>
             </div>
         </div>
@@ -111,8 +112,8 @@
             <div class="profile-info-item">
                 <span>Department</span>
                 <strong>
-                    <a href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
-                        {{ employee.department.department_name }}
+                    <a data-record-modal href="{{ url_for('department.department_detail', department_id=employee.department_id) }}">
+                        {{ employee.department.department_name|upper }}
                     </a>
                 </strong>
             </div>
@@ -183,18 +184,18 @@
                     {% endif %}
                 </td>
                 <td>{{ user.employee.position if user.employee else '—' }}</td>
-                <td>{{ user.employee.department.department_name if user.employee else '—' }}</td>
+                <td>{{ user.employee.department.department_name|upper if user.employee and user.employee.department else '—' }}</td>
                 <td>
                     <div class="table-actions">
                         {% if current_user.role == 'admin' %}
-                        <a class="button button-secondary button-small" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
+                        <a class="button button-secondary button-small" data-record-modal data-modal-size="large" href="{{ url_for('users.edit_user', user_id=user.id) }}">Edit account</a>
                         {% endif %}
                         {% if user.employee %}
                         {% if current_user.role == 'admin' or user.role == 'employee' %}
-                        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
+                        <a class="button button-secondary button-small" data-record-modal href="{{ url_for('employee.employee_detail', employee_id=user.employee.id) }}">View</a>
                         {% endif %}
                         {% if current_user.role == 'admin' or (current_user.role == 'hr' and user.role == 'employee') %}
-                        <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">Edit</a>
+                        <a class="button button-secondary button-small" data-record-modal data-modal-size="large" href="{{ url_for('employee.edit_employee', employee_id=user.employee.id) }}">Edit</a>
                         {% endif %}
                         {% if current_user.role == 'admin' %}
                         <form method="post" action="{{ url_for('employee.delete_employee', employee_id=user.employee.id) }}"
@@ -238,13 +239,13 @@
                     </div>
                 </td>
                 <td>{{ employee.position }}</td>
-                <td>{{ employee.department.department_name }}</td>
+                <td>{{ employee.department.department_name|upper }}</td>
                 <td>{{ employee.user.email }}</td>
                 <td>
                     <div class="table-actions">
-                        <a class="button button-secondary button-small" href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">View</a>
+                        <a class="button button-secondary button-small" data-record-modal href="{{ url_for('employee.employee_detail', employee_id=employee.id) }}">View</a>
                         {% if current_user.role in ('admin', 'hr') %}
-                        <a class="button button-secondary button-small" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit</a>
+                        <a class="button button-secondary button-small" data-record-modal data-modal-size="large" href="{{ url_for('employee.edit_employee', employee_id=employee.id) }}">Edit</a>
                         {% endif %}
                         {% if current_user.role == 'admin' %}
                         <form method="post" action="{{ url_for('employee.delete_employee', employee_id=employee.id) }}"
