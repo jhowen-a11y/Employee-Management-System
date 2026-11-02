@@ -470,54 +470,201 @@ body {
     gap: 8px;
 }
 
-.delete-dialog {
-    width: min(100% - 32px, 460px);
+.action-confirmation-dialog {
+    position: fixed;
+    inset: 0;
+    width: min(calc(100vw - 32px), 480px);
+    max-width: none;
+    max-height: min(620px, calc(100dvh - 32px));
     margin: auto;
-    padding: 30px;
+    padding: 28px;
+    overflow-y: auto;
     border: 1px solid #e7e9f0;
     border-radius: 18px;
     color: #252833;
+    background: #ffffff;
     box-shadow: 0 24px 80px rgb(20 24 39 / 24%);
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        overlay 0.18s allow-discrete,
+        display 0.18s allow-discrete;
 }
 
-.delete-dialog::backdrop {
+.action-confirmation-dialog[open] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.action-confirmation-dialog::backdrop {
+    background: rgb(20 24 39 / 0%);
+    backdrop-filter: blur(0);
+    transition: background-color 0.18s ease, backdrop-filter 0.18s ease;
+}
+
+.action-confirmation-dialog[open]::backdrop {
     background: rgb(20 24 39 / 56%);
-    backdrop-filter: blur(3px);
+    backdrop-filter: blur(4px);
 }
 
-.delete-dialog-icon {
+@starting-style {
+    .action-confirmation-dialog[open] {
+        opacity: 0;
+        transform: translateY(8px) scale(0.99);
+    }
+
+    .action-confirmation-dialog[open]::backdrop {
+        background: rgb(20 24 39 / 0%);
+        backdrop-filter: blur(0);
+    }
+}
+
+.confirmation-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    color: #626879;
+    background: #f5f6fa;
+    border: 1px solid #e9eaf0;
+    border-radius: 9px;
+    cursor: pointer;
+}
+
+.confirmation-close:hover {
+    color: #30364a;
+    background: #e9eaf0;
+}
+
+.confirmation-close:focus-visible,
+.action-confirmation-dialog .button:focus-visible,
+.confirmation-reason textarea:focus-visible {
+    outline: 3px solid rgb(91 108 235 / 35%);
+    outline-offset: 2px;
+}
+
+.confirmation-icon {
     display: grid;
     width: 48px;
     height: 48px;
     margin-bottom: 18px;
     place-items: center;
     border-radius: 14px;
+    background: #eef0ff;
+    color: #5267df;
+}
+
+.action-confirmation-dialog[data-variant="danger"] .confirmation-icon {
     background: #fff0f0;
     color: #bd3038;
 }
 
-.delete-dialog-icon svg {
+.confirmation-icon svg {
     width: 23px;
     height: 23px;
 }
 
-.delete-dialog h2 {
+.action-confirmation-dialog h2 {
     margin-bottom: 8px;
     font-size: 19px;
 }
 
-.delete-dialog p {
+.action-confirmation-dialog > p {
     color: #697083;
     font-size: 14px;
     line-height: 1.6;
 }
 
-.delete-dialog-actions {
+.confirmation-context {
+    margin-top: 10px;
+    padding: 10px 12px;
+    color: #4a5060 !important;
+    background: #f7f8fb;
+    border: 1px solid #e9ebf2;
+    border-radius: 9px;
+    overflow-wrap: anywhere;
+}
+
+.confirmation-reason {
+    display: grid;
+    gap: 7px;
+    margin-top: 18px;
+}
+
+.confirmation-reason[hidden],
+.confirmation-context[hidden],
+.confirmation-error[hidden] {
+    display: none;
+}
+
+.confirmation-reason label {
+    color: #424757;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.confirmation-reason textarea {
+    width: 100%;
+    min-height: 88px;
+    padding: 10px 12px;
+    color: #252833;
+    background: #fff;
+    border: 1px solid #dfe2eb;
+    border-radius: 9px;
+    resize: vertical;
+}
+
+.confirmation-reason small {
+    color: #777d8c;
+    font-size: 12px;
+}
+
+.action-confirmation-dialog .confirmation-error {
+    margin-top: 12px;
+    color: #a52c35;
+    font-size: 13px;
+}
+
+.confirmation-actions {
     display: flex;
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 26px;
+}
+
+.confirmation-spinner {
+    animation: confirmation-spin 0.8s linear infinite;
+}
+
+@keyframes confirmation-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 480px) {
+    .action-confirmation-dialog {
+        width: calc(100vw - 24px);
+        max-height: calc(100dvh - 24px);
+        padding: 24px 20px;
+        border-radius: 15px;
+    }
+
+    .confirmation-actions {
+        align-items: stretch;
+        flex-direction: column-reverse;
+    }
+
+    .confirmation-actions .button {
+        width: 100%;
+        min-height: 44px;
+    }
 }
 
 .role-form {
@@ -2594,6 +2741,7 @@ a.profile-role:hover {
     .hr-stat-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
 }
 
 @media (max-width: 560px) {
@@ -2623,6 +2771,7 @@ a.profile-role:hover {
     .hr-stat-card {
         min-height: 128px;
     }
+
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2635,6 +2784,7 @@ a.profile-role:hover {
     .hr-task-card:hover {
         transform: none;
     }
+
 }
 
 .admin-overview-feature-grid {
@@ -5273,41 +5423,6 @@ body {
     font-size: 15px;
 }
 
-.delete-dialog {
-    opacity: 0;
-    transform: translateY(8px);
-    transition:
-        opacity 0.18s ease,
-        transform 0.18s ease,
-        overlay 0.18s allow-discrete,
-        display 0.18s allow-discrete;
-}
-
-.delete-dialog[open] {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.delete-dialog::backdrop {
-    background-color: rgb(20 24 39 / 0%);
-    transition: background-color 0.18s ease;
-}
-
-.delete-dialog[open]::backdrop {
-    background-color: rgb(20 24 39 / 56%);
-}
-
-@starting-style {
-    .delete-dialog[open] {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-
-    .delete-dialog[open]::backdrop {
-        background-color: rgb(20 24 39 / 0%);
-    }
-}
-
 @media (max-width: 800px) {
     .sidebar {
         position: fixed;
@@ -5375,9 +5490,13 @@ body {
     .data-table tbody tr,
     .sidebar-account-profile,
     .sidebar-signout,
-    .delete-dialog,
-    .delete-dialog::backdrop {
+    .action-confirmation-dialog,
+    .action-confirmation-dialog::backdrop {
         transition: none;
+    }
+
+    .confirmation-spinner {
+        animation: none;
     }
 
     .nav-links a:hover,

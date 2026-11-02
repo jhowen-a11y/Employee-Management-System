@@ -11,7 +11,9 @@
         <h1>{% if current_user.role == 'employee' %}My Leave Requests{% else %}Leave Requests{% endif %}</h1>
         <p>Review submitted leave requests and their status.</p>
     </div>
-    <a class="button button-primary" href="{{ url_for('leave.add_leave') }}">{% if current_user.role == 'employee' %}Submit request{% else %}Add leave request{% endif %}</a>
+    {% if current_user.role == 'employee' %}
+    <a class="button button-primary" href="{{ url_for('leave.add_leave') }}">Submit request</a>
+    {% endif %}
 </div>
 <form class="table-filters" method="get" data-search-form>
     <div class="table-search-group">

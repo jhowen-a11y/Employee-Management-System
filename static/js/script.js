@@ -456,14 +456,103 @@
         }
     });
 
-    const deleteDialog = document.getElementById("deleteDialog");
-    const deleteTitle = document.getElementById("deleteDialogTitle");
-    const deleteMessage = document.getElementById("deleteDialogMessage");
-    const cancelDelete = document.getElementById("cancelDelete");
-    const confirmDelete = document.getElementById("confirmDelete");
-    let pendingDeleteForm = null;
+    const confirmationDialog = document.getElementById("actionConfirmationDialog");
+    const confirmationTitle = document.getElementById("actionConfirmationTitle");
+    const confirmationMessage = document.getElementById("actionConfirmationMessage");
+    const confirmationContext = document.getElementById("actionConfirmationContext");
+    const confirmationIcon = document.getElementById("actionConfirmationIcon");
+    const confirmationReason = document.getElementById("actionConfirmationReason");
+    const confirmationReasonInput = document.getElementById("actionConfirmationReasonInput");
+    const confirmationError = document.getElementById("actionConfirmationError");
+    const cancelConfirmation = document.getElementById("cancelActionConfirmation");
+    const closeConfirmation = document.getElementById("closeActionConfirmation");
+    const confirmAction = document.getElementById("confirmActionConfirmation");
+    let pendingAction = null;
+    let confirmationBusy = false;
     let confirmedDeleteForm = null;
     let confirmedModalDeleteForm = null;
+    let confirmedReviewForm = null;
+    let resolveModalAction = null;
+
+    function setConfirmationButton(icon, label) {
+        confirmAction.innerHTML =
+            '<i data-lucide="' + icon + '" aria-hidden="true"></i><span></span>';
+        confirmAction.querySelector("span").textContent = label;
+        if (window.lucide) window.lucide.createIcons();
+    }
+
+    function clearConfirmationReason(form) {
+        if (!form) return;
+        form.dataset.deleteReasonReady = "false";
+        const reasonField = form.querySelector('input[name="reason"]');
+        if (reasonField) reasonField.value = "";
+    }
+
+    function closeActionConfirmation() {
+        if (confirmationBusy) return;
+        if (pendingAction?.form?.hasAttribute("data-delete-reason")) {
+            clearConfirmationReason(pendingAction.form);
+        }
+        pendingAction = null;
+        confirmationError.hidden = true;
+        confirmationError.textContent = "";
+        confirmationReasonInput.value = "";
+        confirmationReason.hidden = true;
+        if (confirmationDialog.open) confirmationDialog.close();
+    }
+
+    function showActionConfirmation(options, action) {
+        if (!confirmationDialog || !confirmationTitle || !confirmationMessage ||
+            !confirmAction || !cancelConfirmation) {
+            throw new Error("The shared action confirmation dialog is unavailable.");
+        }
+        if (confirmationBusy) return;
+
+        action.options = options;
+        pendingAction = action;
+        confirmationBusy = false;
+        confirmAction.disabled = false;
+        cancelConfirmation.disabled = false;
+        closeConfirmation.disabled = false;
+        confirmAction.removeAttribute("aria-busy");
+        confirmationTitle.textContent = options.title;
+        confirmationMessage.textContent = options.message;
+        confirmationContext.textContent = options.context || "";
+        confirmationContext.hidden = !options.context;
+        confirmationDialog.setAttribute(
+            "aria-describedby",
+            options.context
+                ? "actionConfirmationMessage actionConfirmationContext"
+                : "actionConfirmationMessage"
+        );
+        confirmationDialog.dataset.variant = options.variant || "primary";
+        confirmationIcon.innerHTML = '<i data-lucide="' +
+            (options.icon || "triangle-alert") + '" aria-hidden="true"></i>';
+        confirmAction.className = "button " +
+            (options.variant === "danger" ? "button-danger" : "button-primary");
+        setConfirmationButton(options.icon || "check", options.confirmText || "Confirm");
+        cancelConfirmation.textContent = options.cancelText || "Cancel";
+        confirmationReason.hidden = !action.requiresReason;
+        confirmationReasonInput.value = "";
+        confirmationError.hidden = true;
+        confirmationError.textContent = "";
+        if (window.lucide) window.lucide.createIcons();
+        if (!confirmationDialog.open) {
+            if (typeof confirmationDialog.showModal === "function") {
+                confirmationDialog.showModal();
+            } else {
+                confirmationDialog.setAttribute("open", "");
+            }
+        }
+        cancelConfirmation.focus();
+    }
+
+    function finishModalAction(result) {
+        if (!resolveModalAction) return;
+        const resolve = resolveModalAction;
+        resolveModalAction = null;
+        resolve(result);
+    }
 
     document.addEventListener("click", function (event) {
         const printButton = event.target instanceof Element
@@ -474,34 +563,10 @@
         }
     });
 
-    if (deleteDialog && deleteTitle && deleteMessage && cancelDelete && confirmDelete) {
+    if (confirmationDialog && confirmAction && confirmationReasonInput) {
         document.addEventListener("submit", function (event) {
             const form = event.target;
             if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-confirm-delete")) {
-                return;
-            }
-
-            if (
-                form.hasAttribute("data-delete-reason") &&
-                form.dataset.deleteReasonReady !== "true"
-            ) {
-                event.preventDefault();
-                const reason = window.prompt(
-                    "Enter a reason for deleting this attendance record (10–1000 characters):"
-                );
-                if (reason === null) return;
-                const trimmedReason = reason.trim();
-                if (trimmedReason.length < 10 || trimmedReason.length > 1000) {
-                    window.alert("Enter a reason between 10 and 1000 characters.");
-                    return;
-                }
-                const reasonField = form.querySelector('input[name="reason"]');
-                if (!reasonField) {
-                    throw new Error("The attendance deletion form is missing its reason field.");
-                }
-                reasonField.value = trimmedReason;
-                form.dataset.deleteReasonReady = "true";
-                form.requestSubmit();
                 return;
             }
 
@@ -514,48 +579,123 @@
             }
 
             event.preventDefault();
-            pendingDeleteForm = form;
-            deleteTitle.textContent = form.dataset.deleteTitle || "Delete this record?";
-            deleteMessage.textContent = form.dataset.deleteMessage || "This action cannot be undone.";
+            showActionConfirmation({
+                title: form.dataset.deleteTitle || "Delete this record?",
+                message: form.dataset.deleteMessage || "This action cannot be undone.",
+                confirmText: "Delete permanently",
+                cancelText: "Cancel",
+                variant: "danger",
+                icon: "trash-2"
+            }, {
+                form: form,
+                requiresReason: form.hasAttribute("data-delete-reason"),
+                onConfirm: function () {
+                    if (form.hasAttribute("data-delete-reason")) {
+                        const reason = confirmationReasonInput.value.trim();
+                        if (reason.length < 10 || reason.length > 1000) {
+                            confirmationError.textContent =
+                                "Enter a reason between 10 and 1000 characters.";
+                            confirmationError.hidden = false;
+                            confirmationReasonInput.focus();
+                            return { success: false, validation: true };
+                        }
+                        const reasonField = form.querySelector('input[name="reason"]');
+                        if (!reasonField) {
+                            throw new Error("The attendance deletion form is missing its reason field.");
+                        }
+                        reasonField.value = reason;
+                        form.dataset.deleteReasonReady = "true";
+                    }
 
-            if (typeof deleteDialog.showModal === "function") {
-                deleteDialog.showModal();
-                cancelDelete.focus();
-            } else if (window.confirm(deleteTitle.textContent + "\n\n" + deleteMessage.textContent)) {
-                pendingDeleteForm = null;
-                confirmedDeleteForm = form;
-                form.requestSubmit();
-            }
+                    confirmedDeleteForm = form;
+                    if (form.closest("#recordModal")) {
+                        return new Promise(function (resolve) {
+                            resolveModalAction = resolve;
+                            form.requestSubmit();
+                        });
+                    }
+                    form.requestSubmit();
+                    return { success: true };
+                }
+            });
         });
 
-        cancelDelete.addEventListener("click", function () {
-            if (pendingDeleteForm) {
-                pendingDeleteForm.dataset.deleteReasonReady = "false";
-                const reasonField = pendingDeleteForm.querySelector('input[name="reason"]');
-                if (reasonField) reasonField.value = "";
-            }
-            pendingDeleteForm = null;
-            deleteDialog.close();
-        });
+        cancelConfirmation.addEventListener("click", closeActionConfirmation);
+        closeConfirmation.addEventListener("click", closeActionConfirmation);
 
-        deleteDialog.addEventListener("cancel", function () {
-            if (pendingDeleteForm) {
-                pendingDeleteForm.dataset.deleteReasonReady = "false";
-                const reasonField = pendingDeleteForm.querySelector('input[name="reason"]');
-                if (reasonField) reasonField.value = "";
-            }
-            pendingDeleteForm = null;
-        });
-
-        confirmDelete.addEventListener("click", function () {
-            if (!pendingDeleteForm) {
+        confirmationDialog.addEventListener("cancel", function (event) {
+            if (confirmationBusy) {
+                event.preventDefault();
                 return;
             }
-            const form = pendingDeleteForm;
-            pendingDeleteForm = null;
-            confirmedDeleteForm = form;
-            deleteDialog.close();
-            form.requestSubmit();
+            if (pendingAction?.form?.hasAttribute("data-delete-reason")) {
+                clearConfirmationReason(pendingAction.form);
+            }
+            pendingAction = null;
+            confirmationError.hidden = true;
+        });
+
+        confirmationDialog.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !confirmationBusy) {
+                event.preventDefault();
+                closeActionConfirmation();
+            }
+        });
+
+        confirmAction.addEventListener("click", async function () {
+            if (!pendingAction || confirmationBusy) return;
+            const action = pendingAction;
+            confirmationBusy = true;
+            confirmAction.disabled = true;
+            confirmAction.setAttribute("aria-busy", "true");
+            cancelConfirmation.disabled = true;
+            closeConfirmation.disabled = true;
+            setConfirmationButton("loader-circle", "Processing...");
+            const spinner = confirmAction.querySelector("svg, i");
+            if (spinner) spinner.classList.add("confirmation-spinner");
+
+            let result;
+            try {
+                result = await action.onConfirm();
+            } catch (error) {
+                console.error("Confirmed action could not be completed:", error);
+                result = {
+                    success: false,
+                    message: "The action could not be completed. Please try again."
+                };
+            }
+
+            if (result?.success) {
+                if (action.form?.hasAttribute("data-delete-reason")) {
+                    action.form.dataset.deleteReasonReady = "false";
+                }
+                pendingAction = null;
+                confirmationBusy = false;
+                confirmAction.disabled = false;
+                confirmAction.removeAttribute("aria-busy");
+                cancelConfirmation.disabled = false;
+                closeConfirmation.disabled = false;
+                confirmationDialog.close();
+                return;
+            }
+
+            confirmationBusy = false;
+            confirmAction.disabled = false;
+            confirmAction.removeAttribute("aria-busy");
+            cancelConfirmation.disabled = false;
+            closeConfirmation.disabled = false;
+            confirmAction.className = "button " +
+                (action.options.variant === "danger" ? "button-danger" : "button-primary");
+            setConfirmationButton(
+                action.options.icon || "check",
+                action.options.confirmText || "Confirm"
+            );
+            if (result?.validation) {
+                return;
+            }
+            confirmationError.textContent = result?.message ||
+                "The action could not be completed. Please try again.";
+            confirmationError.hidden = false;
         });
     }
 
@@ -638,13 +778,21 @@
             return modal.dataset.dirty === "true";
         }
 
-        function confirmDiscardChanges() {
-            if (!hasUnsavedChanges()) return true;
-            const shouldDiscard = window.confirm(
-                "You have unsaved changes. Discard them and close this window?"
-            );
-            if (shouldDiscard) modal.dataset.dirty = "false";
-            return shouldDiscard;
+        function confirmDiscardChanges(onDiscard) {
+            showActionConfirmation({
+                title: "Discard unsaved changes?",
+                message: "You have unsaved changes. Discard them and close this window?",
+                confirmText: "Discard changes",
+                cancelText: "Continue editing",
+                variant: "danger",
+                icon: "triangle-alert"
+            }, {
+                onConfirm: function () {
+                    modal.dataset.dirty = "false";
+                    onDiscard();
+                    return { success: true };
+                }
+            });
         }
 
         async function loadRecord(url) {
@@ -653,6 +801,14 @@
             if (modalRequest) modalRequest.abort();
             const controller = new AbortController();
             modalRequest = controller;
+            let timedOut = false;
+            const timeoutId = window.setTimeout(function () {
+                timedOut = true;
+                controller.abort();
+            }, 15000);
+            let errorTitle = "Unable to load this record";
+            let errorMessage = "The service could not load this record. Please try again.";
+            let retryUrl = url.href;
             modalTitle.textContent = "Loading record";
             modalContent.setAttribute("aria-busy", "true");
             showMessage("Loading record details", "Please wait…", null);
@@ -672,6 +828,21 @@
                     return;
                 }
                 if (!response.ok) {
+                    if (response.status === 403) {
+                        errorTitle = "Access denied";
+                        errorMessage = "You do not have permission to view this record.";
+                        retryUrl = null;
+                    } else if (response.status === 404) {
+                        errorTitle = "Record not found";
+                        errorMessage = "This record may have been removed or is unavailable.";
+                        retryUrl = null;
+                    } else if (response.status >= 500) {
+                        errorTitle = "Service temporarily unavailable";
+                        errorMessage = "Please check your connection and try again.";
+                    } else {
+                        errorMessage = "The request could not be completed. Please try again.";
+                        retryUrl = null;
+                    }
                     throw new Error("The record could not be loaded (HTTP " + response.status + ").");
                 }
                 const page = new DOMParser().parseFromString(
@@ -680,21 +851,27 @@
                 );
                 showPage(page, "Record details", url.href);
             } catch (error) {
-                if (controller.signal.aborted) return;
+                if (controller.signal.aborted && !timedOut) return;
+                if (timedOut) {
+                    errorTitle = "Request timed out";
+                    errorMessage = "The record is taking too long to load. Please try again.";
+                }
                 console.error("Record details could not be loaded:", error);
-                showMessage(
-                    "Unable to load this record",
-                    "Check your connection and try again.",
-                    url.href
-                );
+                showMessage(errorTitle, errorMessage, retryUrl);
             } finally {
+                window.clearTimeout(timeoutId);
                 if (modalRequest === controller) modalRequest = null;
             }
         }
 
         function closeModal(immediate) {
             if (!modal.open) return;
-            if (!confirmDiscardChanges()) return;
+            if (hasUnsavedChanges()) {
+                confirmDiscardChanges(function () {
+                    closeModal(immediate);
+                });
+                return;
+            }
             window.clearTimeout(closeTimer);
             modal.classList.add("is-closing");
             const reducedMotion = window.matchMedia &&
@@ -709,7 +886,12 @@
         }
 
         function openModal(trigger, url, size) {
-            if (modal.open && !confirmDiscardChanges()) return;
+            if (modal.open && hasUnsavedChanges()) {
+                confirmDiscardChanges(function () {
+                    openModal(trigger, url, size);
+                });
+                return;
+            }
             window.clearTimeout(closeTimer);
             modal.classList.remove("is-closing");
             modal.dataset.modalSize = size || "standard";
@@ -855,8 +1037,14 @@
             const retry = target.closest("[data-modal-retry]");
             if (retry) {
                 event.preventDefault();
-                if (!confirmDiscardChanges()) return;
-                loadRecord(new URL(retry.dataset.modalRetry, window.location.href));
+                const retryUrl = new URL(retry.dataset.modalRetry, window.location.href);
+                if (hasUnsavedChanges()) {
+                    confirmDiscardChanges(function () {
+                        loadRecord(retryUrl);
+                    });
+                    return;
+                }
+                loadRecord(retryUrl);
                 return;
             }
 
@@ -879,9 +1067,13 @@
                 return;
             }
             if (modal.open && modal.contains(link)) {
-                if (!confirmDiscardChanges()) {
+                if (hasUnsavedChanges()) {
                     event.preventDefault();
                     event.stopImmediatePropagation();
+                    confirmDiscardChanges(function () {
+                        closeModal(false);
+                        window.location.assign(link.href);
+                    });
                     return;
                 }
                 closeModal(false);
@@ -919,6 +1111,57 @@
             ) {
                 return;
             }
+            const submitter = event.submitter instanceof HTMLButtonElement
+                ? event.submitter
+                : null;
+            const reviewDecision = submitter?.dataset.reviewDecision;
+            if (
+                form.hasAttribute("data-leave-review") &&
+                reviewDecision &&
+                confirmedReviewForm !== form
+            ) {
+                event.preventDefault();
+                const decision = reviewDecision.toLowerCase();
+                const employeeName = modalContent.querySelector(
+                    ".record-person-copy h2"
+                )?.textContent.trim();
+                const leaveType = Array.from(
+                    modalContent.querySelectorAll(".record-detail-field")
+                ).find(function (field) {
+                    return field.querySelector("dt")?.textContent.trim() === "Leave type";
+                })?.querySelector("dd")?.textContent.trim();
+                showActionConfirmation({
+                    title: decision === "decline"
+                        ? "Decline leave request?"
+                        : "Approve leave request?",
+                    message: decision === "decline"
+                        ? "Are you sure you want to decline this leave request?"
+                        : "Are you sure you want to approve this leave request?",
+                    context: [employeeName, leaveType].filter(Boolean).join(" · "),
+                    confirmText: decision === "decline"
+                        ? "Confirm decline"
+                        : "Confirm approval",
+                    cancelText: "Cancel",
+                    variant: decision === "decline" ? "danger" : "primary",
+                    icon: decision === "decline" ? "x" : "check"
+                }, {
+                    form: form,
+                    submitter: submitter,
+                    onConfirm: function () {
+                        return new Promise(function (resolve) {
+                            resolveModalAction = resolve;
+                            confirmedReviewForm = form;
+                            if (submitter) {
+                                form.requestSubmit(submitter);
+                            } else {
+                                form.requestSubmit();
+                            }
+                        });
+                    }
+                });
+                return;
+            }
+            if (confirmedReviewForm === form) confirmedReviewForm = null;
             if (confirmedModalDeleteForm === form) {
                 confirmedModalDeleteForm = null;
             }
@@ -926,12 +1169,16 @@
             if (isSubmitting) return;
             isSubmitting = true;
             modalContent.setAttribute("aria-busy", "true");
-
             const formData = new FormData(form);
-            const submitter = event.submitter;
             if (submitter instanceof HTMLButtonElement && submitter.name) {
                 formData.append(submitter.name, submitter.value);
             }
+            const submitButtons = Array.from(form.querySelectorAll(
+                'button[type="submit"], button:not([type])'
+            ));
+            submitButtons.forEach(function (button) {
+                button.disabled = true;
+            });
 
             try {
                 const response = await window.fetch(form.action || modalUrl, {
@@ -965,14 +1212,38 @@
                     modal.dataset.dirty = "false";
                     closeModal(false);
                 }
+                finishModalAction({ success: true });
             } catch (error) {
                 console.error("Record action could not be completed:", error);
-                showMessage(
-                    "Unable to complete this action",
-                    "Please try again. If the problem continues, reload the page.",
-                    modalUrl
-                );
+                const statusMatch = /HTTP (\d+)/.exec(error.message);
+                const status = statusMatch ? Number(statusMatch[1]) : null;
+                let message = "Please try again. If the problem continues, reload the page.";
+                if (status === 403) {
+                    message = "You do not have permission to review this request.";
+                } else if (status === 404) {
+                    message = "This leave request is no longer available.";
+                } else if (status === 409) {
+                    message = "This request has already been reviewed. Reload its details to see the latest status.";
+                } else if (status >= 500) {
+                    message = "The service could not save this decision. Please try again.";
+                }
+                if (
+                    form.hasAttribute("data-leave-review") ||
+                    form.hasAttribute("data-confirm-delete")
+                ) {
+                    finishModalAction({ success: false, message: message });
+                } else {
+                    showMessage(
+                        "Unable to complete this action",
+                        message,
+                        modalUrl
+                    );
+                }
             } finally {
+                submitButtons.forEach(function (button) {
+                    button.disabled = false;
+                });
+                modalContent.setAttribute("aria-busy", "false");
                 isSubmitting = false;
             }
         });

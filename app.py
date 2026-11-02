@@ -9,12 +9,15 @@ from pathlib import Path
 
 import click
 from sqlalchemy import event, func, select
+from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import HTTPException
 from sqlalchemy.orm import joinedload
 from flask import (
     Flask,
     abort,
     g,
     has_request_context,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -23,6 +26,7 @@ from flask import (
 )
 from dotenv import load_dotenv
 from flask_login import LoginManager, current_user
+from markupsafe import escape
 from werkzeug.security import generate_password_hash
 
 from models import db, migrate
@@ -58,7 +62,7 @@ def create_app(test_config=None):
 
     app.config.update(
         SECRET_KEY=secret_key,
-        DEBUG=os.getenv("FLASK_DEBUG", "0").strip() == "1",
+        DEBUG=False,
         SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL"),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SEND_FILE_MAX_AGE_DEFAULT=0,
@@ -112,6 +116,129 @@ def create_app(test_config=None):
 
     db.init_app(app)
     migrate.init_app(app, db)
+
+    def render_safe_error(code, title, message):
+        accepts_json = (
+            request.accept_mimetypes["application/json"]
+            > request.accept_mimetypes["text/html"]
+        )
+        is_api_endpoint = (
+            request.path.startswith("/api/")
+            or request.path.endswith("/api")
+        )
+        if accepts_json or is_api_endpoint:
+            return jsonify({"error": message}), code
+        page = f"""\
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{code} — {escape(title)}</title>
+  <style>
+    :root {{ color-scheme: light; }}
+    body {{
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f3f6fb;
+      color: #1f2937;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .card {{
+      width: min(90vw, 560px);
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+      padding: 2rem 2rem 1.5rem;
+      text-align: center;
+    }}
+    h1 {{ margin: 0 0 0.75rem; font-size: clamp(2rem, 3vw, 2.5rem); }}
+    p {{ margin: 0 0 1rem; color: #4b5563; }}
+    .actions {{ display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }}
+    .button {{
+      display: inline-block;
+      background: #5a64f4;
+      color: #fff;
+      text-decoration: none;
+      border: none;
+      border-radius: 10px;
+      padding: 0.8rem 1.3rem;
+      cursor: pointer;
+      font-weight: 600;
+    }}
+    .button.secondary {{
+      background: #e5e7eb;
+      color: #111827;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>{escape(title)}</h1>
+    <p>{escape(message)}</p>
+    <div class="actions">
+      <button class="button" type="button" onclick="window.location.reload()">Retry</button>
+      <a class="button secondary" href="{escape(url_for('index'))}">Return home</a>
+    </div>
+  </div>
+</body>
+</html>
+"""
+        return page, code
+
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(error):
+        code = error.code or 500
+        title_map = {
+            400: "Bad request",
+            401: "Please sign in",
+            403: "Access denied",
+            404: "Page not found",
+            405: "Method not allowed",
+            429: "Too many requests",
+            500: "Service unavailable",
+        }
+        title = title_map.get(code, "Request unavailable")
+        message = error.description or "Please try again later."
+        if code == 500:
+            message = "The service is temporarily unavailable. Please try again."
+        return render_safe_error(code, title, message)
+
+    @app.errorhandler(SQLAlchemyError)
+    def handle_database_error(error):
+        original_error = getattr(error, "orig", None)
+        app.logger.error(
+            "Database request failed: endpoint=%s path=%s error_type=%s "
+            "driver_error_type=%s",
+            request.endpoint,
+            request.path,
+            type(error).__name__,
+            type(original_error).__name__ if original_error else "unknown",
+        )
+        return render_safe_error(
+            503,
+            "Service unavailable",
+            "The database is temporarily unavailable. Please try again.",
+        )
+
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error):
+        if isinstance(error, HTTPException):
+            return handle_http_exception(error)
+        app.logger.error(
+            "Unhandled request failure: endpoint=%s path=%s error_type=%s",
+            request.endpoint,
+            request.path,
+            type(error).__name__,
+        )
+        return render_safe_error(
+            500,
+            "Service unavailable",
+            "The service is temporarily unavailable. Please try again.",
+        )
 
     @app.before_request
     def start_request_timing():

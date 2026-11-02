@@ -251,21 +251,33 @@
     <div class="record-modal-content" id="recordModalContent" aria-live="polite"></div>
 </dialog>
 
-<dialog class="delete-dialog" id="deleteDialog"
-        aria-labelledby="deleteDialogTitle"
-        aria-describedby="deleteDialogMessage">
-    <div class="delete-dialog-icon" aria-hidden="true">
+<dialog class="action-confirmation-dialog" id="actionConfirmationDialog"
+        aria-labelledby="actionConfirmationTitle"
+        aria-describedby="actionConfirmationMessage">
+    <button class="confirmation-close" id="closeActionConfirmation" type="button"
+            aria-label="Close confirmation">
+        <i data-lucide="x" aria-hidden="true"></i>
+    </button>
+    <div class="confirmation-icon" id="actionConfirmationIcon" aria-hidden="true">
         <i data-lucide="triangle-alert"></i>
     </div>
-    <h2 id="deleteDialogTitle">Delete this record?</h2>
-    <p id="deleteDialogMessage">This action cannot be undone.</p>
-    <div class="delete-dialog-actions">
-        <button class="button button-secondary" id="cancelDelete"
-                type="button">Keep record</button>
-        <button class="button button-danger" id="confirmDelete"
+    <h2 id="actionConfirmationTitle">Confirm this action?</h2>
+    <p id="actionConfirmationMessage">Please confirm to continue.</p>
+    <p class="confirmation-context" id="actionConfirmationContext" hidden></p>
+    <div class="confirmation-reason" id="actionConfirmationReason" hidden>
+        <label for="actionConfirmationReasonInput">Reason for deletion</label>
+        <textarea id="actionConfirmationReasonInput" rows="3" maxlength="1000"
+                  aria-describedby="actionConfirmationReasonHint actionConfirmationError"></textarea>
+        <small id="actionConfirmationReasonHint">Enter 10–1000 characters.</small>
+    </div>
+    <p class="confirmation-error" id="actionConfirmationError" role="alert" hidden></p>
+    <div class="confirmation-actions">
+        <button class="button button-secondary" id="cancelActionConfirmation"
+                type="button">Cancel</button>
+        <button class="button button-primary" id="confirmActionConfirmation"
                 type="button">
-            <i data-lucide="trash-2" aria-hidden="true"></i>
-            Delete permanently
+            <i data-lucide="check" aria-hidden="true"></i>
+            <span>Confirm</span>
         </button>
     </div>
 </dialog>

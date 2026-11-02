@@ -32,6 +32,7 @@
             {{ record_detail_field('Leave type', leave.leave_type) }}
             {{ record_detail_field('Start date', leave.start_date.strftime('%B %d, %Y')) }}
             {{ record_detail_field('End date', leave.end_date.strftime('%B %d, %Y')) }}
+            {{ record_detail_field('Submitted', leave.created_at.strftime('%B %d, %Y at %I:%M %p') if leave.created_at else 'Not available') }}
             {{ record_detail_field('Reason', leave.reason or 'No reason provided.', true) }}
         </dl>
     </section>
@@ -68,12 +69,15 @@
         </a>
         <div class="record-detail-action-group">
     {% if current_user.role != 'employee' and leave.status == 'Pending' %}
-            <form method="post" action="{{ url_for('leave.update_leave_status', leave_id=leave.id) }}" class="record-detail-action-group">
+            <form method="post"
+                  action="{{ url_for('leave.update_leave_status', leave_id=leave.id) }}"
+                  class="record-detail-action-group"
+                  data-leave-review>
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button class="button button-primary" type="submit" name="status" value="Approved">
+                <button class="button button-primary" type="submit" name="status" value="Approved" data-review-decision="Approve">
                     <i data-lucide="check" aria-hidden="true"></i>Approve
                 </button>
-                <button class="button button-danger" type="submit" name="status" value="Rejected">
+                <button class="button button-danger" type="submit" name="status" value="Rejected" data-review-decision="Decline">
                     <i data-lucide="x" aria-hidden="true"></i>Decline
                 </button>
             </form>

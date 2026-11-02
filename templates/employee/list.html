@@ -7,7 +7,7 @@
 {% block content %}
 <div class="page-heading page-heading-row{% if current_user.role == 'employee' %} my-information-heading{% endif %}">
     <div>
-            <h1>{% if current_user.role == 'employee' %}My Information{% elif current_user.role == 'admin' %}Users and Employees{% elif current_user.role == 'hr' %}HR Employee Directory{% else %}Employees{% endif %}</h1>
+            <h1>{% if current_user.role == 'employee' %}Employee information{% elif current_user.role == 'admin' %}Users and Employees{% elif current_user.role == 'hr' %}HR Employee Directory{% else %}Employees{% endif %}</h1>
             <p>{% if current_user.role == 'employee' %}Your employee record.{% elif current_user.role in ('admin', 'hr') %}User accounts and linked employee records.{% else %}Employee directory and records.{% endif %}</p>
     </div>
         {% if current_user.role in ('admin', 'hr') %}

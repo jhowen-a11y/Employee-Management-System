@@ -83,7 +83,7 @@ Create a `.env` file in the project root:
 ```env
 DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DATABASE
 SECRET_KEY=replace_with_a_random_secret
-FLASK_DEBUG=1
+FLASK_DEBUG=0
 ```
 
 Replace the database placeholders with your PostgreSQL connection details. Generate a strong secret key with:
@@ -198,7 +198,7 @@ python -m unittest discover -s tests -v
 ## Production notes
 
 - Set `DATABASE_URL` and a strong `SECRET_KEY` in your hosting provider's environment settings. Do not rely on a local `.env` file in production.
-- Disable debug mode in production by setting `FLASK_DEBUG=0` or leaving it unset.
+- The application disables Flask debug mode so browser requests do not expose the interactive debugger or tracebacks. Use a production WSGI server when deploying; do not enable Flask's development server in production.
 - Back up the database before applying migrations.
 - If deploying on Vercel, configure the environment variables for each deployment environment and redeploy after changing them.
 - Profile-picture uploads use Supabase Storage so they persist across Vercel deployments. Photos appear in the shared navigation, employee directory, and employee-related pages. Create a bucket named `employee-profiles` (or set `SUPABASE_PROFILE_BUCKET` to another bucket name); private buckets are supported using expiring signed URLs. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel. A Supabase secret key can be used as `SUPABASE_SECRET_KEY` instead. Keep either key server-side; never expose it in browser code. Existing local pictures continue to use their local static files until replaced.

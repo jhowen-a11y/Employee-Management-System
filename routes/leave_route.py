@@ -9,7 +9,6 @@ from models import db
 from models.employee import Employee
 from models.leave import Leave
 from models.record_audit import RecordAudit
-from models.record_audit import RecordAudit
 from models.user import User
 from profile_storage import profile_picture_urls
 from routes.employee_access import (
@@ -125,34 +124,35 @@ def leave_list():
 # Submit a leave request
 @leave_bp.route("/add", methods=["GET", "POST"])
 def add_leave():
-    is_employee = current_user.role == User.EMPLOYEE
-    employee = current_employee() if is_employee else None
-    employees = (
-        [employee] if employee else []
-    ) if is_employee else Employee.query.order_by(
-            Employee.last_name.asc(),
-            Employee.first_name.asc()
-        ).all()
+    if current_user.role != User.EMPLOYEE:
+        abort(403, description="Only employees may submit leave requests.")
+
+    employee = current_employee()
+    employees = [employee] if employee else []
+    allowed_leave_types = (
+        "Annual", "Sick", "Personal", "Maternity", "Paternity", "Other"
+    )
 
     if request.method == "POST":
-        employee_id = request.form.get("employee_id", type=int)
-        if is_employee:
-            employee_id = employee.id if employee else None
+        if employee is None:
+            flash(
+                "Your account is not linked to an employee record. "
+                "Please contact your administrator.",
+                "error",
+            )
+            return render_template(
+                "leave/add.html",
+                employees=employees,
+                allowed_leave_types=allowed_leave_types,
+            )
+
         leave_type = request.form.get("leave_type", "").strip()
         start_date = request.form.get("start_date", "")
         end_date = request.form.get("end_date", "")
         reason = request.form.get("reason", "").strip()
 
-        allowed_leave_types = (
-            "Annual", "Sick", "Personal", "Maternity", "Paternity", "Other"
-        )
-        selected_employee = (
-            db.session.get(Employee, employee_id) if employee_id else None
-        )
-
         if (
-            selected_employee is None
-            or not leave_type
+            not leave_type
             or not start_date
             or not end_date
         ):
@@ -170,7 +170,7 @@ def add_leave():
                     flash("End date cannot be before the start date.", "error")
                 else:
                     leave = Leave(
-                        employee_id=selected_employee.id,
+                        employee_id=employee.id,
                         leave_type=leave_type,
                         start_date=start_date,
                         end_date=end_date,
@@ -193,9 +193,7 @@ def add_leave():
     return render_template(
         "leave/add.html",
         employees=employees,
-        allowed_leave_types=(
-            "Annual", "Sick", "Personal", "Maternity", "Paternity", "Other"
-        ),
+        allowed_leave_types=allowed_leave_types,
     )
 
 

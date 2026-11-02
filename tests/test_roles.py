@@ -436,6 +436,11 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"Leave details", leave_detail.data)
         self.assertIn(b"October 20, 2026", leave_detail.data)
         self.assertIn(b"Family care", leave_detail.data)
+        self.assertIn(b"EMP-0001", leave_detail.data)
+        self.assertIn(b"Submitted", leave_detail.data)
+        self.assertIn(b'data-leave-review', leave_detail.data)
+        self.assertIn(b'data-review-decision="Approve"', leave_detail.data)
+        self.assertIn(b'data-review-decision="Decline"', leave_detail.data)
         self.assertIn(b"employee-status-badge pending", leave_detail.data)
 
         attendance_detail = self.client.get(
@@ -444,6 +449,11 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(attendance_detail.status_code, 200)
         self.assertIn(b"Not recorded", attendance_detail.data)
         self.assertIn(b"employee-status-badge absent", attendance_detail.data)
+        self.assertEqual(self.client.get("/attendance/d").status_code, 404)
+        self.assertEqual(
+            self.client.get("/attendance/999999").status_code,
+            404,
+        )
 
         payroll_detail = self.client.get(f"/payroll/{payroll_id}")
         self.assertEqual(payroll_detail.status_code, 200)
@@ -460,6 +470,280 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"Request details", review_detail.data)
         self.assertIn(b"No payroll record exists", review_detail.data)
         self.assertIn(b"employee-status-badge pending", review_detail.data)
+
+    def test_employee_leave_submission_validates_and_persists_own_request(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Leave submission")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            other_employee = self.Employee(
+                user_id=self.hr_id,
+                first_name="Other",
+                last_name="Staff",
+                position="Coordinator",
+                salary=Decimal("45000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add_all([employee, other_employee])
+            self.db.session.commit()
+            employee_id = employee.id
+            other_employee_id = other_employee.id
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        form = employee_client.get("/leaves/add")
+        token = self.csrf_token(form)
+
+        missing_fields = employee_client.post(
+            "/leaves/add",
+            data={"_csrf_token": token, "leave_type": "Annual"},
+        )
+        self.assertEqual(missing_fields.status_code, 200)
+        self.assertIn(b"Please fill in all required fields.", missing_fields.data)
+
+        invalid_dates = employee_client.post(
+            "/leaves/add",
+            data={
+                "_csrf_token": token,
+                "leave_type": "Annual",
+                "start_date": "2026-02-31",
+                "end_date": "2026-03-01",
+            },
+        )
+        self.assertEqual(invalid_dates.status_code, 200)
+        self.assertIn(b"Please enter valid dates.", invalid_dates.data)
+        with self.app.app_context():
+            self.assertEqual(self.Leave.query.count(), 0)
+
+        response = employee_client.post(
+            "/leaves/add",
+            data={
+                "_csrf_token": token,
+                "employee_id": str(other_employee_id),
+                "leave_type": "Annual",
+                "start_date": "2026-11-10",
+                "end_date": "2026-11-12",
+                "reason": "Family commitment",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/leaves/")
+        requests_page = employee_client.get(response.location)
+        self.assertIn(b"Annual", requests_page.data)
+        with self.app.app_context():
+            leave = self.Leave.query.one()
+            leave_id = leave.id
+            self.assertEqual(leave.employee_id, employee_id)
+            self.assertEqual(leave.start_date, date(2026, 11, 10))
+            self.assertEqual(leave.status, "Pending")
+
+        request_detail = employee_client.get(f"/leaves/{leave_id}")
+        self.assertEqual(request_detail.status_code, 200)
+        self.assertIn(b"Family commitment", request_detail.data)
+        self.login(self.client, "admin", "AdminPass123")
+        self.assertEqual(self.client.get("/leaves/add").status_code, 403)
+        admin_form = self.client.get("/leaves/")
+        self.assertEqual(
+            self.client.post(
+                "/leaves/add",
+                data={
+                    "_csrf_token": self.csrf_token(admin_form),
+                    "employee_id": str(employee_id),
+                    "leave_type": "Sick",
+                    "start_date": "2026-11-15",
+                    "end_date": "2026-11-16",
+                },
+            ).status_code,
+            403,
+        )
+        with self.app.app_context():
+            self.assertEqual(self.Leave.query.count(), 1)
+
+    def test_hr_can_approve_and_decline_leave_requests_once(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Leave review")
+            self.db.session.add(department)
+            self.db.session.flush()
+            employee = self.Employee(
+                user_id=self.employee_id,
+                first_name="Jamie",
+                last_name="Staff",
+                position="Analyst",
+                salary=Decimal("50000.00"),
+                department_id=department.id,
+            )
+            self.db.session.add(employee)
+            self.db.session.flush()
+            requests = [
+                self.Leave(
+                    employee_id=employee.id,
+                    leave_type="Annual",
+                    start_date=date(2026, 11, 10),
+                    end_date=date(2026, 11, 12),
+                    reason="Family event",
+                ),
+                self.Leave(
+                    employee_id=employee.id,
+                    leave_type="Sick",
+                    start_date=date(2026, 11, 20),
+                    end_date=date(2026, 11, 21),
+                    reason="Medical appointment",
+                ),
+            ]
+            self.db.session.add_all(requests)
+            self.db.session.commit()
+            approve_id, decline_id = (leave.id for leave in requests)
+
+        self.login(self.client, "hrstaff", "HrPass123")
+        for leave_id, status, expected_status in (
+            (approve_id, "Approved", "Approved"),
+            (decline_id, "Rejected", "Rejected"),
+        ):
+            detail = self.client.get(f"/leaves/{leave_id}")
+            self.assertEqual(detail.status_code, 200)
+            self.assertIn(b"Jamie Staff", detail.data)
+            self.assertIn(b"EMP-0001", detail.data)
+            self.assertIn(b"Submitted", detail.data)
+            self.assertIn(b'data-leave-review', detail.data)
+            response = self.client.post(
+                f"/leaves/{leave_id}/status",
+                data={
+                    "_csrf_token": self.csrf_token(detail),
+                    "status": status,
+                },
+            )
+            self.assertEqual(response.status_code, 302)
+            reviewed_detail = self.client.get(f"/leaves/{leave_id}")
+            self.assertEqual(reviewed_detail.status_code, 200)
+            self.assertIn(expected_status.encode(), reviewed_detail.data)
+            self.assertNotIn(b'data-leave-review', reviewed_detail.data)
+            self.assertIn(b"Review history", reviewed_detail.data)
+            self.assertIn(b"hrstaff", reviewed_detail.data)
+            self.assertEqual(
+                self.client.post(
+                    f"/leaves/{leave_id}/status",
+                    data={
+                        "_csrf_token": self.csrf_token(reviewed_detail),
+                        "status": "Approved",
+                    },
+                ).status_code,
+                409,
+            )
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        employee_detail = employee_client.get(f"/leaves/{approve_id}")
+        self.assertEqual(
+            employee_client.post(
+                f"/leaves/{approve_id}/status",
+                data={
+                    "_csrf_token": self.csrf_token(employee_detail),
+                    "status": "Approved",
+                },
+            ).status_code,
+            403,
+        )
+        self.assertEqual(self.client.get("/leaves/999999").status_code, 404)
+
+    def test_safe_error_handler_uses_html_for_pages_and_json_for_api(self):
+        from app import create_app
+
+        configured_app = create_app(
+            {"SQLALCHEMY_DATABASE_URI": "sqlite://"}
+        )
+        self.assertFalse(configured_app.debug)
+        with configured_app.app_context():
+            self.db.engine.dispose()
+
+        page_error = self.client.get("/attendance/d")
+        self.assertEqual(page_error.status_code, 404)
+        self.assertEqual(page_error.mimetype, "text/html")
+        self.assertIn(b"Page not found", page_error.data)
+        self.assertNotIn(b"Traceback", page_error.data)
+
+        api_error = self.client.get(
+            "/attendance/d",
+            headers={"Accept": "application/json"},
+        )
+        self.assertEqual(api_error.status_code, 404)
+        self.assertEqual(api_error.mimetype, "application/json")
+        self.assertIn(b'"error"', api_error.data)
+        self.assertNotIn(b"Traceback", api_error.data)
+
+    def test_database_failures_return_safe_503_responses(self):
+        from sqlalchemy import event
+        from sqlalchemy.exc import OperationalError
+
+        self.login(self.client, "admin", "AdminPass123")
+
+        def fail_database_query(
+            connection,
+            cursor,
+            statement,
+            parameters,
+            context,
+            executemany,
+        ):
+            raise OperationalError(
+                "SELECT 1",
+                {},
+                RuntimeError("sensitive-test-database-detail"),
+            )
+
+        with self.app.app_context():
+            engine = self.db.engine
+            event.listen(
+                engine,
+                "before_cursor_execute",
+                fail_database_query,
+            )
+            try:
+                page_response = self.client.get(
+                    "/attendance/",
+                    headers={"Accept": "text/html"},
+                )
+                self.assertEqual(page_response.status_code, 503)
+                self.assertEqual(page_response.mimetype, "text/html")
+                self.assertIn(
+                    b"The database is temporarily unavailable",
+                    page_response.data,
+                )
+                self.assertNotIn(
+                    b"sensitive-test-database-detail",
+                    page_response.data,
+                )
+                self.assertNotIn(b"Traceback", page_response.data)
+
+                api_response = self.client.get(
+                    "/users/api",
+                    headers={"Accept": "application/json"},
+                )
+                self.assertEqual(api_response.status_code, 503)
+                self.assertEqual(api_response.mimetype, "application/json")
+                self.assertNotIn(
+                    b"sensitive-test-database-detail",
+                    api_response.data,
+                )
+            finally:
+                event.remove(
+                    engine,
+                    "before_cursor_execute",
+                    fail_database_query,
+                )
 
     def test_login_required_and_admin_can_manage_accounts(self):
         self.assertEqual(self.client.get("/users/").status_code, 302)
@@ -645,6 +929,7 @@ class RoleManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_employee_information_uses_profile_layout_without_directory_controls(self):
+        from datetime import datetime, timezone
         from decimal import Decimal
 
         with self.app.app_context():
@@ -659,6 +944,7 @@ class RoleManagementTests(unittest.TestCase):
                     position="Analyst",
                     salary=Decimal("50000.00"),
                     department_id=department.id,
+                    created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
                 )
             )
             self.db.session.commit()
@@ -1090,7 +1376,6 @@ class RoleManagementTests(unittest.TestCase):
             "/attendance/",
             "/attendance/add",
             "/leaves/",
-            "/leaves/add",
             "/payroll/",
             "/payroll/add",
             "/users/",
@@ -1099,6 +1384,7 @@ class RoleManagementTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
+        self.assertEqual(self.client.get("/leaves/add").status_code, 403)
 
         response = self.client.post(
             "/attendance/add",
@@ -1133,11 +1419,14 @@ class RoleManagementTests(unittest.TestCase):
             attendance = self.db.session.get(self.Attendance, attendance_id)
             self.assertEqual(attendance.status, "Late")
 
-        response = self.client.post(
+        employee_client = self.app.test_client()
+        self.login(employee_client, "employee-one", "EmployeePass123")
+        leave_form = employee_client.get("/leaves/add")
+        response = employee_client.post(
             "/leaves/add",
             data={
-                "_csrf_token": token,
-                "employee_id": str(employee_id),
+                "_csrf_token": self.csrf_token(leave_form),
+                "employee_id": str(self.employee_id),
                 "leave_type": "Annual",
                 "start_date": "2026-10-05",
                 "end_date": "2026-10-06",
@@ -1148,6 +1437,7 @@ class RoleManagementTests(unittest.TestCase):
         with self.app.app_context():
             leave = self.Leave.query.one()
             leave_id = leave.id
+            self.assertEqual(leave.employee_id, employee_id)
 
         response = self.client.post(
             f"/leaves/{leave_id}/status",
@@ -1290,13 +1580,13 @@ class RoleManagementTests(unittest.TestCase):
         for path in (
             "/attendance/add",
             "/departments/add",
-            "/leaves/add",
             "/payroll/add",
             "/employees/",
             "/employees/add",
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
+        self.assertEqual(self.client.get("/leaves/add").status_code, 403)
         for path in (
             "/users/",
             "/users/add",
