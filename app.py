@@ -40,6 +40,7 @@ from models.travel_order import TravelOrder
 from models.user import User
 from profile_storage import profile_picture_url
 from routes.auth_routes import auth_bp
+from routes.database_backup_routes import database_backup_bp
 from routes.employee_routes import employee_bp
 from routes.attendance_routes import attendance_bp
 from routes.department_routes import department_bp
@@ -68,6 +69,7 @@ def create_app(test_config=None):
         SEND_FILE_MAX_AGE_DEFAULT=0,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        BACKUP_UPLOAD_MAX_CONTENT_LENGTH=513 * 1024 * 1024,
     )
     if test_config:
         app.config.update(test_config)
@@ -76,7 +78,7 @@ def create_app(test_config=None):
             "DATABASE_URL must be set in the environment or .env file."
         )
 
-    static_assets = ("css/style.css", "js/script.js")
+    static_assets = ("css/style.css", "js/script.js", "js/database_backup.js")
     static_asset_versions = {
         filename: hashlib.sha256(
             (Path(app.static_folder) / filename).read_bytes()
@@ -199,10 +201,13 @@ def create_app(test_config=None):
             404: "Page not found",
             405: "Method not allowed",
             429: "Too many requests",
+            413: "Upload too large",
             500: "Service unavailable",
         }
         title = title_map.get(code, "Request unavailable")
         message = error.description or "Please try again later."
+        if code == 413:
+            message = "The uploaded file exceeds the 512 MB size limit."
         if code == 500:
             message = "The service is temporarily unavailable. Please try again."
         return render_safe_error(code, title, message)
@@ -297,6 +302,10 @@ def create_app(test_config=None):
 
     @app.before_request
     def require_sign_in():
+        if request.endpoint == "database_backup.restore":
+            request.max_content_length = app.config[
+                "BACKUP_UPLOAD_MAX_CONTENT_LENGTH"
+            ]
         if request.endpoint == "auth.login":
             if request.method == "POST":
                 return validate_csrf_token()
@@ -341,6 +350,7 @@ def create_app(test_config=None):
     app.register_blueprint(payslip_bp)
     app.register_blueprint(travel_order_bp)
     app.register_blueprint(user_bp)
+    app.register_blueprint(database_backup_bp)
 
     @app.route("/")
     def index():

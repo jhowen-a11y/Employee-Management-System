@@ -143,6 +143,11 @@
                 <i data-lucide="user-cog"></i>
                 Users &amp; Roles
             </a>
+            <a href="{{ url_for('database_backup.index') }}"
+               class="{% if request.endpoint and request.endpoint.startswith('database_backup.') %}active{% endif %}">
+                <i data-lucide="database"></i>
+                Database Backup
+            </a>
             {% endif %}
             {% endif %}
 

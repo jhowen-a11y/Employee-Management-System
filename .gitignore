@@ -3,6 +3,7 @@ __pycache__/
 env/
 venv/
 .venv/
+instance/database-backups/
 pip-log.txt
 .env
 .env.local

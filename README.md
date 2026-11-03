@@ -24,6 +24,7 @@ A role-based employee management web application built with Flask and PostgreSQL
 - Server-side search, sorting, filtering, and pagination across management lists
 - Employee payslip requests with HR/admin approval and request history
 - Employee travel order requests with HR/admin approval tracking
+- Administrator-only PostgreSQL backups and safe restore into a new database
 - Separate administrator, HR, and employee experiences
 - Sign-in required for application pages, with CSRF protection on forms
 - Same-origin page navigation with responsive skeletons and full-page fallback
@@ -184,6 +185,7 @@ All application pages require sign-in. Users are redirected to a role-specific h
 | Submit Travel Order | `/travel-orders/submit` | Employee |
 | Manage Travel Orders | `/travel-orders/manage` | Administrator and HR |
 | Users & Roles | `/users/` | Administrator |
+| Database Backup | `/admin/database-backups` | Administrator |
 | Edit profile | `/users/profile` | Signed-in users |
 | Users API | `/users/api` | Administrator |
 
@@ -198,6 +200,7 @@ python -m unittest discover -s tests -v
 ## Production notes
 
 - Set `DATABASE_URL` and a strong `SECRET_KEY` in your hosting provider's environment settings. Do not rely on a local `.env` file in production.
+- Database backups require PostgreSQL `pg_dump` and `pg_restore` binaries on the application server, network access to the database, and a database account with permission to create a separate database to restore into. Signed `.emsbackup` packages and their history are stored outside the project directory by default (`%LOCALAPPDATA%\\MCM-EMS\\database-backups` on Windows or `$XDG_DATA_HOME/mcm-ems/database-backups` on Unix-like systems; without `XDG_DATA_HOME`, `$HOME/.local/share/mcm-ems/database-backups`). Set `EMS_BACKUP_DIRECTORY` to a persistent, private directory in deployments with ephemeral instance storage; set `PG_DUMP_PATH` and `PG_RESTORE_PATH` if the PostgreSQL utilities are not on `PATH`. Backups are limited to 512 MB. Restore validates the signed package before creating a new database; it never replaces the active database. Keep `SECRET_KEY` stable because packages are signed with it. Password-encrypted backups use AES-256-GCM and require the password to restore. Database backups do not include profile pictures stored separately in Supabase Storage.
 - The application disables Flask debug mode so browser requests do not expose the interactive debugger or tracebacks. Use a production WSGI server when deploying; do not enable Flask's development server in production.
 - Back up the database before applying migrations.
 - If deploying on Vercel, configure the environment variables for each deployment environment and redeploy after changing them.
@@ -210,6 +213,7 @@ python -m unittest discover -s tests -v
 ├── app.py                 # Flask app setup, authentication checks, and CLI commands
 ├── models/                # SQLAlchemy models
 ├── routes/                # Feature blueprints and access-control helpers
+├── services/              # Database backup packaging and restore operations
 ├── templates/             # Jinja pages, organized by feature
 ├── static/                # CSS and JavaScript
 ├── migrations/            # Alembic/Flask-Migrate schema history
