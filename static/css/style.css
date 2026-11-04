@@ -6551,6 +6551,41 @@ body {
     text-align: right;
 }
 
+.payslip-amounts .payslip-deduction-breakdown {
+    display: block;
+    padding: 0;
+}
+
+.payslip-deduction-breakdown > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e9eaf0;
+}
+
+.payslip-deduction-breakdown .payslip-deduction-heading {
+    padding-bottom: 6px;
+    border-bottom: 0;
+    color: #424757;
+    font-weight: 700;
+}
+
+.payslip-deduction-unavailable dd {
+    color: #777d8c;
+}
+
+.deduction-breakdown-table td:last-child,
+.deduction-breakdown-table th:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.deduction-breakdown-table .deduction-breakdown-total {
+    background: #f3f5ff;
+    font-weight: 700;
+}
+
 .payslip-amounts .payslip-net {
     border: 0;
     border-radius: 7px;

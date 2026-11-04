@@ -1,6 +1,8 @@
+import base64
 import os
 import re
 import unittest
+import zlib
 from datetime import date, time
 from decimal import Decimal
 from unittest.mock import patch
@@ -150,6 +152,7 @@ class PayrollDeductionTests(unittest.TestCase):
         self.assertEqual(calculation["absence_days"], 1)
         self.assertEqual(calculation["absence_deduction"], Decimal("1000.00"))
         self.assertEqual(calculation["late_minutes"], 60)
+        self.assertEqual(calculation["late_occurrences"], 1)
         self.assertEqual(calculation["late_deduction"], Decimal("125.00"))
         self.assertEqual(calculation["total_deductions"], Decimal("1125.00"))
         self.assertEqual(calculation["incomplete_attendance_days"], 1)
@@ -205,6 +208,7 @@ class PayrollDeductionTests(unittest.TestCase):
         self.assertEqual(preview.status_code, 200)
         self.assertEqual(preview.json["absence_days"], 1)
         self.assertEqual(preview.json["late_minutes"], 30)
+        self.assertEqual(preview.json["late_occurrences"], 1)
         self.assertEqual(preview.json["total_deductions"], "1062.50")
         self.assertEqual(preview.json["estimated_net_pay"], "21037.50")
 
@@ -229,6 +233,7 @@ class PayrollDeductionTests(unittest.TestCase):
             payroll_id = payroll.id
             self.assertEqual(payroll.absence_days, 1)
             self.assertEqual(payroll.late_minutes, 30)
+            self.assertEqual(payroll.late_occurrences, 1)
             self.assertEqual(payroll.absence_deduction, Decimal("1000.00"))
             self.assertEqual(payroll.late_deduction, Decimal("62.50"))
             self.assertEqual(payroll.deductions, Decimal("1062.50"))
@@ -241,9 +246,12 @@ class PayrollDeductionTests(unittest.TestCase):
             self.assertEqual(payroll.deductions, Decimal("1062.50"))
             self.assertEqual(payroll.absence_deduction, Decimal("1000.00"))
 
-        self.assertIn(b"Absence deductions (1 days)", self.client.get(
-            f"/payroll/{payroll_id}"
-        ).data)
+        admin_detail = self.client.get(f"/payroll/{payroll_id}")
+        self.assertIn(b"Absences", admin_detail.data)
+        self.assertIn(b"1 day", admin_detail.data)
+        self.assertIn(b"1 occurrence (30 minutes)", admin_detail.data)
+        self.assertIn(b"Total deductions", admin_detail.data)
+        self.assertIn(b"1,062.50", admin_detail.data)
         self.assertIn(b"1062.50", self.client.get("/payroll/").data)
         with self.app.app_context():
             payroll = self.db.session.get(self.Payroll, payroll_id)
@@ -257,9 +265,26 @@ class PayrollDeductionTests(unittest.TestCase):
         self.login_as(self.employee_user_id)
         payslip = self.client.get(f"/payslips/{payroll_id}")
         self.assertEqual(payslip.status_code, 200)
-        self.assertIn(b"Absence deductions (1 days)", payslip.data)
-        self.assertIn(b"Late deductions (30 minutes)", payslip.data)
+        self.assertIn(b"Absences (1 day)", payslip.data)
+        self.assertIn(b"Lateness (1 occurrence, 30 minutes)", payslip.data)
+        self.assertIn(b"Total deductions", payslip.data)
         self.assertIn(b"1,062.50", payslip.data)
+        self.assertIn(b"@media print", payslip.data)
+        pdf = self.client.get(f"/payslips/{payroll_id}/download")
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.data.startswith(b"%PDF"))
+        pdf_streams = re.findall(
+            rb"stream\r?\n(.*?)~?>endstream", pdf.data, re.DOTALL
+        )
+        pdf_text = b"".join(
+            zlib.decompress(
+                base64.a85decode(stream.replace(b"~>", b""))
+            )
+            for stream in pdf_streams
+        ).replace(b"\\(", b"(").replace(b"\\)", b")")
+        self.assertIn(b"Absences (1 day)", pdf_text)
+        self.assertIn(b"Lateness (1 occurrence, 30 minutes)", pdf_text)
+        self.assertIn(b"Total deductions", pdf_text)
 
         self.login_as(self.admin_id)
         pending_form = self.client.get("/payroll/add")
@@ -334,6 +359,86 @@ class PayrollDeductionTests(unittest.TestCase):
             self.assertIsNone(historical.absence_deduction)
             self.assertIsNone(historical.late_deduction)
 
+    def test_historical_breakdown_is_reconstructed_only_when_total_matches(self):
+        with self.app.app_context():
+            self.add_attendance(date(2026, 10, 5), "Absent")
+            self.add_attendance(date(2026, 10, 6), "Late", time(8, 30))
+            self.db.session.commit()
+            historical = self.Payroll(
+                employee_id=self.employee_id,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31),
+                basic_salary=Decimal("22000.00"),
+                allowances=Decimal("0.00"),
+                deductions=Decimal("1062.50"),
+                net_pay=Decimal("20937.50"),
+                payment_date=date(2026, 11, 1),
+            )
+            self.db.session.add(historical)
+            self.db.session.commit()
+            payroll_id = historical.id
+            original_amounts = (
+                historical.basic_salary,
+                historical.allowances,
+                historical.deductions,
+                historical.net_pay,
+            )
+
+        self.login_as(self.admin_id)
+        admin_detail = self.client.get(f"/payroll/{payroll_id}")
+        self.assertEqual(admin_detail.status_code, 200)
+        self.assertIn(b"Absences", admin_detail.data)
+        self.assertIn(b"1 day", admin_detail.data)
+        self.assertIn(b"1 occurrence (30 minutes)", admin_detail.data)
+        self.assertIn(b"1,062.50", admin_detail.data)
+
+        self.login_as(self.employee_user_id)
+        employee_detail = self.client.get(f"/payslips/{payroll_id}")
+        self.assertEqual(employee_detail.status_code, 200)
+        self.assertIn(b"Lateness (1 occurrence, 30 minutes)", employee_detail.data)
+        with self.app.app_context():
+            historical = self.db.session.get(self.Payroll, payroll_id)
+            self.assertEqual(
+                (
+                    historical.basic_salary,
+                    historical.allowances,
+                    historical.deductions,
+                    historical.net_pay,
+                ),
+                original_amounts,
+            )
+
+    def test_legacy_breakdown_snapshot_recovers_late_occurrences_safely(self):
+        with self.app.app_context():
+            self.add_attendance(date(2026, 10, 5), "Absent")
+            self.add_attendance(date(2026, 10, 6), "Late", time(8, 30))
+            self.db.session.commit()
+            historical = self.Payroll(
+                employee_id=self.employee_id,
+                pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31),
+                basic_salary=Decimal("22000.00"),
+                allowances=Decimal("0.00"),
+                deductions=Decimal("1062.50"),
+                net_pay=Decimal("20937.50"),
+                payment_date=date(2026, 11, 1),
+                absence_days=1,
+                late_minutes=30,
+                absence_deduction=Decimal("1000.00"),
+                late_deduction=Decimal("62.50"),
+            )
+            self.db.session.add(historical)
+            self.db.session.commit()
+            payroll_id = historical.id
+
+        self.login_as(self.employee_user_id)
+        detail = self.client.get(f"/payslips/{payroll_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn(b"Lateness (1 occurrence, 30 minutes)", detail.data)
+        with self.app.app_context():
+            historical = self.db.session.get(self.Payroll, payroll_id)
+            self.assertIsNone(historical.late_occurrences)
+
     def test_payroll_pages_remain_available_before_breakdown_migration(self):
         with self.app.app_context():
             self.add_attendance(date(2026, 12, 1), "Absent")
@@ -355,6 +460,7 @@ class PayrollDeductionTests(unittest.TestCase):
                 for column_name in (
                     "absence_days",
                     "late_minutes",
+                    "late_occurrences",
                     "absence_deduction",
                     "late_deduction",
                 ):
@@ -387,13 +493,13 @@ class PayrollDeductionTests(unittest.TestCase):
                 "allowances": "100.00",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Payroll was not created", response.data)
         with self.app.app_context():
             created = self.Payroll.query.filter_by(
                 pay_period_start=date(2026, 12, 1)
-            ).one()
-            self.assertEqual(created.deductions, Decimal("1000.00"))
-            self.assertEqual(created.net_pay, Decimal("21100.00"))
+            ).first()
+            self.assertIsNone(created)
 
         with self.app.app_context():
             paid_record = self.db.session.get(self.Payroll, payroll_id)

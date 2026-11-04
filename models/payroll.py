@@ -56,6 +56,10 @@ class Payroll(db.Model):
         mapped_column(Integer, nullable=True)
     )
 
+    late_occurrences: Mapped[int | None] = deferred(
+        mapped_column(Integer, nullable=True)
+    )
+
     absence_deduction: Mapped[Decimal | None] = deferred(
         mapped_column(Numeric(10, 2), nullable=True)
     )

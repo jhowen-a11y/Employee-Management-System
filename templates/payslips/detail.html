@@ -48,12 +48,16 @@
         <div><dt>Basic salary</dt><dd>{{ "{:,.2f}".format(payroll.basic_salary) }}</dd></div>
         <div><dt>Allowances</dt><dd>{{ "{:,.2f}".format(payroll.allowances) }}</dd></div>
         <div><dt>Gross salary</dt><dd>{{ "{:,.2f}".format(payroll.basic_salary + payroll.allowances) }}</dd></div>
-        {% if deduction_breakdown_available and payroll.absence_deduction is not none %}
-        <div><dt>Absence deductions ({{ payroll.absence_days }} days)</dt><dd>− {{ "{:,.2f}".format(payroll.absence_deduction) }}</dd></div>
-        <div><dt>Late deductions ({{ payroll.late_minutes }} minutes)</dt><dd>− {{ "{:,.2f}".format(payroll.late_deduction) }}</dd></div>
+        {% if deduction_breakdown %}
+        <div class="payslip-deduction-breakdown">
+            <div class="payslip-deduction-heading">Deduction breakdown</div>
+            <div><dt>Absences ({{ deduction_breakdown.absence_days }} {{ 'day' if deduction_breakdown.absence_days == 1 else 'days' }})</dt><dd>− ₱{{ "{:,.2f}".format(deduction_breakdown.absence_deduction) }}</dd></div>
+            <div><dt>Lateness ({{ deduction_breakdown.late_occurrences }} {{ 'occurrence' if deduction_breakdown.late_occurrences == 1 else 'occurrences' }}, {{ deduction_breakdown.late_minutes }} minutes)</dt><dd>− ₱{{ "{:,.2f}".format(deduction_breakdown.late_deduction) }}</dd></div>
+        </div>
         <div><dt>Total deductions</dt><dd>− {{ "{:,.2f}".format(payroll.deductions) }}</dd></div>
         {% else %}
         <div><dt>Deductions</dt><dd>− {{ "{:,.2f}".format(payroll.deductions) }}</dd></div>
+        <div class="payslip-deduction-unavailable"><dt>Deduction breakdown</dt><dd>Unavailable for this historical payroll record.</dd></div>
         {% endif %}
         <div class="payslip-net"><dt>Net salary</dt><dd>{{ "{:,.2f}".format(payroll.net_pay) }}</dd></div>
     </dl>

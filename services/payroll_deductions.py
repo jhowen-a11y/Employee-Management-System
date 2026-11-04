@@ -3,17 +3,20 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import current_app, g, has_request_context
-from sqlalchemy import inspect
+from sqlalchemy import inspect, or_
 
 from models import db
 from models.attendance import Attendance
 from models.leave import Leave
+from models.payroll import Payroll
+from models.record_audit import RecordAudit
 
 
 CENT = Decimal("0.01")
 BREAKDOWN_COLUMNS = {
     "absence_days",
     "late_minutes",
+    "late_occurrences",
     "absence_deduction",
     "late_deduction",
 }
@@ -109,6 +112,7 @@ def calculate_attendance_deductions(
 
     absence_days = 0
     late_minutes = 0
+    late_occurrences = 0
     incomplete_attendance_days = 0
     current_day = period_start
     while current_day <= period_end:
@@ -133,6 +137,7 @@ def calculate_attendance_deductions(
                     recorded_minutes.append(minutes_late)
                 if recorded_minutes:
                     late_minutes += max(recorded_minutes)
+                    late_occurrences += 1
                 else:
                     incomplete_attendance_days += 1
             elif len(statuses) > 1 and statuses.intersection(
@@ -152,12 +157,168 @@ def calculate_attendance_deductions(
         "absence_days": absence_days,
         "absence_deduction": absence_deduction,
         "late_minutes": late_minutes,
+        "late_occurrences": late_occurrences,
         "late_hours": (Decimal(late_minutes) / Decimal(60)).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         ),
         "late_deduction": late_deduction,
         "total_deductions": total_deductions,
         "incomplete_attendance_days": incomplete_attendance_days,
+    }
+
+
+def _attendance_history_is_unchanged(payroll):
+    if not payroll.created_at:
+        return False
+
+    later_payroll_audit = RecordAudit.query.filter(
+        RecordAudit.record_type == "payroll",
+        RecordAudit.record_id == payroll.id,
+        RecordAudit.created_at >= payroll.created_at,
+    ).first()
+    if later_payroll_audit:
+        return False
+
+    later_attendance = Attendance.query.filter(
+        Attendance.employee_id == payroll.employee_id,
+        Attendance.attendance_date >= payroll.pay_period_start,
+        Attendance.attendance_date <= payroll.pay_period_end,
+        Attendance.created_at >= payroll.created_at,
+    ).first()
+    if later_attendance:
+        return False
+
+    later_leave = Leave.query.filter(
+        Leave.employee_id == payroll.employee_id,
+        Leave.start_date <= payroll.pay_period_end,
+        Leave.end_date >= payroll.pay_period_start,
+        or_(
+            Leave.created_at >= payroll.created_at,
+            Leave.updated_at >= payroll.created_at,
+        ),
+    ).first()
+    if later_leave:
+        return False
+
+    later_audits = RecordAudit.query.filter(
+        RecordAudit.record_type.in_(("attendance", "leave")),
+        RecordAudit.created_at >= payroll.created_at,
+    ).all()
+    for audit in later_audits:
+        for values in (audit.before_values, audit.after_values):
+            if values.get("employee_id") != payroll.employee_id:
+                continue
+            attendance_date = values.get("attendance_date")
+            if attendance_date:
+                try:
+                    attendance_date = date.fromisoformat(attendance_date)
+                except (TypeError, ValueError):
+                    return False
+                if payroll.pay_period_start <= attendance_date <= payroll.pay_period_end:
+                    return False
+            elif audit.record_type == "leave":
+                return False
+    return True
+
+
+def payroll_deduction_breakdown(payroll):
+    if not attendance_deduction_schema_available():
+        return None
+
+    absence_days = payroll.absence_days
+    late_minutes = payroll.late_minutes
+    late_occurrences = payroll.late_occurrences
+    absence_amount = payroll.absence_deduction
+    late_amount = payroll.late_deduction
+
+    if all(
+        value is not None
+        for value in (
+            absence_days,
+            late_minutes,
+            late_occurrences,
+            absence_amount,
+            late_amount,
+        )
+    ):
+        if (
+            absence_days < 0
+            or late_minutes < 0
+            or late_occurrences < 0
+            or absence_amount < 0
+            or late_amount < 0
+            or absence_amount + late_amount != payroll.deductions
+        ):
+            return None
+        return {
+            "absence_days": absence_days,
+            "absence_deduction": absence_amount,
+            "late_minutes": late_minutes,
+            "late_occurrences": late_occurrences,
+            "late_deduction": late_amount,
+            "total_deductions": payroll.deductions,
+        }
+
+    legacy_snapshot = (
+        absence_days,
+        late_minutes,
+        absence_amount,
+        late_amount,
+    )
+    if any(value is not None for value in legacy_snapshot):
+        if (
+            late_occurrences is not None
+            or any(value is None for value in legacy_snapshot)
+            or absence_amount < 0
+            or late_amount < 0
+            or absence_amount + late_amount != payroll.deductions
+            or not _attendance_history_is_unchanged(payroll)
+        ):
+            return None
+
+        calculation = calculate_attendance_deductions(
+            payroll.employee_id,
+            payroll.pay_period_start,
+            payroll.pay_period_end,
+            payroll.basic_salary,
+        )
+        if (
+            calculation["absence_days"] != absence_days
+            or calculation["late_minutes"] != late_minutes
+            or calculation["absence_deduction"] != absence_amount
+            or calculation["late_deduction"] != late_amount
+        ):
+            return None
+        return {
+            "absence_days": absence_days,
+            "absence_deduction": absence_amount,
+            "late_minutes": late_minutes,
+            "late_occurrences": calculation["late_occurrences"],
+            "late_deduction": late_amount,
+            "total_deductions": payroll.deductions,
+        }
+
+    if not _attendance_history_is_unchanged(payroll):
+        return None
+
+    calculation = calculate_attendance_deductions(
+        payroll.employee_id,
+        payroll.pay_period_start,
+        payroll.pay_period_end,
+        payroll.basic_salary,
+    )
+    if calculation["total_deductions"] != payroll.deductions:
+        return None
+    return {
+        key: calculation[key]
+        for key in (
+            "absence_days",
+            "absence_deduction",
+            "late_minutes",
+            "late_occurrences",
+            "late_deduction",
+            "total_deductions",
+        )
     }
 
 

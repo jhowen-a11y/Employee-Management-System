@@ -17,6 +17,7 @@ from routes.employee_access import management_required
 from services.payroll_deductions import (
     attendance_deduction_schema_available,
     calculate_attendance_deductions,
+    payroll_deduction_breakdown,
     serialize_deduction_preview,
 )
 
@@ -75,6 +76,7 @@ def payroll_snapshot(payroll, include_breakdown=True):
         snapshot.update(
             absence_days=payroll.absence_days,
             late_minutes=payroll.late_minutes,
+            late_occurrences=payroll.late_occurrences,
             absence_deduction=(
                 str(payroll.absence_deduction)
                 if payroll.absence_deduction is not None
@@ -221,7 +223,7 @@ def payroll_detail(payroll_id):
         "payroll/detail.html",
         payroll=payroll,
         payroll_audits=payroll_audits,
-        deduction_breakdown_available=attendance_deduction_schema_available(),
+        deduction_breakdown=payroll_deduction_breakdown(payroll),
     )
 
 
@@ -270,6 +272,19 @@ def add_payroll():
     employees = Employee.query.order_by(Employee.last_name).all()
 
     if request.method == "POST":
+        if not attendance_deduction_schema_available():
+            current_app.logger.error(
+                "Payroll creation blocked because the attendance deduction "
+                "snapshot columns are missing."
+            )
+            flash(
+                "Payroll was not created because the database update for "
+                "deduction breakdowns is pending. Apply the database migration "
+                "and try again.",
+                "error",
+            )
+            return render_payroll_add(employees)
+
         employee_id = request.form.get("employee_id", type=int)
         period_start = read_date(request.form.get("pay_period_start"))
         period_end = read_date(request.form.get("pay_period_end"))
@@ -329,6 +344,7 @@ def add_payroll():
                     payroll_values.update(
                         absence_days=calculation["absence_days"],
                         late_minutes=calculation["late_minutes"],
+                        late_occurrences=calculation["late_occurrences"],
                         absence_deduction=calculation["absence_deduction"],
                         late_deduction=calculation["late_deduction"],
                     )
@@ -460,6 +476,7 @@ def edit_payroll(payroll_id):
                 values.update(
                     absence_days=calculation["absence_days"],
                     late_minutes=calculation["late_minutes"],
+                    late_occurrences=calculation["late_occurrences"],
                     absence_deduction=calculation["absence_deduction"],
                     late_deduction=calculation["late_deduction"],
                 )
@@ -478,6 +495,7 @@ def edit_payroll(payroll_id):
                 statement = statement.where(
                     Payroll.absence_days == payroll.absence_days,
                     Payroll.late_minutes == payroll.late_minutes,
+                    Payroll.late_occurrences == payroll.late_occurrences,
                     Payroll.absence_deduction == payroll.absence_deduction,
                     Payroll.late_deduction == payroll.late_deduction,
                 )
@@ -570,6 +588,9 @@ def correct_paid_payroll(payroll_id):
                 "late_minutes": (
                     payroll.late_minutes if preserve_breakdown else None
                 ),
+                "late_occurrences": (
+                    payroll.late_occurrences if preserve_breakdown else None
+                ),
                 "absence_deduction": (
                     str(payroll.absence_deduction)
                     if preserve_breakdown
@@ -612,6 +633,7 @@ def correct_paid_payroll(payroll_id):
                     statement = statement.where(
                         Payroll.absence_days == payroll.absence_days,
                         Payroll.late_minutes == payroll.late_minutes,
+                        Payroll.late_occurrences == payroll.late_occurrences,
                         Payroll.absence_deduction == payroll.absence_deduction,
                         Payroll.late_deduction == payroll.late_deduction,
                     )
@@ -621,6 +643,11 @@ def correct_paid_payroll(payroll_id):
                         ),
                         late_minutes=(
                             payroll.late_minutes if preserve_breakdown else None
+                        ),
+                        late_occurrences=(
+                            payroll.late_occurrences
+                            if preserve_breakdown
+                            else None
                         ),
                         absence_deduction=(
                             payroll.absence_deduction

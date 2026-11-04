@@ -38,10 +38,35 @@
         <dl class="record-detail-grid">
             {{ record_detail_field('Basic salary', "{:,.2f}".format(payroll.basic_salary)) }}
             {{ record_detail_field('Allowances', "{:,.2f}".format(payroll.allowances)) }}
-            {% if deduction_breakdown_available and payroll.absence_deduction is not none %}
-            {{ record_detail_field('Absence deductions (' ~ payroll.absence_days ~ ' days)', "{:,.2f}".format(payroll.absence_deduction)) }}
-            {{ record_detail_field('Late deductions (' ~ payroll.late_minutes ~ ' minutes)', "{:,.2f}".format(payroll.late_deduction)) }}
-            {{ record_detail_field('Total deductions', "{:,.2f}".format(payroll.deductions)) }}
+            {% if deduction_breakdown %}
+            <div class="record-detail-field record-detail-field-wide">
+                <dt>Deduction breakdown</dt>
+                <dd>
+                    <div class="table-scroll">
+                        <table class="data-table deduction-breakdown-table">
+                            <thead>
+                                <tr><th>Deduction type</th><th>Details</th><th>Amount</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Absences</td>
+                                    <td>{{ deduction_breakdown.absence_days }} {{ 'day' if deduction_breakdown.absence_days == 1 else 'days' }}</td>
+                                    <td>₱{{ "{:,.2f}".format(deduction_breakdown.absence_deduction) }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Lateness</td>
+                                    <td>{{ deduction_breakdown.late_occurrences }} {{ 'occurrence' if deduction_breakdown.late_occurrences == 1 else 'occurrences' }} ({{ deduction_breakdown.late_minutes }} minutes)</td>
+                                    <td>₱{{ "{:,.2f}".format(deduction_breakdown.late_deduction) }}</td>
+                                </tr>
+                                <tr class="deduction-breakdown-total">
+                                    <th colspan="2">Total deductions</th>
+                                    <th>₱{{ "{:,.2f}".format(payroll.deductions) }}</th>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </dd>
+            </div>
             {% else %}
             {{ record_detail_field('Deductions', "{:,.2f}".format(payroll.deductions)) }}
             {{ record_detail_field('Deduction breakdown', 'Unavailable for this historical payroll record.') }}

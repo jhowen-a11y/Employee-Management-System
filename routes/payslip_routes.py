@@ -28,7 +28,9 @@ from models.payroll import Payroll
 from models.payslip_request import PayslipRequest
 from models.user import User
 from routes.employee_access import current_employee, management_required
-from services.payroll_deductions import attendance_deduction_schema_available
+from services.payroll_deductions import (
+    payroll_deduction_breakdown,
+)
 
 
 payslip_bp = Blueprint("payslip", __name__, url_prefix="/payslips")
@@ -79,7 +81,6 @@ def my_payslips():
     return render_template(
         "payslips/list.html",
         payslips=payslips,
-        deduction_breakdown_available=attendance_deduction_schema_available(),
     )
 
 
@@ -92,7 +93,7 @@ def payslip_detail(payroll_id):
         "payslips/detail.html",
         payroll=payroll,
         employee=employee,
-        deduction_breakdown_available=attendance_deduction_schema_available(),
+        deduction_breakdown=payroll_deduction_breakdown(payroll),
     )
 
 
@@ -133,19 +134,28 @@ def download_payslip(payroll_id):
         ["Allowances", f"{payroll.allowances:,.2f}"],
         ["Gross salary", f"{gross_pay:,.2f}"],
     ]
-    if (
-        attendance_deduction_schema_available()
-        and payroll.absence_deduction is not None
-    ):
+    deduction_breakdown = payroll_deduction_breakdown(payroll)
+    if deduction_breakdown:
         rows.extend(
             [
                 [
-                    f"Absence deductions ({payroll.absence_days} days)",
-                    f"{payroll.absence_deduction:,.2f}",
+                    "Deduction breakdown",
+                    "",
                 ],
                 [
-                    f"Late deductions ({payroll.late_minutes} minutes)",
-                    f"{payroll.late_deduction:,.2f}",
+                    (
+                        f"Absences ({deduction_breakdown['absence_days']} "
+                        f"{'day' if deduction_breakdown['absence_days'] == 1 else 'days'})"
+                    ),
+                    f"{deduction_breakdown['absence_deduction']:,.2f}",
+                ],
+                [
+                    (
+                        f"Lateness ({deduction_breakdown['late_occurrences']} "
+                        f"{'occurrence' if deduction_breakdown['late_occurrences'] == 1 else 'occurrences'}, "
+                        f"{deduction_breakdown['late_minutes']} minutes)"
+                    ),
+                    f"{deduction_breakdown['late_deduction']:,.2f}",
                 ],
                 ["Total deductions", f"{payroll.deductions:,.2f}"],
             ]
