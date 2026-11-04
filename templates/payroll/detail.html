@@ -38,7 +38,14 @@
         <dl class="record-detail-grid">
             {{ record_detail_field('Basic salary', "{:,.2f}".format(payroll.basic_salary)) }}
             {{ record_detail_field('Allowances', "{:,.2f}".format(payroll.allowances)) }}
+            {% if deduction_breakdown_available and payroll.absence_deduction is not none %}
+            {{ record_detail_field('Absence deductions (' ~ payroll.absence_days ~ ' days)', "{:,.2f}".format(payroll.absence_deduction)) }}
+            {{ record_detail_field('Late deductions (' ~ payroll.late_minutes ~ ' minutes)', "{:,.2f}".format(payroll.late_deduction)) }}
+            {{ record_detail_field('Total deductions', "{:,.2f}".format(payroll.deductions)) }}
+            {% else %}
             {{ record_detail_field('Deductions', "{:,.2f}".format(payroll.deductions)) }}
+            {{ record_detail_field('Deduction breakdown', 'Unavailable for this historical payroll record.') }}
+            {% endif %}
             {{ record_detail_field('Net pay', "{:,.2f}".format(payroll.net_pay), emphasized=true) }}
         </dl>
     </section>

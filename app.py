@@ -70,6 +70,17 @@ def create_app(test_config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         BACKUP_UPLOAD_MAX_CONTENT_LENGTH=513 * 1024 * 1024,
+        PAYROLL_MONTHLY_WORKING_DAYS=os.getenv(
+            "EMS_PAYROLL_MONTHLY_WORKING_DAYS", "22"
+        ),
+        PAYROLL_HOURS_PER_DAY=os.getenv("EMS_PAYROLL_HOURS_PER_DAY", "8"),
+        PAYROLL_SHIFT_START=os.getenv("EMS_PAYROLL_SHIFT_START", "08:00"),
+        PAYROLL_LATE_GRACE_MINUTES=os.getenv(
+            "EMS_PAYROLL_LATE_GRACE_MINUTES", "0"
+        ),
+        PAYROLL_NON_WORKING_DATES=os.getenv(
+            "EMS_PAYROLL_NON_WORKING_DATES", ""
+        ),
     )
     if test_config:
         app.config.update(test_config)
@@ -78,7 +89,12 @@ def create_app(test_config=None):
             "DATABASE_URL must be set in the environment or .env file."
         )
 
-    static_assets = ("css/style.css", "js/script.js", "js/database_backup.js")
+    static_assets = (
+        "css/style.css",
+        "js/script.js",
+        "js/database_backup.js",
+        "js/payroll_deductions.js",
+    )
     static_asset_versions = {
         filename: hashlib.sha256(
             (Path(app.static_folder) / filename).read_bytes()

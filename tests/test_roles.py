@@ -1472,14 +1472,15 @@ class RoleManagementTests(unittest.TestCase):
                 "pay_period_end": "2026-10-15",
                 "basic_salary": "3000.00",
                 "allowances": "100.00",
-                "deductions": "50.00",
             },
         )
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             payroll = self.Payroll.query.one()
             payroll_id = payroll.id
-            self.assertEqual(payroll.net_pay, Decimal("3050.00"))
+            self.assertEqual(payroll.net_pay, Decimal("3078.69"))
+            self.assertEqual(payroll.late_minutes, 75)
+            self.assertEqual(payroll.absence_deduction, Decimal("0.00"))
 
         response = self.client.post(
             f"/payroll/{payroll_id}/edit",
@@ -1490,13 +1491,12 @@ class RoleManagementTests(unittest.TestCase):
                 "pay_period_end": "2026-10-15",
                 "basic_salary": "3200.00",
                 "allowances": "100.00",
-                "deductions": "50.00",
             },
         )
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             payroll = self.db.session.get(self.Payroll, payroll_id)
-            self.assertEqual(payroll.net_pay, Decimal("3250.00"))
+            self.assertEqual(payroll.net_pay, Decimal("3277.27"))
 
         response = self.client.post(
             f"/payroll/{payroll_id}/edit",
@@ -1510,10 +1510,10 @@ class RoleManagementTests(unittest.TestCase):
                 "deductions": "5000.00",
             },
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             payroll = self.db.session.get(self.Payroll, payroll_id)
-            self.assertEqual(payroll.net_pay, Decimal("3250.00"))
+            self.assertEqual(payroll.net_pay, Decimal("3277.27"))
 
         response = self.client.post(
             f"/payroll/{payroll_id}/edit",
@@ -1525,7 +1525,6 @@ class RoleManagementTests(unittest.TestCase):
                 "payment_date": "2026-10-17",
                 "basic_salary": "3200.00",
                 "allowances": "100.00",
-                "deductions": "50.00",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -1928,14 +1927,13 @@ class RoleManagementTests(unittest.TestCase):
                 "pay_period_end": "2026-10-31",
                 "basic_salary": "4000.00",
                 "allowances": "200.00",
-                "deductions": "100.00",
             },
         )
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             payroll = self.Payroll.query.one()
             payroll_id = payroll.id
-            self.assertEqual(payroll.net_pay, Decimal("4100.00"))
+            self.assertEqual(payroll.net_pay, Decimal("4200.00"))
 
         response = self.client.post(
             f"/payroll/{payroll_id}/edit",
@@ -1947,13 +1945,12 @@ class RoleManagementTests(unittest.TestCase):
                 "payment_date": "2026-11-05",
                 "basic_salary": "4200.00",
                 "allowances": "200.00",
-                "deductions": "100.00",
             },
         )
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             payroll = self.db.session.get(self.Payroll, payroll_id)
-            self.assertEqual(payroll.net_pay, Decimal("4300.00"))
+            self.assertEqual(payroll.net_pay, Decimal("4400.00"))
             self.assertEqual(payroll.payment_date, date(2026, 11, 5))
 
         response = self.client.post(

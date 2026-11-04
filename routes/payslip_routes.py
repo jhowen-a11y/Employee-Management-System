@@ -28,6 +28,7 @@ from models.payroll import Payroll
 from models.payslip_request import PayslipRequest
 from models.user import User
 from routes.employee_access import current_employee, management_required
+from services.payroll_deductions import attendance_deduction_schema_available
 
 
 payslip_bp = Blueprint("payslip", __name__, url_prefix="/payslips")
@@ -75,7 +76,11 @@ def my_payslips():
         if employee
         else []
     )
-    return render_template("payslips/list.html", payslips=payslips)
+    return render_template(
+        "payslips/list.html",
+        payslips=payslips,
+        deduction_breakdown_available=attendance_deduction_schema_available(),
+    )
 
 
 @payslip_bp.route("/<int:payroll_id>")
@@ -87,6 +92,7 @@ def payslip_detail(payroll_id):
         "payslips/detail.html",
         payroll=payroll,
         employee=employee,
+        deduction_breakdown_available=attendance_deduction_schema_available(),
     )
 
 
@@ -126,10 +132,32 @@ def download_payslip(payroll_id):
         ["Basic salary", f"{payroll.basic_salary:,.2f}"],
         ["Allowances", f"{payroll.allowances:,.2f}"],
         ["Gross salary", f"{gross_pay:,.2f}"],
-        ["Deductions", f"{payroll.deductions:,.2f}"],
-        ["Net salary", f"{payroll.net_pay:,.2f}"],
-        ["Payment status", f"Paid on {payroll.payment_date}"],
     ]
+    if (
+        attendance_deduction_schema_available()
+        and payroll.absence_deduction is not None
+    ):
+        rows.extend(
+            [
+                [
+                    f"Absence deductions ({payroll.absence_days} days)",
+                    f"{payroll.absence_deduction:,.2f}",
+                ],
+                [
+                    f"Late deductions ({payroll.late_minutes} minutes)",
+                    f"{payroll.late_deduction:,.2f}",
+                ],
+                ["Total deductions", f"{payroll.deductions:,.2f}"],
+            ]
+        )
+    else:
+        rows.append(["Deductions", f"{payroll.deductions:,.2f}"])
+    rows.extend(
+        [
+            ["Net salary", f"{payroll.net_pay:,.2f}"],
+            ["Payment status", f"Paid on {payroll.payment_date}"],
+        ]
+    )
     table = Table(rows, colWidths=[2.0 * inch, 4.7 * inch], hAlign="LEFT")
     table.setStyle(
         TableStyle(

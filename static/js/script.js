@@ -163,6 +163,7 @@
             error.hidden = true;
             toggle.removeAttribute("aria-invalid");
         }
+        range.dispatchEvent(new CustomEvent("rangechange", { bubbles: true }));
     }
 
     function renderDateRangeCalendar(range) {

@@ -48,7 +48,13 @@
         <div><dt>Basic salary</dt><dd>{{ "{:,.2f}".format(payroll.basic_salary) }}</dd></div>
         <div><dt>Allowances</dt><dd>{{ "{:,.2f}".format(payroll.allowances) }}</dd></div>
         <div><dt>Gross salary</dt><dd>{{ "{:,.2f}".format(payroll.basic_salary + payroll.allowances) }}</dd></div>
+        {% if deduction_breakdown_available and payroll.absence_deduction is not none %}
+        <div><dt>Absence deductions ({{ payroll.absence_days }} days)</dt><dd>− {{ "{:,.2f}".format(payroll.absence_deduction) }}</dd></div>
+        <div><dt>Late deductions ({{ payroll.late_minutes }} minutes)</dt><dd>− {{ "{:,.2f}".format(payroll.late_deduction) }}</dd></div>
+        <div><dt>Total deductions</dt><dd>− {{ "{:,.2f}".format(payroll.deductions) }}</dd></div>
+        {% else %}
         <div><dt>Deductions</dt><dd>− {{ "{:,.2f}".format(payroll.deductions) }}</dd></div>
+        {% endif %}
         <div class="payslip-net"><dt>Net salary</dt><dd>{{ "{:,.2f}".format(payroll.net_pay) }}</dd></div>
     </dl>
     <p class="payslip-finalized-note">This payslip reflects the finalized values recorded for this pay period.</p>

@@ -7,13 +7,14 @@
 {% block content %}
 <div class="page-heading"><h1>Edit payroll record</h1><p>Update the pay period and amounts.</p></div>
 <section class="panel form-panel">
-    <form method="post" class="form-grid">
+    <form method="post" class="form-grid{% if automatic_deductions %} payroll-deduction-form{% endif %}"
+          {% if automatic_deductions %}data-payroll-deduction-form data-preview-url="{{ url_for('payroll.deduction_preview') }}"{% endif %}>
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-field">
             <label for="employee_id">Employee</label>
             <select id="employee_id" name="employee_id" required>
                 {% for employee in employees %}
-                <option value="{{ employee.id }}" {% if request.form.get('employee_id', '0')|int == employee.id or (not request.form and payroll.employee_id == employee.id) %}selected{% endif %}>{{ employee.first_name }} {{ employee.last_name }}</option>
+                <option value="{{ employee.id }}" data-salary="{{ employee.salary }}" {% if request.form.get('employee_id', '0')|int == employee.id or (not request.form and payroll.employee_id == employee.id) %}selected{% endif %}>{{ employee.first_name }} {{ employee.last_name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -35,11 +36,37 @@
         </div>
         <div class="form-field"><label for="basic_salary">Basic salary</label><input id="basic_salary" name="basic_salary" type="number" min="0" step="0.01" value="{{ request.form.get('basic_salary', payroll.basic_salary) }}" required></div>
         <div class="form-field"><label for="allowances">Allowances</label><input id="allowances" name="allowances" type="number" min="0" step="0.01" value="{{ request.form.get('allowances', payroll.allowances) }}"></div>
-        <div class="form-field"><label for="deductions">Deductions</label><input id="deductions" name="deductions" type="number" min="0" step="0.01" value="{{ request.form.get('deductions', payroll.deductions) }}"></div>
+        {% if automatic_deductions %}
+        <section class="payroll-deduction-preview" data-payroll-preview aria-labelledby="payroll-deduction-heading" aria-live="polite">
+            <div class="payroll-preview-heading">
+                <div><h2 id="payroll-deduction-heading">Attendance deduction preview</h2><p>Editing recalculates attendance deductions using current records.</p></div>
+                <button class="button button-secondary" type="button" data-preview-refresh>Refresh calculation</button>
+            </div>
+            <p class="payroll-preview-message" data-preview-message>Recalculate to preview deductions.</p>
+            <dl class="payroll-preview-grid" data-preview-results hidden>
+                <div><dt>Daily rate</dt><dd data-preview-value="daily_rate"></dd></div>
+                <div><dt>Hourly rate</dt><dd data-preview-value="hourly_rate"></dd></div>
+                <div><dt>Deductible absence days</dt><dd data-preview-value="absence_days"></dd></div>
+                <div><dt>Absence deduction</dt><dd data-preview-value="absence_deduction"></dd></div>
+                <div><dt>Late time</dt><dd><span data-preview-value="late_minutes"></span> min (<span data-preview-value="late_hours"></span> hr)</dd></div>
+                <div><dt>Late deduction</dt><dd data-preview-value="late_deduction"></dd></div>
+                <div><dt>Total attendance deductions</dt><dd data-preview-value="total_deductions"></dd></div>
+                <div><dt>Estimated net pay</dt><dd data-preview-value="estimated_net_pay"></dd></div>
+            </dl>
+        </section>
+        {% else %}
+        <div class="form-field"><label for="deductions">Existing deductions</label><input id="deductions" name="deductions" type="number" min="0" step="0.01" value="{{ request.form.get('deductions', payroll.deductions) }}"><small>This historical record predates automatic attendance deductions; its existing deduction is retained unless edited.</small></div>
+        {% endif %}
         <div class="form-actions">
             <button class="button button-primary" type="submit">Save changes</button>
             <a class="button button-secondary" data-record-modal href="{{ url_for('payroll.payroll_detail', payroll_id=payroll.id) }}">Cancel</a>
         </div>
     </form>
 </section>
+{% endblock %}
+
+{% block scripts %}
+{% if automatic_deductions %}
+<script src="{{ url_for('static', filename='js/payroll_deductions.js', v=static_asset_version('js/payroll_deductions.js')) }}" defer></script>
+{% endif %}
 {% endblock %}

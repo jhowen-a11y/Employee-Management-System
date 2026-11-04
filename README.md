@@ -165,6 +165,22 @@ Open <http://127.0.0.1:5000/> in your browser. Press `Ctrl+C` in the terminal to
 
 All application pages require sign-in. Users are redirected to a role-specific home page after signing in. Payroll history cannot be deleted.
 
+## Attendance-based payroll deductions
+
+New payroll records calculate absence and late deductions on the server. The add-payroll preview is informational; saving recalculates from the current attendance and approved-leave records. Absences are charged only for explicit `Absent` entries on Monday–Friday, excluding approved leave and configured non-working dates. Missing attendance is never assumed to be an absence. Late deductions use only records marked `Late` with a time-in; one maximum late duration is used per date to avoid duplicate daily charges. Existing payroll records keep their saved totals and are not backfilled.
+
+The current project has no employee-specific schedule or holiday calendar. The default schedule is 22 working days per month, 8 hours per day, an 08:00 start, and no grace period. Configure these server-side environment variables when the organization’s schedule differs:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `EMS_PAYROLL_MONTHLY_WORKING_DAYS` | `22` | Monthly denominator for the daily rate |
+| `EMS_PAYROLL_HOURS_PER_DAY` | `8` | Hours used to derive hourly rate |
+| `EMS_PAYROLL_SHIFT_START` | `08:00` | Start time used to derive minutes late for records already marked `Late` |
+| `EMS_PAYROLL_LATE_GRACE_MINUTES` | `0` | Grace minutes subtracted from the recorded lateness |
+| `EMS_PAYROLL_NON_WORKING_DATES` | empty | Comma-separated `YYYY-MM-DD` dates excluded from weekday absence/late deductions |
+
+These settings are app-wide, not per employee. Weekends are treated as rest days; this implementation does not model employee-specific rotating shifts or scheduled weekend work. Historical payrolls whose breakdown fields are empty continue to display their original total deduction without inventing absence/late amounts. The payroll migration adds nullable breakdown columns and prevents duplicate employee/pay-period records; if duplicate periods already exist, the migration stops without deleting or changing payroll rows so they can be reviewed first.
+
 ## Main pages
 
 | Page | URL | Access |
@@ -213,7 +229,7 @@ python -m unittest discover -s tests -v
 ├── app.py                 # Flask app setup, authentication checks, and CLI commands
 ├── models/                # SQLAlchemy models
 ├── routes/                # Feature blueprints and access-control helpers
-├── services/              # Database backup packaging and restore operations
+├── services/              # Business services, including backup and payroll calculations
 ├── templates/             # Jinja pages, organized by feature
 ├── static/                # CSS and JavaScript
 ├── migrations/            # Alembic/Flask-Migrate schema history

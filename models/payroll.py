@@ -1,7 +1,15 @@
 
 from . import db
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import date, datetime
 from decimal import Decimal
@@ -10,6 +18,12 @@ from decimal import Decimal
 class Payroll(db.Model):
     __tablename__ = "payroll"
     __table_args__ = (
+        UniqueConstraint(
+            "employee_id",
+            "pay_period_start",
+            "pay_period_end",
+            name="uq_payroll_employee_period",
+        ),
         Index("ix_payroll_period_id", "pay_period_start", "id"),
         Index(
             "ix_payroll_employee_period_id",
@@ -33,6 +47,22 @@ class Payroll(db.Model):
     allowances: Mapped[Decimal] = mapped_column(Numeric(10, 2),default=Decimal("0.00"),nullable=False)
 
     deductions: Mapped[Decimal] = mapped_column(Numeric(10, 2),default=Decimal("0.00"),nullable=False)
+
+    absence_days: Mapped[int | None] = deferred(
+        mapped_column(Integer, nullable=True)
+    )
+
+    late_minutes: Mapped[int | None] = deferred(
+        mapped_column(Integer, nullable=True)
+    )
+
+    absence_deduction: Mapped[Decimal | None] = deferred(
+        mapped_column(Numeric(10, 2), nullable=True)
+    )
+
+    late_deduction: Mapped[Decimal | None] = deferred(
+        mapped_column(Numeric(10, 2), nullable=True)
+    )
 
     net_pay: Mapped[Decimal] = mapped_column(Numeric(10, 2),nullable=False)
 
