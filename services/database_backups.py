@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -16,22 +17,32 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from flask import current_app
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.utils import secure_filename
 
 from models import db
+from models.database_backup import DatabaseBackup
+from services.supabase_storage import (
+    SupabaseStorageConfigurationError,
+    storage_bucket,
+)
 
 
 logger = logging.getLogger(__name__)
 FORMAT_VERSION = 1
 MAX_BACKUP_SIZE = 512 * 1024 * 1024
 MAX_MANIFEST_SIZE = 16 * 1024
+MAX_PACKAGE_SIZE = MAX_BACKUP_SIZE + MAX_MANIFEST_SIZE + 1024 * 1024
+MAX_REMOTE_PACKAGE_SIZE = 50 * 1000 * 1000
+BACKUP_BUCKET = "ems-database-backups"
+BACKUP_STORAGE_PREFIX = "ems"
 MAX_HISTORY_ITEMS = 200
 PBKDF2_ITERATIONS = 600_000
 PASSWORD_MIN_LENGTH = 12
 DATABASE_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
 BACKUP_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+LOCAL_OPERATION_LOCK = threading.Lock()
 PACKAGE_EXTENSION = ".emsbackup"
 
 
@@ -65,6 +76,76 @@ def _backup_directory():
         logger.error("Could not prepare private backup storage: error_type=%s", type(error).__name__)
         raise BackupError("Private backup storage is unavailable.") from error
     return directory
+
+
+def _uses_supabase_storage():
+    return current_app.config.get("BACKUP_STORAGE_BACKEND", "local") == "supabase"
+
+
+def _package_size_limit():
+    return MAX_REMOTE_PACKAGE_SIZE if _uses_supabase_storage() else MAX_PACKAGE_SIZE
+
+
+def _package_size_error():
+    if _uses_supabase_storage():
+        return "The final backup package exceeds the 50 MB Supabase Storage limit."
+    return "The generated backup exceeds the 512 MB size limit."
+
+
+def _backup_storage_bucket():
+    try:
+        return storage_bucket(BACKUP_BUCKET)
+    except SupabaseStorageConfigurationError as error:
+        logger.error("Supabase backup storage is unavailable: error_type=%s", type(error).__name__)
+        raise BackupError("Private backup storage is unavailable.") from error
+
+
+def _storage_key(backup_id):
+    if not BACKUP_ID_PATTERN.fullmatch(backup_id):
+        raise BackupError("The requested backup is invalid.")
+    return f"{BACKUP_STORAGE_PREFIX}/{backup_id}{PACKAGE_EXTENSION}"
+
+
+def _upload_package(path, storage_key):
+    try:
+        bucket = _backup_storage_bucket()
+        with path.open("rb") as package:
+            bucket.upload(
+                storage_key,
+                package.read(),
+                {
+                    "content-type": "application/zip",
+                    "upsert": "false",
+                },
+            )
+    except BackupError:
+        raise
+    except Exception as error:
+        logger.error("Could not upload backup object: error_type=%s", type(error).__name__)
+        raise BackupError("The backup could not be saved to private storage.") from error
+
+
+def _download_package(storage_key):
+    try:
+        contents = _backup_storage_bucket().download(storage_key)
+    except BackupError:
+        raise
+    except Exception as error:
+        logger.error("Could not retrieve backup object: error_type=%s", type(error).__name__)
+        raise BackupError("The selected backup could not be retrieved from private storage.") from error
+    if not isinstance(contents, bytes) or len(contents) > MAX_REMOTE_PACKAGE_SIZE:
+        raise BackupError("The selected backup file is invalid or exceeds 50 MB.")
+    return contents
+
+
+def _delete_package(storage_key):
+    try:
+        _backup_storage_bucket().remove([storage_key])
+    except BackupError:
+        raise
+    except Exception as error:
+        logger.error("Could not delete backup object: error_type=%s", type(error).__name__)
+        raise BackupError("The backup could not be deleted from private storage.") from error
 
 
 def _database_url():
@@ -180,9 +261,11 @@ def _run_tool(arguments, url, timeout=900):
                     "Unable to complete the database operation. Please try again."
                 ) from error
     if result.returncode:
+        stderr_text = result.stderr.decode("utf-8", errors="replace").strip()
         logger.error(
-            "PostgreSQL backup utility returned an error: return_code=%s",
+            "PostgreSQL backup utility returned an error: return_code=%s stderr=%s",
             result.returncode,
+            stderr_text,
         )
         raise BackupError("Unable to complete the database operation. Please try again.")
     return result
@@ -285,7 +368,7 @@ def _write_package(dump_path, package_path, password):
         )
     manifest["payload_size"] = payload_path.stat().st_size
     if manifest["payload_size"] > MAX_BACKUP_SIZE:
-        raise BackupError("The generated backup exceeds the 512 MB size limit.")
+        raise BackupError("The database dump exceeds the 50 MB storage limit.")
     manifest["payload_sha256"] = _digest_file(payload_path)
     manifest["signature"] = _manifest_signature(manifest)
     with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_STORED) as package:
@@ -294,6 +377,8 @@ def _write_package(dump_path, package_path, password):
             _canonical_json(manifest),
         )
         package.write(payload_path, "backup.enc" if password else "backup.dump")
+    if package_path.stat().st_size > _package_size_limit():
+        raise BackupError(_package_size_error())
 
 
 def _read_manifest(package):
@@ -401,6 +486,19 @@ def _metadata_path(backup_id):
 
 
 def _read_metadata(backup_id):
+    if _uses_supabase_storage():
+        if not BACKUP_ID_PATTERN.fullmatch(backup_id):
+            return None
+        try:
+            record = db.session.get(DatabaseBackup, backup_id)
+        except SQLAlchemyError as error:
+            db.session.rollback()
+            logger.error("Could not read persistent backup metadata: error_type=%s", type(error).__name__)
+            raise BackupError("Backup information is temporarily unavailable.") from error
+        if record is None:
+            return None
+        return _metadata_from_record(record)
+
     metadata_path = _metadata_path(backup_id)
     if metadata_path is None or metadata_path.is_symlink() or not metadata_path.is_file():
         return None
@@ -429,7 +527,66 @@ def _read_metadata(backup_id):
     return metadata
 
 
+def _metadata_from_record(record):
+    created_at = record.created_at
+    expected_storage_key = _storage_key(record.id)
+    if (
+        not isinstance(record.filename, str)
+        or secure_filename(record.filename) != record.filename
+        or Path(record.filename).name != record.filename
+        or not record.filename.endswith(PACKAGE_EXTENSION)
+        or record.status not in {"successful", "failed"}
+        or not isinstance(record.file_size, int)
+        or isinstance(record.file_size, bool)
+        or record.file_size < 0
+        or (
+            record.status == "successful"
+            and record.file_size > MAX_REMOTE_PACKAGE_SIZE
+        )
+        or record.storage_key != expected_storage_key
+        or not isinstance(record.verified, bool)
+    ):
+        raise BackupError("Stored backup information is invalid.")
+    if created_at is None:
+        raise BackupError("Stored backup information is invalid.")
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return {
+        "id": record.id,
+        "filename": record.filename,
+        "created_at": created_at.isoformat(),
+        "file_size": record.file_size,
+        "created_by": record.created_by,
+        "encrypted": record.encrypted,
+        "status": record.status,
+        "storage_key": record.storage_key,
+        "verified": record.verified,
+    }
+
+
 def _write_metadata(metadata):
+    if _uses_supabase_storage():
+        try:
+            record = db.session.get(DatabaseBackup, metadata["id"])
+            if record is None:
+                record = DatabaseBackup(id=metadata["id"])
+                db.session.add(record)
+            created_at = datetime.fromisoformat(metadata["created_at"])
+            record.filename = metadata["filename"]
+            record.created_at = created_at
+            record.file_size = metadata["file_size"]
+            record.created_by = metadata["created_by"]
+            record.encrypted = metadata["encrypted"]
+            record.status = metadata["status"]
+            record.storage_key = metadata.get("storage_key")
+            record.verified = metadata.get("verified", False)
+            db.session.commit()
+        except SQLAlchemyError as error:
+            db.session.rollback()
+            logger.error("Could not write persistent backup metadata: error_type=%s", type(error).__name__)
+            raise BackupError("Backup information could not be saved.") from error
+        return
+
     metadata_path = _metadata_path(metadata["id"])
     temporary_path = metadata_path.with_name(
         f".{metadata['id']}.{uuid.uuid4().hex}.tmp"
@@ -453,23 +610,68 @@ def _backup_file(metadata):
 
 
 def backup_overview():
-    database_name = db.engine.url.database if db.engine.dialect.name == "postgresql" else None
+    try:
+        database_name = db.engine.url.database if db.engine.dialect.name == "postgresql" else None
+    except SQLAlchemyError:
+        database_name = None
+    metadata_available = True
     try:
         all_backups = list_backups(limit=None)
     except BackupError:
         all_backups = []
+        metadata_available = False
     backups = all_backups[:MAX_HISTORY_ITEMS]
     successful = [item for item in all_backups if item["status"] == "successful"]
     latest = successful[0] if successful else None
+    storage_available = False
+    if _uses_supabase_storage():
+        try:
+            _backup_storage_bucket().list("", {"limit": 1})
+            storage_available = True
+        except BackupError:
+            pass
+        except Exception as error:
+            logger.error("Could not check Supabase backup storage: error_type=%s", type(error).__name__)
+    else:
+        try:
+            _backup_directory()
+            storage_available = True
+        except BackupError:
+            pass
+    try:
+        db.session.execute(text("SELECT 1"))
+        connection_status = "Connected"
+    except SQLAlchemyError:
+        db.session.rollback()
+        connection_status = "Unavailable"
+    restore_available = False
+    try:
+        restore_available = bool(
+            db.session.execute(
+                text(
+                    "SELECT rolcreatedb FROM pg_roles "
+                    "WHERE rolname = current_user"
+                )
+            ).scalar()
+        )
+    except SQLAlchemyError:
+        db.session.rollback()
     return {
         "database_name": database_name or "Unavailable",
-        "connection_status": "Unavailable",
+        "connection_status": connection_status,
         "backups": backups,
         "backup_count": len(successful),
         "latest_backup": latest,
         "utilities_available": all(
             _has_utility(name) for name in ("pg_dump", "pg_restore")
         ),
+        "storage_available": storage_available,
+        "backup_service_available": storage_available
+        and metadata_available
+        and connection_status == "Connected"
+        and all(_has_utility(name) for name in ("pg_dump", "pg_restore")),
+        "storage_backend": "supabase" if _uses_supabase_storage() else "local",
+        "restore_available": restore_available,
     }
 
 
@@ -482,6 +684,19 @@ def _has_utility(name):
 
 
 def list_backups(limit=MAX_HISTORY_ITEMS):
+    if _uses_supabase_storage():
+        try:
+            records = db.session.execute(
+                select(DatabaseBackup).order_by(DatabaseBackup.created_at.desc())
+            ).scalars().all()
+        except SQLAlchemyError as error:
+            db.session.rollback()
+            logger.error("Could not list persistent backup metadata: error_type=%s", type(error).__name__)
+            raise BackupError("Backup information is temporarily unavailable.") from error
+        backups = [_metadata_from_record(record) for record in records]
+        backups.sort(key=lambda item: item["created_at"], reverse=True)
+        return backups if limit is None else backups[:limit]
+
     directory = _backup_directory()
     backups = []
     for metadata_path in directory.glob("*.json"):
@@ -511,6 +726,11 @@ def list_backups(limit=MAX_HISTORY_ITEMS):
 def create_backup(created_by, password=None):
     if password is not None and len(password) < PASSWORD_MIN_LENGTH:
         raise BackupError("Use an encryption password with at least 12 characters.")
+    with LOCAL_OPERATION_LOCK:
+        return _create_backup_internal(created_by, password)
+
+
+def _create_backup_internal(created_by, password=None):
     url = _database_url()
     backup_id = uuid.uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
@@ -525,7 +745,10 @@ def create_backup(created_by, password=None):
         "created_by": created_by,
         "encrypted": bool(password),
         "status": "failed",
+        "storage_key": _storage_key(backup_id) if _uses_supabase_storage() else None,
+        "verified": False,
     }
+    upload_attempted = False
     try:
         dump_utility = _utility_path("pg_dump")
         with tempfile.TemporaryDirectory(prefix=".create-", dir=directory) as temp:
@@ -545,16 +768,38 @@ def create_backup(created_by, password=None):
             _verify_dump(dump_path, url)
             if dump_path.stat().st_size > MAX_BACKUP_SIZE:
                 raise BackupError("The generated backup exceeds the 512 MB size limit.")
+            if (
+                _uses_supabase_storage()
+                and dump_path.stat().st_size > MAX_REMOTE_PACKAGE_SIZE
+            ):
+                raise BackupError(
+                    "The final backup package exceeds the 50 MB Supabase Storage limit."
+                )
             _write_package(dump_path, staged_package, password)
             if os.name != "nt":
                 staged_package.chmod(0o600)
-            os.replace(staged_package, package_path)
+            package_size = staged_package.stat().st_size
+            if package_size > _package_size_limit():
+                raise BackupError(_package_size_error())
+            if _uses_supabase_storage():
+                upload_attempted = True
+                _upload_package(staged_package, metadata["storage_key"])
+            else:
+                os.replace(staged_package, package_path)
         metadata["status"] = "successful"
-        metadata["file_size"] = package_path.stat().st_size
+        metadata["file_size"] = (
+            package_size if _uses_supabase_storage() else package_path.stat().st_size
+        )
+        metadata["verified"] = True
         _write_metadata(metadata)
         return metadata
     except Exception as error:
         package_path.unlink(missing_ok=True)
+        if upload_attempted and metadata.get("storage_key"):
+            try:
+                _delete_package(metadata["storage_key"])
+            except BackupError:
+                logger.error("Could not clean up an incomplete backup object.")
         logger.error("Database backup failed: error_type=%s", type(error).__name__)
         try:
             _write_metadata(metadata)
@@ -569,6 +814,8 @@ def get_backup(backup_id):
     metadata = _read_metadata(backup_id)
     if metadata is None or metadata["status"] != "successful":
         return None
+    if _uses_supabase_storage():
+        return metadata
     path = _backup_file(metadata)
     if path is None:
         return None
@@ -579,6 +826,20 @@ def delete_backup(backup_id):
     metadata = _read_metadata(backup_id)
     if metadata is None:
         return False
+    if _uses_supabase_storage():
+        if metadata["status"] == "successful" and metadata.get("storage_key"):
+            _delete_package(metadata["storage_key"])
+        try:
+            record = db.session.get(DatabaseBackup, backup_id)
+            if record is not None:
+                db.session.delete(record)
+                db.session.commit()
+        except SQLAlchemyError as error:
+            db.session.rollback()
+            logger.error("Could not delete persistent backup metadata: error_type=%s", type(error).__name__)
+            raise BackupError("Backup information could not be deleted.") from error
+        return True
+
     backup_path = _backup_file(metadata) if metadata["status"] == "successful" else None
     if backup_path:
         backup_path.unlink()
@@ -622,6 +883,11 @@ def restore_backup(upload_stream, database_name, password=""):
     if database_name.casefold() == (url.database or "").casefold():
         raise BackupError("The active database cannot be used as the restore destination.")
 
+    with LOCAL_OPERATION_LOCK:
+        return _restore_backup_internal(upload_stream, database_name, password, url)
+
+
+def _restore_backup_internal(upload_stream, database_name, password, url):
     directory = _backup_directory()
     try:
         with tempfile.TemporaryDirectory(prefix=".restore-", dir=directory) as temp:
@@ -631,8 +897,8 @@ def restore_backup(upload_stream, database_name, password=""):
             with package_path.open("xb") as staged_upload:
                 while chunk := upload_stream.read(1024 * 1024):
                     size += len(chunk)
-                    if size > MAX_BACKUP_SIZE + MAX_MANIFEST_SIZE + 1024 * 1024:
-                        raise BackupError("The uploaded backup file is too large.")
+                    if size > MAX_PACKAGE_SIZE:
+                        raise BackupError("The uploaded backup file exceeds the 512 MB size limit.")
                     staged_upload.write(chunk)
             if size < 1:
                 raise BackupError("The uploaded backup file is invalid.")
@@ -685,6 +951,8 @@ def restore_backup(upload_stream, database_name, password=""):
                     "--no-acl",
                     "--exit-on-error",
                     "--single-transaction",
+                    "-d",
+                    database_name,
                     str(dump_path),
                 ]
                 _run_tool(arguments, target_url)

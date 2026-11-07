@@ -6826,3 +6826,56 @@ body {
     color: #888;
     font-size: 12px;
 }
+
+/* Database backup worker configuration banner */
+.database-backup-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin: 0 0 24px;
+    padding: 16px 18px;
+    border: 1px solid #e3c2a0;
+    border-left: 4px solid #d97706;
+    border-radius: 10px;
+    background: #fff7ed;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.database-backup-banner-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fed7aa;
+    color: #9a3412;
+}
+
+.database-backup-banner-icon i {
+    width: 20px;
+    height: 20px;
+}
+
+.database-backup-banner-content h2 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    color: #7c2d12;
+}
+
+.database-backup-banner-content p {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #7c2d12;
+    line-height: 1.5;
+}
+
+.database-backup-banner-content p:last-child {
+    margin-bottom: 0;
+}
+
+.database-backup-banner-detail {
+    font-weight: 600;
+    color: #5c2d12 !important;
+}

@@ -70,6 +70,8 @@ def create_app(test_config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         BACKUP_UPLOAD_MAX_CONTENT_LENGTH=513 * 1024 * 1024,
+        BACKUP_WORKER_URL=os.getenv("BACKUP_WORKER_URL"),
+        BACKUP_WORKER_TOKEN=os.getenv("BACKUP_WORKER_TOKEN"),
         PAYROLL_MONTHLY_WORKING_DAYS=os.getenv(
             "EMS_PAYROLL_MONTHLY_WORKING_DAYS", "22"
         ),
@@ -223,7 +225,7 @@ def create_app(test_config=None):
         title = title_map.get(code, "Request unavailable")
         message = error.description or "Please try again later."
         if code == 413:
-            message = "The uploaded file exceeds the 512 MB size limit."
+            message = "The uploaded backup file exceeds the 512 MB size limit."
         if code == 500:
             message = "The service is temporarily unavailable. Please try again."
         return render_safe_error(code, title, message)

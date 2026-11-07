@@ -11,6 +11,7 @@ from sqlalchemy.engine import make_url
 from werkzeug.security import generate_password_hash
 
 import services.database_backups as database_backups
+from models.database_backup import DatabaseBackup
 
 
 class DatabaseBackupTests(unittest.TestCase):
@@ -285,7 +286,7 @@ class DatabaseBackupTests(unittest.TestCase):
         finally:
             self.app.config["BACKUP_UPLOAD_MAX_CONTENT_LENGTH"] = previous_limit
         self.assertEqual(response.status_code, 413)
-        self.assertIn(b"uploaded file exceeds the 512 MB size limit", response.data)
+        self.assertIn(b"uploaded backup file exceeds the 512 MB size limit", response.data)
 
     def test_failed_backup_is_recorded_as_failed_not_successful(self):
         with self.app.app_context():
@@ -393,3 +394,113 @@ class DatabaseBackupTests(unittest.TestCase):
                     self.assertEqual(passfile.stat().st_mode & 0o777, 0o600)
             finally:
                 passfile.unlink(missing_ok=True)
+
+    def test_supabase_backend_uploads_package_and_persists_metadata_in_database(self):
+        previous_backend = self.app.config.get("BACKUP_STORAGE_BACKEND")
+        self.app.config["BACKUP_STORAGE_BACKEND"] = "supabase"
+        try:
+            uploaded_sizes = []
+
+            def capture_upload(path, _storage_key):
+                uploaded_sizes.append(path.stat().st_size)
+
+            with self.app.app_context(), patch.object(
+                database_backups,
+                "_upload_package",
+                side_effect=capture_upload,
+            ) as upload:
+                backup = self._create_test_backup()
+                self.assertEqual(backup["status"], "successful")
+                self.assertTrue(backup["verified"])
+                self.assertEqual(
+                    backup["storage_key"],
+                    f"ems/{backup['id']}.emsbackup",
+                )
+                self.assertEqual(backup["file_size"], uploaded_sizes[0])
+                upload.assert_called_once()
+                self.assertEqual(
+                    database_backups.list_backups()[0]["id"],
+                    backup["id"],
+                )
+                self.assertIsNotNone(
+                    self.db.session.get(DatabaseBackup, backup["id"])
+                )
+                self.assertFalse(
+                    Path(self.backup_directory.name, backup["filename"]).exists()
+                )
+        finally:
+            if previous_backend is None:
+                self.app.config.pop("BACKUP_STORAGE_BACKEND", None)
+            else:
+                self.app.config["BACKUP_STORAGE_BACKEND"] = previous_backend
+
+    def test_supabase_backend_rejects_oversize_final_package_before_upload(self):
+        previous_backend = self.app.config.get("BACKUP_STORAGE_BACKEND")
+        self.app.config["BACKUP_STORAGE_BACKEND"] = "supabase"
+        try:
+            def write_oversize_package(_dump_path, package_path, _password):
+                package_path.write_bytes(b"x" * 101)
+
+            with self.app.app_context(), patch.object(
+                database_backups,
+                "MAX_REMOTE_PACKAGE_SIZE",
+                100,
+            ), patch.object(
+                database_backups,
+                "_write_package",
+                side_effect=write_oversize_package,
+            ), patch.object(
+                database_backups,
+                "_upload_package",
+            ) as upload, patch.object(
+                database_backups,
+                "_delete_package",
+            ) as delete_object, patch.object(
+                database_backups,
+                "_database_url",
+                return_value=self._postgres_url(),
+            ), patch.object(
+                database_backups,
+                "_utility_path",
+                side_effect=lambda name: name,
+            ), patch.object(
+                database_backups,
+                "_run_tool",
+                side_effect=self._mock_tool,
+            ):
+                with self.assertRaisesRegex(
+                    database_backups.BackupError,
+                    "final backup package exceeds the 50 MB",
+                ):
+                    database_backups.create_backup("admin")
+                upload.assert_not_called()
+                delete_object.assert_not_called()
+                self.assertEqual(database_backups.list_backups()[0]["status"], "failed")
+        finally:
+            if previous_backend is None:
+                self.app.config.pop("BACKUP_STORAGE_BACKEND", None)
+            else:
+                self.app.config["BACKUP_STORAGE_BACKEND"] = previous_backend
+
+    def test_supabase_deletion_removes_object_and_database_metadata(self):
+        previous_backend = self.app.config.get("BACKUP_STORAGE_BACKEND")
+        self.app.config["BACKUP_STORAGE_BACKEND"] = "supabase"
+        try:
+            with self.app.app_context(), patch.object(
+                database_backups,
+                "_upload_package",
+            ), patch.object(
+                database_backups,
+                "_delete_package",
+            ) as delete_object:
+                backup = self._create_test_backup()
+                self.assertTrue(database_backups.delete_backup(backup["id"]))
+                delete_object.assert_called_once_with(backup["storage_key"])
+                self.assertIsNone(
+                    self.db.session.get(DatabaseBackup, backup["id"])
+                )
+        finally:
+            if previous_backend is None:
+                self.app.config.pop("BACKUP_STORAGE_BACKEND", None)
+            else:
+                self.app.config["BACKUP_STORAGE_BACKEND"] = previous_backend
