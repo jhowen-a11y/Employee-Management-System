@@ -213,15 +213,12 @@ class DatabaseBackupTests(unittest.TestCase):
 
             with patch.object(
                 database_backups, "database_url", return_value=self._postgres_url()
-            ), patch.object(
-                database_backups, "clear_active_database"
-            ) as clear_database:
+            ):
                 with self.assertRaises(database_backups.BackupError):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
                         "incorrect-password",
                     )
-                clear_database.assert_not_called()
 
                 with patch.object(
                     database_backups,
@@ -230,21 +227,16 @@ class DatabaseBackupTests(unittest.TestCase):
                 ), patch.object(
                     database_backups,
                     "run_tool",
-                    return_value=SimpleNamespace(
-                        returncode=0,
-                        stdout=b"",
-                        stderr=b"",
-                    ),
-                ) as run_tool, patch.object(
-                    database_backups, "clear_active_database"
-                ) as clear_database:
+                    side_effect=self._mock_tool,
+                ) as run_tool:
                     destination = database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
                         "very-strong-test-password",
                     )
                 self.assertEqual(destination, "ems")
-                clear_database.assert_called_once()
-                self.assertIn("--single-transaction", run_tool.call_args_list[-1].args[0])
+                restore_arguments = run_tool.call_args_list[-1].args[0]
+                self.assertIn("--single-transaction", restore_arguments)
+                self.assertIn("psql", restore_arguments[0])
 
     def test_delete_removes_backup_and_metadata_from_supabase(self):
         with self.app.app_context():
@@ -336,6 +328,14 @@ class DatabaseBackupTests(unittest.TestCase):
                         stdout=b"",
                         stderr=b"",
                     )
+                if "psql" not in arguments[0]:
+                    output_path = Path(arguments[arguments.index("--file") + 1])
+                    output_path.write_bytes(b"restore sql")
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=b"",
+                        stderr=b"",
+                    )
                 raise database_backups.BackupError("safe test failure")
 
             with patch.object(
@@ -343,15 +343,15 @@ class DatabaseBackupTests(unittest.TestCase):
             ), patch.object(
                 database_backups, "utility_path", side_effect=lambda name: name
             ), patch.object(
-                database_backups, "clear_active_database"
-            ) as clear_database, patch.object(
                 database_backups, "run_tool", side_effect=fail_restore
             ):
-                with self.assertRaisesRegex(database_backups.BackupError, "Unable to restore"):
+                with self.assertRaisesRegex(
+                    database_backups.BackupError,
+                    "transaction rolled back",
+                ):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
                     )
-                clear_database.assert_called_once()
 
     def test_package_is_signed_and_contains_only_supported_archive(self):
         with self.app.app_context():

@@ -17,7 +17,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask import current_app
-from sqlalchemy import text
 from supabase import create_client
 from werkzeug.utils import secure_filename
 
@@ -85,9 +84,14 @@ def database_url():
 
 
 def utility_path(name):
-    configured = current_app.config.get(
-        "PG_DUMP_PATH" if name == "pg_dump" else "PG_RESTORE_PATH"
-    ) or os.getenv("PG_DUMP_PATH" if name == "pg_dump" else "PG_RESTORE_PATH")
+    config_key = {
+        "pg_dump": "PG_DUMP_PATH",
+        "pg_restore": "PG_RESTORE_PATH",
+        "psql": "PSQL_PATH",
+    }.get(name)
+    if config_key is None:
+        raise BackupError("Unsupported PostgreSQL utility.")
+    configured = current_app.config.get(config_key) or os.getenv(config_key)
     utility = None
     if configured:
         configured_path = Path(configured).expanduser()
@@ -489,7 +493,7 @@ def backup_overview():
         "backup_count": len(successful),
         "latest_backup": latest,
         "utilities_available": all(
-            has_utility(name) for name in ("pg_dump", "pg_restore")
+            has_utility(name) for name in ("pg_dump", "pg_restore", "psql")
         ),
     }
 
@@ -653,21 +657,6 @@ def delete_backup(backup_id):
     return True
 
 
-def clear_active_database():
-    try:
-        with db.engine.begin() as connection:
-            connection.execute(text("DROP SCHEMA public CASCADE"))
-            connection.execute(text("CREATE SCHEMA public"))
-    except Exception as error:
-        logger.error(
-            "Could not clear the active database schema: error_type=%s",
-            type(error).__name__,
-        )
-        raise BackupError(
-            "Could not clear the active database before restoring the backup."
-        ) from error
-
-
 def restore_backup(upload_stream, password=""):
     url = database_url()
 
@@ -714,21 +703,48 @@ def restore_backup(upload_stream, password=""):
             else:
                 os.replace(payload_path, dump_path)
             verify_dump(dump_path, url)
-            clear_active_database()
-            arguments = [
+
+            generated_sql_path = temp_directory / "generated_restore.sql"
+            generate_restore_sql = [
                 utility_path("pg_restore"),
                 "--no-owner",
                 "--no-acl",
                 "--exit-on-error",
-                "--single-transaction",
+                "--clean",
+                "--if-exists",
+                "--file",
+                str(generated_sql_path),
                 str(dump_path),
             ]
+            run_tool(generate_restore_sql, url)
+            if (
+                not generated_sql_path.is_file()
+                or not generated_sql_path.stat().st_size
+            ):
+                raise BackupError("Unable to prepare the database restore.")
+
+            restore_sql_path = temp_directory / "restore.sql"
+            with restore_sql_path.open("wb") as restore_sql:
+                restore_sql.write(b"DROP SCHEMA public CASCADE;\n")
+                restore_sql.write(b"CREATE SCHEMA public;\n")
+                with generated_sql_path.open("rb") as generated_sql:
+                    restore_sql.write(generated_sql.read())
+
             try:
-                run_tool(arguments, url)
+                run_tool(
+                    [
+                        utility_path("psql"),
+                        "--set=ON_ERROR_STOP=on",
+                        "--single-transaction",
+                        "--file",
+                        str(restore_sql_path),
+                    ],
+                    url,
+                )
             except BackupError as error:
                 raise BackupError(
-                    "Unable to restore the backup. The active database may be "
-                    "incomplete."
+                    "Unable to restore the backup. The transaction rolled back, "
+                    "so the active database was not changed."
                 ) from error
     except BackupError:
         raise
