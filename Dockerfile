@@ -10,6 +10,8 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+    
+RUN which pg_dump && pg_dump --version && which pg_restore
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
