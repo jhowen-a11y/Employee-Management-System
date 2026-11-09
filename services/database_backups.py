@@ -10,20 +10,23 @@ import tempfile
 import uuid
 import zipfile
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
 from flask import current_app
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from supabase import create_client
 from werkzeug.utils import secure_filename
 
 from models import db
 
 
 logger = logging.getLogger(__name__)
+DEFAULT_BACKUP_BUCKET = "database-backups"
 FORMAT_VERSION = 1
 MAX_BACKUP_SIZE = 512 * 1024 * 1024
 MAX_MANIFEST_SIZE = 16 * 1024
@@ -41,40 +44,48 @@ class BackupError(Exception):
         self.public_message = public_message
 
 
-def _backup_directory():
-    configured = current_app.config.get("BACKUP_DIRECTORY") or os.getenv(
-        "EMS_BACKUP_DIRECTORY"
+def backup_bucket_name():
+    return os.getenv("SUPABASE_BACKUP_BUCKET", DEFAULT_BACKUP_BUCKET)
+
+
+def backup_bucket():
+    project_url = os.getenv("SUPABASE_URL")
+    secret_key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_SECRET_KEY")
     )
-    if configured:
-        directory = Path(configured).expanduser()
-    elif os.name == "nt":
-        local_data = Path(os.getenv("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-        directory = local_data / "MCM-EMS" / "database-backups"
-    else:
-        local_data = Path(os.getenv("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-        directory = local_data / "mcm-ems" / "database-backups"
-    directory = directory.resolve()
-    static_directory = Path(current_app.static_folder).resolve()
-    if directory == static_directory or static_directory in directory.parents:
-        raise BackupError("Private backup storage must be outside the public files directory.")
+    if not project_url:
+        raise BackupError("SUPABASE_URL is not configured.")
+    if not secret_key:
+        raise BackupError(
+            "Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY."
+        )
+
     try:
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if os.name != "nt":
-            directory.chmod(0o700)
-    except OSError as error:
-        logger.error("Could not prepare private backup storage: error_type=%s", type(error).__name__)
-        raise BackupError("Private backup storage is unavailable.") from error
-    return directory
+        return create_client(project_url, secret_key).storage.from_(
+            backup_bucket_name()
+        )
+    except Exception as error:
+        raise BackupError("Could not connect to Supabase Storage.") from error
 
 
-def _database_url():
+def raise_storage_error(message, error):
+    logger.error(
+        "%s: error_type=%s",
+        message,
+        type(error).__name__,
+    )
+    raise BackupError(message) from error
+
+
+def database_url():
     url = db.engine.url
     if url.get_backend_name() != "postgresql":
         raise BackupError("Database backup and restore require PostgreSQL.")
     return url
 
 
-def _utility_path(name):
+def utility_path(name):
     configured = current_app.config.get(
         "PG_DUMP_PATH" if name == "pg_dump" else "PG_RESTORE_PATH"
     ) or os.getenv("PG_DUMP_PATH" if name == "pg_dump" else "PG_RESTORE_PATH")
@@ -95,7 +106,7 @@ def _utility_path(name):
     return str(Path(utility).resolve())
 
 
-def _tool_environment(url):
+def tool_environment(url):
     environment = os.environ.copy()
     environment.pop("PGPASSWORD", None)
     for key, value in (
@@ -148,15 +159,20 @@ def _tool_environment(url):
         except OSError as error:
             if passfile:
                 passfile.unlink(missing_ok=True)
-            logger.error("Could not prepare PostgreSQL credentials: error_type=%s", type(error).__name__)
-            raise BackupError("Unable to complete the database operation. Please try again.") from error
+            logger.error(
+                "Could not prepare PostgreSQL credentials: error_type=%s",
+                type(error).__name__,
+            )
+            raise BackupError(
+                "Unable to complete the database operation. Please try again."
+            ) from error
     return environment, passfile
 
 
-def _run_tool(arguments, url, timeout=900):
+def run_tool(arguments, url, timeout=900):
     passfile = None
     try:
-        environment, passfile = _tool_environment(url)
+        environment, passfile = tool_environment(url)
         result = subprocess.run(
             arguments,
             check=False,
@@ -165,8 +181,13 @@ def _run_tool(arguments, url, timeout=900):
             env=environment,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
-        logger.error("PostgreSQL backup utility failed: error_type=%s", type(error).__name__)
-        raise BackupError("Unable to complete the database operation. Please try again.") from error
+        logger.error(
+            "PostgreSQL backup utility failed: error_type=%s",
+            type(error).__name__,
+        )
+        raise BackupError(
+            "Unable to complete the database operation. Please try again."
+        ) from error
     finally:
         if passfile:
             try:
@@ -184,11 +205,13 @@ def _run_tool(arguments, url, timeout=900):
             "PostgreSQL backup utility returned an error: return_code=%s",
             result.returncode,
         )
-        raise BackupError("Unable to complete the database operation. Please try again.")
+        raise BackupError(
+            "Unable to complete the database operation. Please try again."
+        )
     return result
 
 
-def _password_key(password, salt):
+def password_key(password, salt):
     if len(password) < PASSWORD_MIN_LENGTH:
         raise BackupError("Use an encryption password with at least 12 characters.")
     return PBKDF2HMAC(
@@ -199,9 +222,9 @@ def _password_key(password, salt):
     ).derive(password.encode("utf-8"))
 
 
-def _encrypt_file(source, destination, password, salt, nonce):
+def encrypt_file(source, destination, password, salt, nonce):
     encryptor = Cipher(
-        algorithms.AES(_password_key(password, salt)),
+        algorithms.AES(password_key(password, salt)),
         modes.GCM(nonce),
     ).encryptor()
     with source.open("rb") as input_file, destination.open("wb") as output_file:
@@ -211,7 +234,7 @@ def _encrypt_file(source, destination, password, salt, nonce):
         output_file.write(encryptor.tag)
 
 
-def _decrypt_file(source, destination, password, salt, nonce):
+def decrypt_file(source, destination, password, salt, nonce):
     size = source.stat().st_size
     if size < 16:
         raise BackupError("The uploaded backup file is invalid.")
@@ -220,7 +243,7 @@ def _decrypt_file(source, destination, password, salt, nonce):
         tag = input_file.read(16)
         input_file.seek(0)
         decryptor = Cipher(
-            algorithms.AES(_password_key(password, salt)),
+            algorithms.AES(password_key(password, salt)),
             modes.GCM(nonce, tag),
         ).decryptor()
         remaining = size - 16
@@ -238,11 +261,11 @@ def _decrypt_file(source, destination, password, salt, nonce):
             raise
 
 
-def _canonical_json(value):
+def canonical_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def _manifest_signature(manifest):
+def manifest_signature(manifest):
     signing_key = current_app.config["SECRET_KEY"]
     if isinstance(signing_key, str):
         signing_key = signing_key.encode("utf-8")
@@ -251,12 +274,12 @@ def _manifest_signature(manifest):
     }
     return hmac.new(
         signing_key,
-        _canonical_json(unsigned_manifest),
+        canonical_json(unsigned_manifest),
         hashlib.sha256,
     ).hexdigest()
 
 
-def _digest_file(path):
+def digest_file(path):
     digest = hashlib.sha256()
     with path.open("rb") as backup_file:
         for chunk in iter(lambda: backup_file.read(1024 * 1024), b""):
@@ -264,7 +287,7 @@ def _digest_file(path):
     return digest.hexdigest()
 
 
-def _write_package(dump_path, package_path, password):
+def write_package(dump_path, package_path, password):
     payload_path = dump_path
     manifest = {
         "format": "mcm-ems-postgresql",
@@ -275,7 +298,7 @@ def _write_package(dump_path, package_path, password):
         salt = os.urandom(16)
         nonce = os.urandom(12)
         payload_path = dump_path.with_suffix(".encrypted")
-        _encrypt_file(dump_path, payload_path, password, salt, nonce)
+        encrypt_file(dump_path, payload_path, password, salt, nonce)
         manifest.update(
             {
                 "salt": salt.hex(),
@@ -286,17 +309,17 @@ def _write_package(dump_path, package_path, password):
     manifest["payload_size"] = payload_path.stat().st_size
     if manifest["payload_size"] > MAX_BACKUP_SIZE:
         raise BackupError("The generated backup exceeds the 512 MB size limit.")
-    manifest["payload_sha256"] = _digest_file(payload_path)
-    manifest["signature"] = _manifest_signature(manifest)
+    manifest["payload_sha256"] = digest_file(payload_path)
+    manifest["signature"] = manifest_signature(manifest)
     with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_STORED) as package:
         package.writestr(
             "manifest.json",
-            _canonical_json(manifest),
+            canonical_json(manifest),
         )
         package.write(payload_path, "backup.enc" if password else "backup.dump")
 
 
-def _read_manifest(package):
+def read_manifest(package):
     try:
         with zipfile.ZipFile(package) as archive:
             names = archive.namelist()
@@ -353,7 +376,7 @@ def _read_manifest(package):
                     )
                 )
                 or not hmac.compare_digest(
-                    manifest["signature"], _manifest_signature(manifest)
+                    manifest["signature"], manifest_signature(manifest)
                 )
             ):
                 raise BackupError("The uploaded backup file is invalid.")
@@ -364,7 +387,7 @@ def _read_manifest(package):
         raise BackupError("The uploaded backup file is invalid.") from error
 
 
-def _copy_verified_payload(archive, manifest, payload_name, destination):
+def copy_verified_payload(archive, manifest, payload_name, destination):
     digest = hashlib.sha256()
     size = 0
     try:
@@ -386,28 +409,37 @@ def _copy_verified_payload(archive, manifest, payload_name, destination):
         raise BackupError("The uploaded backup file is invalid.")
 
 
-def _verify_dump(dump_path, url):
-    _run_tool(
-        [_utility_path("pg_restore"), "--list", str(dump_path)],
+def verify_dump(dump_path, url):
+    run_tool(
+        [utility_path("pg_restore"), "--list", str(dump_path)],
         url,
         timeout=120,
     )
 
 
-def _metadata_path(backup_id):
+def metadata_object_name(backup_id):
     if not BACKUP_ID_PATTERN.fullmatch(backup_id):
         return None
-    return _backup_directory() / f"{backup_id}.json"
+    return f"{backup_id}.json"
 
 
-def _read_metadata(backup_id):
-    metadata_path = _metadata_path(backup_id)
-    if metadata_path is None or metadata_path.is_symlink() or not metadata_path.is_file():
+def read_metadata(backup_id):
+    object_name = metadata_object_name(backup_id)
+    if object_name is None:
         return None
     try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        logger.error("Could not read backup metadata: error_type=%s", type(error).__name__)
+        metadata_contents = backup_bucket().download(object_name)
+    except Exception as error:
+        if (
+            getattr(error, "status_code", None) == 404
+            or getattr(error, "status", None) == 404
+        ):
+            return None
+        raise_storage_error("Could not read database backup metadata", error)
+    try:
+        metadata = json.loads(metadata_contents)
+    except (TypeError, ValueError, UnicodeDecodeError):
+        logger.warning("Skipped invalid database backup metadata.")
         return None
     expected_filename = metadata.get("filename") if isinstance(metadata, dict) else None
     if (
@@ -429,35 +461,25 @@ def _read_metadata(backup_id):
     return metadata
 
 
-def _write_metadata(metadata):
-    metadata_path = _metadata_path(metadata["id"])
-    temporary_path = metadata_path.with_name(
-        f".{metadata['id']}.{uuid.uuid4().hex}.tmp"
-    )
+def write_metadata(metadata):
+    object_name = metadata_object_name(metadata["id"])
     try:
-        with temporary_path.open("x", encoding="utf-8") as file:
-            json.dump(metadata, file, ensure_ascii=True)
-        if os.name != "nt":
-            temporary_path.chmod(0o600)
-        os.replace(temporary_path, metadata_path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
-
-
-def _backup_file(metadata):
-    directory = _backup_directory()
-    path = directory / metadata["filename"]
-    if path.is_symlink() or not path.is_file() or path.resolve().parent != directory:
-        return None
-    return path
+        backup_bucket().upload(
+            object_name,
+            json.dumps(metadata, ensure_ascii=True).encode("utf-8"),
+            {"content-type": "application/json", "upsert": "true"},
+        )
+    except Exception as error:
+        raise_storage_error("Could not save database backup metadata", error)
 
 
 def backup_overview():
-    database_name = db.engine.url.database if db.engine.dialect.name == "postgresql" else None
-    try:
-        all_backups = list_backups(limit=None)
-    except BackupError:
-        all_backups = []
+    database_name = (
+        db.engine.url.database
+        if db.engine.dialect.name == "postgresql"
+        else None
+    )
+    all_backups = list_backups(limit=None)
     backups = all_backups[:MAX_HISTORY_ITEMS]
     successful = [item for item in all_backups if item["status"] == "successful"]
     latest = successful[0] if successful else None
@@ -468,40 +490,60 @@ def backup_overview():
         "backup_count": len(successful),
         "latest_backup": latest,
         "utilities_available": all(
-            _has_utility(name) for name in ("pg_dump", "pg_restore")
+            has_utility(name) for name in ("pg_dump", "pg_restore")
         ),
     }
 
 
-def _has_utility(name):
+def has_utility(name):
     try:
-        _utility_path(name)
+        utility_path(name)
         return True
     except BackupError:
         return False
 
 
 def list_backups(limit=MAX_HISTORY_ITEMS):
-    directory = _backup_directory()
     backups = []
-    for metadata_path in directory.glob("*.json"):
-        backup_id = metadata_path.stem
+    object_names = set()
+    offset = 0
+    page_size = 100
+    try:
+        bucket = backup_bucket()
+        while True:
+            page = bucket.list("", {"limit": page_size, "offset": offset})
+            object_names.update(
+                item["name"]
+                for item in page
+                if isinstance(item, dict) and isinstance(item.get("name"), str)
+            )
+            if len(page) < page_size:
+                break
+            offset += len(page)
+    except Exception as error:
+        raise_storage_error("Could not list database backups", error)
+
+    for metadata_name in object_names:
+        if not metadata_name.endswith(".json"):
+            continue
+        backup_id = metadata_name[:-5]
         if not BACKUP_ID_PATTERN.fullmatch(backup_id):
             continue
-        metadata = _read_metadata(backup_id)
+        metadata = read_metadata(backup_id)
         if metadata is None:
             logger.warning("Skipped invalid database backup metadata.")
             continue
-        backup_path = _backup_file(metadata) if metadata["status"] == "successful" else None
-        status = metadata["status"] if backup_path else (
-            "missing" if metadata["status"] == "successful" else "failed"
+        has_package = metadata["filename"] in object_names
+        status = (
+            metadata["status"]
+            if has_package or metadata["status"] == "failed"
+            else "missing"
         )
         backups.append(
             {
                 **metadata,
                 "status": status,
-                "file_size": backup_path.stat().st_size if backup_path else metadata.get("file_size", 0),
-                "path": backup_path,
+                "file_size": metadata.get("file_size", 0),
             }
         )
     backups.sort(key=lambda item: item["created_at"], reverse=True)
@@ -511,12 +553,14 @@ def list_backups(limit=MAX_HISTORY_ITEMS):
 def create_backup(created_by, password=None):
     if password is not None and len(password) < PASSWORD_MIN_LENGTH:
         raise BackupError("Use an encryption password with at least 12 characters.")
-    url = _database_url()
+    url = database_url()
     backup_id = uuid.uuid4().hex
-    created_at = datetime.now(timezone.utc).isoformat()
-    filename = f"ems-database-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{backup_id[:8]}{PACKAGE_EXTENSION}"
-    directory = _backup_directory()
-    package_path = directory / filename
+    created_at_time = datetime.now(timezone.utc)
+    created_at = created_at_time.isoformat()
+    filename = (
+        f"ems-database-{created_at_time:%Y%m%dT%H%M%SZ}-"
+        f"{backup_id[:8]}{PACKAGE_EXTENSION}"
+    )
     metadata = {
         "id": backup_id,
         "filename": filename,
@@ -526,9 +570,11 @@ def create_backup(created_by, password=None):
         "encrypted": bool(password),
         "status": "failed",
     }
+    bucket = None
     try:
-        dump_utility = _utility_path("pg_dump")
-        with tempfile.TemporaryDirectory(prefix=".create-", dir=directory) as temp:
+        bucket = backup_bucket()
+        dump_utility = utility_path("pg_dump")
+        with tempfile.TemporaryDirectory(prefix="ems-backup-create-") as temp:
             dump_path = Path(temp) / "database.dump"
             staged_package = Path(temp) / filename
             arguments = [
@@ -539,26 +585,38 @@ def create_backup(created_by, password=None):
                 "--file",
                 str(dump_path),
             ]
-            _run_tool(arguments, url)
+            run_tool(arguments, url)
             if not dump_path.is_file() or not dump_path.stat().st_size:
                 raise BackupError("Unable to create backup. Please try again.")
-            _verify_dump(dump_path, url)
+            verify_dump(dump_path, url)
             if dump_path.stat().st_size > MAX_BACKUP_SIZE:
                 raise BackupError("The generated backup exceeds the 512 MB size limit.")
-            _write_package(dump_path, staged_package, password)
-            if os.name != "nt":
-                staged_package.chmod(0o600)
-            os.replace(staged_package, package_path)
+            write_package(dump_path, staged_package, password)
+            metadata["file_size"] = staged_package.stat().st_size
+            with staged_package.open("rb") as package_file:
+                bucket.upload(
+                    filename,
+                    package_file,
+                    {"content-type": "application/zip", "upsert": "false"},
+                )
         metadata["status"] = "successful"
-        metadata["file_size"] = package_path.stat().st_size
-        _write_metadata(metadata)
+        write_metadata(metadata)
         return metadata
     except Exception as error:
-        package_path.unlink(missing_ok=True)
         logger.error("Database backup failed: error_type=%s", type(error).__name__)
+        if bucket is not None:
+            try:
+                bucket.remove([filename])
+            except Exception as cleanup_error:
+                logger.error(
+                    "Could not remove incomplete database backup from "
+                    "Supabase Storage: "
+                    "error_type=%s",
+                    type(cleanup_error).__name__,
+                )
         try:
-            _write_metadata(metadata)
-        except (OSError, BackupError):
+            write_metadata(metadata)
+        except BackupError:
             logger.error("Could not record failed database backup metadata.")
         if isinstance(error, BackupError):
             raise
@@ -566,28 +624,37 @@ def create_backup(created_by, password=None):
 
 
 def get_backup(backup_id):
-    metadata = _read_metadata(backup_id)
+    metadata = read_metadata(backup_id)
     if metadata is None or metadata["status"] != "successful":
         return None
-    path = _backup_file(metadata)
-    if path is None:
+    try:
+        package = backup_bucket().download(metadata["filename"])
+    except Exception as error:
+        if (
+            getattr(error, "status_code", None) == 404
+            or getattr(error, "status", None) == 404
+        ):
+            return None
+        raise_storage_error("Could not download database backup", error)
+    if not package:
         return None
-    return {**metadata, "path": path}
+    return {**metadata, "stream": BytesIO(package)}
 
 
 def delete_backup(backup_id):
-    metadata = _read_metadata(backup_id)
+    metadata = read_metadata(backup_id)
     if metadata is None:
         return False
-    backup_path = _backup_file(metadata) if metadata["status"] == "successful" else None
-    if backup_path:
-        backup_path.unlink()
-    metadata_path = _metadata_path(backup_id)
-    metadata_path.unlink(missing_ok=True)
+    object_name = metadata_object_name(backup_id)
+    object_names = [object_name, metadata["filename"]]
+    try:
+        backup_bucket().remove(object_names)
+    except Exception as error:
+        raise_storage_error("Could not delete database backup", error)
     return True
 
 
-def _create_destination_database(url, database_name):
+def create_destination_database(url, database_name):
     maintenance_url = url.set(database="postgres")
     engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
     try:
@@ -598,7 +665,7 @@ def _create_destination_database(url, database_name):
         engine.dispose()
 
 
-def _drop_destination_database(url, database_name):
+def drop_destination_database(url, database_name):
     maintenance_url = url.set(database="postgres")
     engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
     try:
@@ -618,13 +685,14 @@ def restore_backup(upload_stream, database_name, password=""):
         raise BackupError(
             "Enter a new database name using letters, numbers, and underscores."
         )
-    url = _database_url()
+    url = database_url()
     if database_name.casefold() == (url.database or "").casefold():
-        raise BackupError("The active database cannot be used as the restore destination.")
+        raise BackupError(
+            "The active database cannot be used as the restore destination."
+        )
 
-    directory = _backup_directory()
     try:
-        with tempfile.TemporaryDirectory(prefix=".restore-", dir=directory) as temp:
+        with tempfile.TemporaryDirectory(prefix="ems-backup-restore-") as temp:
             temp_directory = Path(temp)
             package_path = temp_directory / "uploaded.emsbackup"
             size = 0
@@ -637,10 +705,10 @@ def restore_backup(upload_stream, database_name, password=""):
             if size < 1:
                 raise BackupError("The uploaded backup file is invalid.")
 
-            manifest, payload_name = _read_manifest(package_path)
+            manifest, payload_name = read_manifest(package_path)
             payload_path = temp_directory / payload_name
             with zipfile.ZipFile(package_path) as package:
-                _copy_verified_payload(
+                copy_verified_payload(
                     package,
                     manifest,
                     payload_name,
@@ -649,7 +717,7 @@ def restore_backup(upload_stream, database_name, password=""):
             dump_path = temp_directory / "restore.dump"
             if manifest["encrypted"]:
                 try:
-                    _decrypt_file(
+                    decrypt_file(
                         payload_path,
                         dump_path,
                         password,
@@ -660,44 +728,47 @@ def restore_backup(upload_stream, database_name, password=""):
                     raise
                 except Exception as error:
                     raise BackupError(
-                        "The uploaded backup file is invalid or its encryption password is incorrect."
+                        "The uploaded backup file is invalid or its encryption "
+                        "password is incorrect."
                     ) from error
             else:
                 os.replace(payload_path, dump_path)
-            _verify_dump(dump_path, url)
+            verify_dump(dump_path, url)
 
             try:
-                _create_destination_database(url, database_name)
+                create_destination_database(url, database_name)
             except SQLAlchemyError as error:
                 logger.error(
                     "Could not create database restore destination: error_type=%s",
                     type(error).__name__,
                 )
                 raise BackupError(
-                    "Could not create a new restore database. Your active database has not been changed."
+                    "Could not create a new restore database. Your active "
+                    "database has not been changed."
                 ) from error
 
             try:
                 target_url = url.set(database=database_name)
                 arguments = [
-                    _utility_path("pg_restore"),
+                    utility_path("pg_restore"),
                     "--no-owner",
                     "--no-acl",
                     "--exit-on-error",
                     "--single-transaction",
                     str(dump_path),
                 ]
-                _run_tool(arguments, target_url)
+                run_tool(arguments, target_url)
             except BackupError as error:
                 try:
-                    _drop_destination_database(url, database_name)
+                    drop_destination_database(url, database_name)
                 except SQLAlchemyError as cleanup_error:
                     logger.error(
                         "Could not remove failed restore destination: error_type=%s",
                         type(cleanup_error).__name__,
                     )
                 raise BackupError(
-                    "Unable to restore the backup. Your active database has not been changed."
+                    "Unable to restore the backup. Your active database has "
+                    "not been changed."
                 ) from error
     except BackupError:
         raise

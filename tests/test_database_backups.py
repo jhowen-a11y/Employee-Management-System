@@ -13,6 +13,32 @@ from werkzeug.security import generate_password_hash
 import services.database_backups as database_backups
 
 
+class InMemoryStorageBucket:
+    def __init__(self):
+        self.objects = {}
+
+    def upload(self, path, file, _options):
+        self.objects[path] = file.read() if hasattr(file, "read") else bytes(file)
+
+    def list(self, _path="", options=None):
+        options = options or {}
+        names = sorted(self.objects)
+        offset = options.get("offset", 0)
+        limit = options.get("limit", len(names))
+        return [{"name": name} for name in names[offset : offset + limit]]
+
+    def download(self, path):
+        if path not in self.objects:
+            error = RuntimeError("Not found")
+            error.status_code = 404
+            raise error
+        return self.objects[path]
+
+    def remove(self, paths):
+        for path in paths:
+            self.objects.pop(path, None)
+
+
 class DatabaseBackupTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -20,6 +46,9 @@ class DatabaseBackupTests(unittest.TestCase):
             os.environ,
             {
                 "SECRET_KEY": "database-backup-test-secret",
+                "SUPABASE_URL": "https://example.supabase.co",
+                "SUPABASE_SERVICE_ROLE_KEY": "test-secret",
+                "SUPABASE_BACKUP_BUCKET": "ems-backups",
                 "DATABASE_URL": "postgresql://test:test@localhost/test",
             },
         )
@@ -62,33 +91,30 @@ class DatabaseBackupTests(unittest.TestCase):
                 self.hr.username: self.hr.id,
                 self.employee.username: self.employee.id,
             }
-        self.backup_directory = tempfile.TemporaryDirectory()
-        self.app.config["BACKUP_DIRECTORY"] = self.backup_directory.name
+        self.backup_storage = InMemoryStorageBucket()
+        self.storage_patch = patch.object(
+            database_backups,
+            "backup_bucket",
+            return_value=self.backup_storage,
+        )
+        self.storage_patch.start()
+        self.addCleanup(self.storage_patch.stop)
         self.client = self.app.test_client()
 
-    def tearDown(self):
-        self.backup_directory.cleanup()
-
-    def test_default_backup_directory_uses_local_user_storage(self):
-        if os.name != "nt":
-            self.skipTest("Windows local-user storage path")
-
-        with tempfile.TemporaryDirectory() as local_data:
-            configured = self.app.config.pop("BACKUP_DIRECTORY", None)
-            try:
-                with patch.dict(
-                    os.environ,
-                    {"EMS_BACKUP_DIRECTORY": "", "LOCALAPPDATA": local_data},
-                ):
-                    with self.app.app_context():
-                        directory = database_backups._backup_directory()
-                self.assertEqual(
-                    directory,
-                    Path(local_data) / "MCM-EMS" / "database-backups",
-                )
-            finally:
-                if configured is not None:
-                    self.app.config["BACKUP_DIRECTORY"] = configured
+    @patch("services.database_backups.create_client")
+    def test_backup_bucket_uses_supabase_configuration(self, create_client):
+        self.storage_patch.stop()
+        try:
+            database_backups.backup_bucket()
+        finally:
+            self.storage_patch.start()
+        create_client.assert_called_once_with(
+            "https://example.supabase.co",
+            "test-secret",
+        )
+        create_client.return_value.storage.from_.assert_called_once_with(
+            "ems-backups"
+        )
 
     def _add_user(self, username, role):
         user = self.User(
@@ -119,10 +145,10 @@ class DatabaseBackupTests(unittest.TestCase):
 
     def _create_test_backup(self, password=None):
         with patch.object(
-            database_backups, "_database_url", return_value=self._postgres_url()
+            database_backups, "database_url", return_value=self._postgres_url()
         ), patch.object(
-            database_backups, "_utility_path", side_effect=lambda name: name
-        ), patch.object(database_backups, "_run_tool", side_effect=self._mock_tool):
+            database_backups, "utility_path", side_effect=lambda name: name
+        ), patch.object(database_backups, "run_tool", side_effect=self._mock_tool):
             return database_backups.create_backup("admin", password)
 
     def test_only_administrators_can_open_backup_routes(self):
@@ -153,10 +179,9 @@ class DatabaseBackupTests(unittest.TestCase):
             backup = self._create_test_backup()
             self.assertEqual(backup["status"], "successful")
             self.assertTrue(Path(backup["filename"]).name == backup["filename"])
-            self.assertEqual(
-                Path(self.backup_directory.name, backup["filename"]).parent,
-                Path(self.backup_directory.name),
-            )
+            self.assertIn(backup["filename"], self.backup_storage.objects)
+            self.assertIn(f"{backup['id']}.json", self.backup_storage.objects)
+            self.assertFalse(Path(backup["filename"]).exists())
 
         admin = self._login("admin")
         page = admin.get("/admin/database-backups")
@@ -171,6 +196,7 @@ class DatabaseBackupTests(unittest.TestCase):
             "attachment",
         )
         self.assertEqual(download.headers["Cache-Control"], "private, no-store")
+        self.assertEqual(download.data, self.backup_storage.objects[backup["filename"]])
         download.close()
 
         for username in ("hr", "employee"):
@@ -184,51 +210,61 @@ class DatabaseBackupTests(unittest.TestCase):
     def test_encrypted_package_authenticates_before_creating_destination(self):
         with self.app.app_context():
             backup = self._create_test_backup("very-strong-test-password")
-            package_path = Path(self.backup_directory.name, backup["filename"])
 
             with patch.object(
-                database_backups, "_database_url", return_value=self._postgres_url()
+                database_backups, "database_url", return_value=self._postgres_url()
             ), patch.object(
-                database_backups, "_create_destination_database"
+                database_backups, "create_destination_database"
             ) as create_database:
-                with package_path.open("rb") as package:
-                    with self.assertRaises(database_backups.BackupError):
-                        database_backups.restore_backup(
-                            package,
-                            "ems_restore_test",
-                            "incorrect-password",
-                        )
+                with self.assertRaises(database_backups.BackupError):
+                    database_backups.restore_backup(
+                        BytesIO(self.backup_storage.objects[backup["filename"]]),
+                        "ems_restore_test",
+                        "incorrect-password",
+                    )
                 create_database.assert_not_called()
 
                 with patch.object(
                     database_backups,
-                    "_utility_path",
+                    "utility_path",
                     side_effect=lambda name: name,
                 ), patch.object(
                     database_backups,
-                    "_run_tool",
+                    "run_tool",
                     return_value=SimpleNamespace(
                         returncode=0,
                         stdout=b"",
                         stderr=b"",
                     ),
                 ) as run_tool:
-                    with package_path.open("rb") as package:
-                        destination = database_backups.restore_backup(
-                            package,
-                            "ems_restore_test",
-                            "very-strong-test-password",
-                        )
+                    destination = database_backups.restore_backup(
+                        BytesIO(self.backup_storage.objects[backup["filename"]]),
+                        "ems_restore_test",
+                        "very-strong-test-password",
+                    )
                 self.assertEqual(destination, "ems_restore_test")
                 create_database.assert_called_once()
                 self.assertIn("--single-transaction", run_tool.call_args_list[-1].args[0])
 
+    def test_delete_removes_backup_and_metadata_from_supabase(self):
+        with self.app.app_context():
+            backup = self._create_test_backup()
+
+        response = self._login("admin").post(
+            f"/admin/database-backups/{backup['id']}/delete",
+            data={"_csrf_token": "test-csrf-token"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn(backup["filename"], self.backup_storage.objects)
+        self.assertNotIn(f"{backup['id']}.json", self.backup_storage.objects)
+
     def test_invalid_upload_is_rejected_without_database_changes(self):
         with self.app.app_context():
             with patch.object(
-                database_backups, "_database_url", return_value=self._postgres_url()
+                database_backups, "database_url", return_value=self._postgres_url()
             ), patch.object(
-                database_backups, "_create_destination_database"
+                database_backups, "create_destination_database"
             ) as create_database:
                 with self.assertRaisesRegex(
                     database_backups.BackupError, "uploaded backup file is invalid"
@@ -242,7 +278,7 @@ class DatabaseBackupTests(unittest.TestCase):
     def test_restore_refuses_active_or_unsafe_database_names(self):
         with self.app.app_context():
             with patch.object(
-                database_backups, "_database_url", return_value=self._postgres_url()
+                database_backups, "database_url", return_value=self._postgres_url()
             ):
                 for database_name in ("ems", "../postgres", "template1", "bad-name"):
                     with self.subTest(database_name=database_name):
@@ -265,9 +301,8 @@ class DatabaseBackupTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         follow_up = client.get(response.location)
         self.assertIn(b"Confirm the restore in the confirmation dialog", follow_up.data)
-        self.assertEqual(
-            list(Path(self.backup_directory.name).glob("*.emsbackup")),
-            [],
+        self.assertFalse(
+            any(name.endswith(".emsbackup") for name in self.backup_storage.objects)
         )
 
     def test_oversized_restore_upload_has_a_safe_error_response(self):
@@ -291,15 +326,15 @@ class DatabaseBackupTests(unittest.TestCase):
         with self.app.app_context():
             with patch.object(
                 database_backups,
-                "_database_url",
+                "database_url",
                 return_value=self._postgres_url(),
             ), patch.object(
                 database_backups,
-                "_utility_path",
+                "utility_path",
                 side_effect=lambda name: name,
             ), patch.object(
                 database_backups,
-                "_run_tool",
+                "run_tool",
                 side_effect=database_backups.BackupError("safe failure"),
             ):
                 with self.assertRaises(database_backups.BackupError):
@@ -311,7 +346,6 @@ class DatabaseBackupTests(unittest.TestCase):
     def test_failed_restore_removes_new_destination_database(self):
         with self.app.app_context():
             backup = self._create_test_backup()
-            package_path = Path(self.backup_directory.name, backup["filename"])
 
             def fail_restore(arguments, _url, timeout=900):
                 if "--list" in arguments:
@@ -323,25 +357,24 @@ class DatabaseBackupTests(unittest.TestCase):
                 raise database_backups.BackupError("safe test failure")
 
             with patch.object(
-                database_backups, "_database_url", return_value=self._postgres_url()
+                database_backups, "database_url", return_value=self._postgres_url()
             ), patch.object(
-                database_backups, "_utility_path", side_effect=lambda name: name
+                database_backups, "utility_path", side_effect=lambda name: name
             ), patch.object(
-                database_backups, "_create_destination_database"
+                database_backups, "create_destination_database"
             ) as create_database, patch.object(
-                database_backups, "_drop_destination_database"
+                database_backups, "drop_destination_database"
             ) as drop_database, patch.object(
-                database_backups, "_run_tool", side_effect=fail_restore
+                database_backups, "run_tool", side_effect=fail_restore
             ):
-                with package_path.open("rb") as package:
-                    with self.assertRaisesRegex(
-                        database_backups.BackupError,
-                        "active database has not been changed",
-                    ):
-                        database_backups.restore_backup(
-                            package,
-                            "ems_restore_test",
-                        )
+                with self.assertRaisesRegex(
+                    database_backups.BackupError,
+                    "active database has not been changed",
+                ):
+                    database_backups.restore_backup(
+                        BytesIO(self.backup_storage.objects[backup["filename"]]),
+                        "ems_restore_test",
+                    )
                 create_database.assert_called_once()
                 drop_database.assert_called_once_with(
                     self._postgres_url(),
@@ -351,36 +384,38 @@ class DatabaseBackupTests(unittest.TestCase):
     def test_package_is_signed_and_contains_only_supported_archive(self):
         with self.app.app_context():
             backup = self._create_test_backup()
-            path = Path(self.backup_directory.name, backup["filename"])
-            with zipfile.ZipFile(path) as package:
+            package_data = BytesIO(self.backup_storage.objects[backup["filename"]])
+            with zipfile.ZipFile(package_data) as package:
                 self.assertEqual(
                     set(package.namelist()),
                     {"manifest.json", "backup.dump"},
                 )
-                manifest, payload_name = database_backups._read_manifest(path)
+                manifest, payload_name = database_backups.read_manifest(
+                    BytesIO(self.backup_storage.objects[backup["filename"]])
+                )
                 self.assertEqual(manifest["format"], "mcm-ems-postgresql")
                 self.assertEqual(payload_name, "backup.dump")
 
                 changed_manifest = dict(manifest, version=999)
-                package_data = BytesIO()
-                with zipfile.ZipFile(package_data, "w") as changed:
+                changed_package = BytesIO()
+                with zipfile.ZipFile(changed_package, "w") as changed:
                     changed.writestr(
                         "manifest.json",
-                        database_backups._canonical_json(changed_manifest),
+                        database_backups.canonical_json(changed_manifest),
                     )
                     changed.writestr("backup.dump", b"test archive")
                 with tempfile.NamedTemporaryFile(suffix=".emsbackup") as changed_file:
-                    changed_file.write(package_data.getvalue())
+                    changed_file.write(changed_package.getvalue())
                     changed_file.flush()
                     with self.assertRaises(database_backups.BackupError):
-                        database_backups._read_manifest(Path(changed_file.name))
+                        database_backups.read_manifest(Path(changed_file.name))
 
     def test_postgres_credentials_are_passed_through_private_passfile(self):
         with self.app.app_context():
             url = make_url(
                 "postgresql+psycopg://user:p%3Aa%5Css@db.example.test/ems"
             )
-            environment, passfile = database_backups._tool_environment(url)
+            environment, passfile = database_backups.tool_environment(url)
             try:
                 self.assertNotIn("PGPASSWORD", environment)
                 self.assertEqual(environment["PGUSER"], "user")

@@ -71,11 +71,15 @@ def create():
 )
 @admin_required
 def download(backup_id):
-    backup = get_backup(backup_id)
+    try:
+        backup = get_backup(backup_id)
+    except BackupError as error:
+        flash(error.public_message, "error")
+        return redirect(url_for("database_backup.index"))
     if backup is None:
         abort(404)
     response = send_file(
-        backup["path"],
+        backup["stream"],
         as_attachment=True,
         download_name=backup["filename"],
         mimetype="application/zip",
@@ -92,7 +96,12 @@ def download(backup_id):
 )
 @admin_required
 def delete(backup_id):
-    if not delete_backup(backup_id):
+    try:
+        deleted = delete_backup(backup_id)
+    except BackupError as error:
+        flash(error.public_message, "error")
+        return redirect(url_for("database_backup.index"))
+    if not deleted:
         abort(404)
     flash("Backup deleted.", "success")
     return redirect(url_for("database_backup.index"))
