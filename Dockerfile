@@ -12,6 +12,12 @@ RUN apt-get update \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-17 \
+    # ----------------------------------------------------
+    # FIX: Tell pg_wrapper to default to PostgreSQL 17
+    # ----------------------------------------------------
+    && mkdir -p /etc/postgresql-common \
+    && echo "17" > /etc/postgresql-common/user_clusters \
+    # ----------------------------------------------------
     && pg_dump --version \
     && pg_restore --version \
     && psql --version \
