@@ -140,7 +140,7 @@ class ProfileStorageTests(unittest.TestCase):
             with self.assertRaises(ProfileStorageError):
                 profile_storage.profile_picture_url("../private.jpg")
 
-    @patch("profile_storage.create_client")
+    @patch("services.supabase_storage.create_client")
     def test_upload_uses_supabase_bucket_and_content_type(self, create_client):
         bucket = Mock()
         create_client.return_value.storage.from_.return_value = bucket

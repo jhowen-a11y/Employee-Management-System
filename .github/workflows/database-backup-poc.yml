@@ -1,0 +1,48 @@
+name: Database Backup PoC
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Create backup proof-of-concept
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ems_poc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL client 17
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+          pg_restore --version
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backup proof-of-concept
+        env:
+          SECRET_KEY: poc-test-secret-key-not-production
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ems_poc_test
+        run: python scripts/run_backup_poc.py

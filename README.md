@@ -216,11 +216,39 @@ python -m unittest discover -s tests -v
 ## Production notes
 
 - Set `DATABASE_URL` and a strong `SECRET_KEY` in your hosting provider's environment settings. Do not rely on a local `.env` file in production.
-- Database backups require PostgreSQL `pg_dump` and `pg_restore` binaries on the application server, network access to the database, and a database account with permission to create a separate database to restore into. Signed `.emsbackup` packages and their history are stored outside the project directory by default (`%LOCALAPPDATA%\\MCM-EMS\\database-backups` on Windows or `$XDG_DATA_HOME/mcm-ems/database-backups` on Unix-like systems; without `XDG_DATA_HOME`, `$HOME/.local/share/mcm-ems/database-backups`). Set `EMS_BACKUP_DIRECTORY` to a persistent, private directory in deployments with ephemeral instance storage; set `PG_DUMP_PATH` and `PG_RESTORE_PATH` if the PostgreSQL utilities are not on `PATH`. Backups are limited to 512 MB. Restore validates the signed package before creating a new database; it never replaces the active database. Keep `SECRET_KEY` stable because packages are signed with it. Password-encrypted backups use AES-256-GCM and require the password to restore. Database backups do not include profile pictures stored separately in Supabase Storage.
+- Production database backups use the separately hosted Render worker defined by `render.yaml`; Vercel does not run PostgreSQL CLI tools or keep backup files. The worker runs `pg_dump`/`pg_restore`, stores private `.emsbackup` objects in the existing `ems-database-backups` Supabase bucket, and stores backup/job metadata in PostgreSQL. Jobs run asynchronously and the administrator page displays their status. The final production package limit is 50,000,000 bytes. Local development continues to use private local storage, local PostgreSQL utilities, and the original 512 MB package limit. See **Production database backups** below for deployment configuration; remote operation is not ready until that configuration and the migration have been applied.
 - The application disables Flask debug mode so browser requests do not expose the interactive debugger or tracebacks. Use a production WSGI server when deploying; do not enable Flask's development server in production.
 - Back up the database before applying migrations.
 - If deploying on Vercel, configure the environment variables for each deployment environment and redeploy after changing them.
 - Profile-picture uploads use Supabase Storage so they persist across Vercel deployments. Photos appear in the shared navigation, employee directory, and employee-related pages. Create a bucket named `employee-profiles` (or set `SUPABASE_PROFILE_BUCKET` to another bucket name); private buckets are supported using expiring signed URLs. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel. A Supabase secret key can be used as `SUPABASE_SECRET_KEY` instead. Keep either key server-side; never expose it in browser code. Existing local pictures continue to use their local static files until replaced.
+
+### Production database backups
+
+The worker is a separate Render Docker web service because Vercel functions do not provide persistent disk or guaranteed PostgreSQL command-line utilities, and a 50 MB restore upload should not pass through a Vercel function. It uses a single worker process for serialized backup jobs, PostgreSQL 17 client utilities from the Docker image, the existing private `ems-database-backups` bucket, and the same PostgreSQL database for persistent metadata. Backup and restore operations are queued and reported in the admin page.
+
+Before deploying:
+
+1. Check the production migration state with `flask --app app db current` and inspect pending revisions before changing production. The new revision creates only `database_backups` and `database_backup_jobs`; it does not modify employee or payroll data. The repository already has an unrelated migration branch after `f3c1a21b8d09`; do **not** blindly run `flask db upgrade` against production if that branch or any other existing revisions are still pending. Review and approve any pre-existing migrations separately first.
+2. Deploy `render.yaml` as a Render Blueprint. Set the following values in the Render worker's environment. Keep the Supabase bucket private.
+3. Configure the Vercel environment with `BACKUP_WORKER_URL` (the Render HTTPS service URL) and `BACKUP_WORKER_TOKEN` (the same high-entropy random value configured on Render). Redeploy Vercel after setting them.
+4. Verify the worker status on the admin Backup page, then create a small backup. Confirm that its object exists in the private `ems-database-backups` bucket and its metadata appears in the page before relying on it.
+5. Test restoration only with an expendable test backup and a destination permitted by the database host. Never use the active database name.
+
+| Variable | Configure on | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | Vercel and Render worker | Same EMS PostgreSQL database; the worker needs a direct or **session-mode** connection suitable for `pg_dump`/`pg_restore`, not a transaction pooler. URL-encode credentials and require SSL. |
+| `SECRET_KEY` | Vercel and Render worker | Keep the app's existing value stable and identical on both; package manifest signatures use it. |
+| `SUPABASE_URL` | Vercel and Render worker | Existing Supabase project URL. |
+| `SUPABASE_SECRET_KEY` | Vercel and Render worker | Existing server-side Supabase secret key. `SUPABASE_SERVICE_ROLE_KEY` is also accepted as a fallback. Never put either key in browser code. |
+| `BACKUP_WORKER_TOKEN` | Vercel and Render worker | Same long random bearer token, used only for HTTPS app-to-worker authentication. Generate a value locally, for example with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. |
+| `BACKUP_WORKER_URL` | Vercel only | Render worker's HTTPS base URL, with no `/internal/v1` suffix. |
+| `SUPABASE_PROFILE_BUCKET` | Optional, existing use | Profile pictures only; leave it unchanged. The backup feature always uses `ems-database-backups`. |
+
+No bucket policy or public access is needed for the backup bucket: server-side Supabase secret/service-role credentials bypass Storage RLS. Do not grant the bucket to browser users and do not generate public URLs. The worker writes objects under the `ems/` prefix and metadata/job rows into the EMS PostgreSQL database.
+
+The Docker image pins PostgreSQL 17 client utilities. They can dump PostgreSQL 15/16/17 databases; if the Supabase project uses a newer server major, update the `POSTGRES_CLIENT_MAJOR` build argument in `backup_worker/Dockerfile` to that server major before deploying. The worker connection must support the PostgreSQL operations used by `pg_dump`, and restore additionally requires permission to create and remove a *new* database. Supabase may restrict `CREATE DATABASE` for a project's database role; if the restore test is refused, restore remains safely failed and the active database is unchanged, but you will need an approved separate restore target/host that supports database creation. Do not grant broader permissions or point the target at the active database just to bypass this restriction.
+
+The admin page restores production backups by selecting an existing private-bucket backup; the encrypted package is retrieved directly by the worker, not uploaded through Vercel. Encrypted backups still require the original password. Worker restarts mark in-progress jobs for manual review rather than automatically retrying a potentially completed restore. Verify a successful test backup and a separate-database restore before depending on this system. This repository change does not itself deploy the worker or verify remote Supabase/Vercel access.
 
 ## Project structure
 

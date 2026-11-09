@@ -9,8 +9,12 @@ from pathlib import Path
 
 from flask import current_app, g, has_request_context, url_for
 from flask_login import current_user
-from supabase import create_client
 from werkzeug.utils import secure_filename
+
+from services.supabase_storage import (
+    SupabaseStorageConfigurationError,
+    storage_bucket,
+)
 
 
 DEFAULT_PROFILE_BUCKET = "employee-profiles"
@@ -244,22 +248,10 @@ def save_profile_picture(file, employee_id):
 
 
 def _storage_bucket():
-    project_url = os.getenv("SUPABASE_URL")
-    secret_key = (
-        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        or os.getenv("SUPABASE_SECRET_KEY")
-    )
-    if not project_url:
-        raise ProfileStorageError("SUPABASE_URL is not configured.")
-    if not secret_key:
-        raise ProfileStorageError(
-            "Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY."
-        )
-
     try:
-        return create_client(project_url, secret_key).storage.from_(
-            _profile_bucket_name()
-        )
+        return storage_bucket(_profile_bucket_name())
+    except SupabaseStorageConfigurationError as error:
+        raise ProfileStorageError(str(error)) from error
     except Exception as error:
         raise ProfileStorageError(
             "Could not connect to Supabase Storage."
