@@ -8,10 +8,7 @@ WORKDIR /app
 
 # Required by the database backup and restore feature.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-17 ca-certificates \
-    && pg_dump --version \
-    && pg_restore --version \
-    && psql --version \
+    && apt-get install -y --no-install-recommends postgresql-client ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
