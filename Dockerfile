@@ -11,7 +11,7 @@ RUN apt-get update \
     && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get install -y --no-install-recommends postgresql-client-17 \
     && pg_dump --version \
     && pg_restore --version \
     && psql --version \
@@ -23,4 +23,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["gunicorn", "app:create_app()"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-10000} 'app:create_app()'"]
