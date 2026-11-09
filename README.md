@@ -207,6 +207,36 @@ These settings are app-wide, not per employee. Weekends are treated as rest days
 
 ## Run tests
 
+### Selective recovery staging (Phase 1)
+
+Selective recovery is separate from full restore. Phase 1 provides configuration
+and target guards only; it does not yet create staging databases, restore backups,
+preview records, or insert recovered records.
+
+Configure `RECOVERY_STAGING_DATABASE_URL` privately with the SQLAlchemy driver
+`postgresql+psycopg`, a dedicated local staging role, an explicit loopback host
+(`127.0.0.1`, `::1`, or `localhost`), a port, and maintenance database `postgres`.
+Do not change `DATABASE_URL` or the Supabase Storage settings. Do not reuse active
+database credentials. An absent setting disables staging validation without
+interrupting normal EMS or existing backups.
+
+The guards reject remote hosts, URL query options, unsafe database names, an
+overlapping active local server, and inherited `PGHOSTADDR`, `PGSERVICE`,
+`PGSERVICEFILE`, or `PGOPTIONS` overrides. Disposable target names are generated
+by the server. A generated name is **not** proof of ownership: later lifecycle
+code must record successful creation and require that record before cleanup.
+
+Before Phase 2, verify the dedicated local role can connect to `postgres` and
+has `CREATEDB` permission using a read-only role query. A running service or open
+TCP port alone does not verify authentication or restore compatibility. No
+migration is required for Phase 1.
+
+Run the guard tests with:
+
+```powershell
+python -m unittest discover -s tests -p test_record_recovery.py -v
+```
+
 Run the test suite from the project root:
 
 ```powershell
