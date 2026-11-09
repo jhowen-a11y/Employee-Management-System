@@ -38,4 +38,4 @@ USER appuser
 EXPOSE 8000
 
 # Backups can run for up to 900 seconds inside a request.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "1000", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+CMD ["sh", "-c", "pg_dump --version && pg_restore --version && psql --version && exec gunicorn --bind 0.0.0.0:${PORT:-10000} 'app:create_app()'"]

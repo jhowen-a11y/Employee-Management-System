@@ -121,7 +121,15 @@ def utility_path(name):
             else shutil.which(configured)
         )
     else:
-        utility = shutil.which(name)
+        versioned_paths = sorted(
+            Path("/usr/lib/postgresql").glob(f"*/bin/{name}"),
+            reverse=True,
+        )
+        utility = (
+            str(versioned_paths[0])
+            if versioned_paths
+            else shutil.which(name)
+        )
     if not utility or not Path(utility).is_file():
         raise BackupError(
             "PostgreSQL backup utilities are unavailable on this server."

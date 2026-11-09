@@ -116,6 +116,18 @@ class DatabaseBackupTests(unittest.TestCase):
             "ems-backups"
         )
 
+    def test_utility_path_prefers_versioned_postgresql_binary(self):
+        with self.app.app_context():
+            with patch.object(
+                database_backups.Path,
+                "glob",
+                return_value=[Path("/usr/lib/postgresql/17/bin/pg_dump")],
+            ), patch("pathlib.Path.is_file", return_value=True):
+                self.assertEqual(
+                    database_backups.utility_path("pg_dump"),
+                    str(Path("/usr/lib/postgresql/17/bin/pg_dump").resolve()),
+                )
+
     def _add_user(self, username, role):
         user = self.User(
             username=username,
