@@ -62,20 +62,6 @@
     </article>
 </section>
 
-{% if overview.worker_error %}
-<section class="database-backup-banner" role="alert">
-    <div class="database-backup-banner-icon"><i data-lucide="triangle-alert" aria-hidden="true"></i></div>
-    <div class="database-backup-banner-content">
-        <h2>Backup service is not configured</h2>
-        <p>{{ overview.worker_error }}</p>
-        <p class="database-backup-banner-detail">
-            The production backup worker is required on this deployment. Set <code>BACKUP_WORKER_URL</code> and
-            <code>BACKUP_WORKER_TOKEN</code> to the deployed worker service, then reload this page.
-        </p>
-    </div>
-</section>
-{% endif %}
-
 <section class="database-backup-actions" aria-label="Backup and restore">
     <article class="database-backup-card">
         <div class="database-backup-card-heading">
@@ -88,18 +74,9 @@
         <p class="database-backup-includes">
             Includes database schema, records, and database objects. Profile pictures stored separately in Supabase Storage are not included.
         </p>
-        {% if overview.worker_mode and not overview.backup_service_available %}
+        {% if not overview.utilities_available %}
         <p class="database-backup-notice" role="status">
-            The production backup worker or its private Supabase Storage connection is unavailable. Backup operations are disabled until the worker is configured and healthy.
-        </p>
-        {% elif not overview.worker_mode and not overview.utilities_available %}
-        <p class="database-backup-notice" role="status">
-            PostgreSQL client utilities are not detected on this local server. Backup actions require <code>pg_dump</code> and <code>pg_restore</code>.
-        </p>
-        {% endif %}
-        {% if overview.worker_mode and overview.backup_service_available %}
-        <p class="database-backup-help" role="status">
-            Production worker connected · private Supabase Storage {% if overview.storage_available %}available{% else %}unavailable{% endif %} · final package limit 50 MB.
+            PostgreSQL client utilities are not detected on this server. Backup actions require <code>pg_dump</code> and <code>pg_restore</code>.
         </p>
         {% endif %}
         <form method="post" action="{{ url_for('database_backup.create') }}" data-backup-operation>
@@ -134,30 +111,15 @@
             <i data-lucide="triangle-alert" aria-hidden="true"></i>
             <p>Restoring creates a <strong>new database</strong>; it never overwrites the active database. Confirm that your hosting account permits creating databases.</p>
         </div>
-        {% if overview.worker_mode and not overview.restore_available %}
-        <p class="database-backup-notice" role="status">
-            The configured PostgreSQL role does not report permission to create databases. Restore may be unavailable on this host; test only with a separate non-production target and do not weaken active-database protections.
-        </p>
-        {% endif %}
         <form method="post" action="{{ url_for('database_backup.restore') }}"
               enctype="multipart/form-data" data-backup-operation data-backup-restore>
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="confirmed_restore" value="">
             <div class="database-backup-field">
                 <label for="backupFile">Backup package</label>
-                {% if overview.worker_mode %}
-                <select name="backup_id" id="backupFile" required>
-                    <option value="">Choose a stored private backup</option>
-                    {% for backup in overview.backups if backup.status == "successful" %}
-                    <option value="{{ backup.id }}">{{ backup.filename }} · {{ "%.1f"|format(backup.file_size / 1024) }} KB</option>
-                    {% endfor %}
-                </select>
-                <small class="database-backup-help">Production restores use backups already stored in the private Supabase bucket; uploads do not pass through Vercel.</small>
-                {% else %}
                 <input type="file" name="backup_file" id="backupFile"
                        accept=".emsbackup,application/zip" required>
                 <small class="database-backup-help">Only signed MCM EMS PostgreSQL packages are supported (512 MB maximum).</small>
-                {% endif %}
             </div>
             <div class="database-backup-field">
                 <label for="restoreDatabaseName">New database name</label>
@@ -186,45 +148,6 @@
         </form>
     </article>
 </section>
-
-{% if overview.worker_mode %}
-<section class="database-backup-history" id="backupJobStatus"
-         data-jobs-url="{{ url_for('database_backup.jobs') }}">
-    <div class="database-backup-history-heading">
-        <div>
-            <p class="database-backup-eyebrow">WORKER</p>
-            <h2>Recent operations</h2>
-        </div>
-        <span>Refreshes automatically</span>
-    </div>
-    <div class="database-backup-table-wrap">
-        <table class="database-backup-table">
-            <thead>
-                <tr>
-                    <th scope="col">Job</th>
-                    <th scope="col">Operation</th>
-                    <th scope="col">Started</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Details</th>
-                </tr>
-            </thead>
-            <tbody id="backupJobRows">
-                {% for job in overview.jobs %}
-                <tr>
-                    <td><code>{{ job.id[:8] }}</code></td>
-                    <td>{{ job.operation|capitalize }}</td>
-                    <td>{{ job.created_at }}</td>
-                    <td><span class="database-backup-status is-{{ job.status }}">{{ job.status|capitalize }}</span></td>
-                    <td>{{ job.message or "" }}</td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5">No recent worker operations.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-{% endif %}
 
 <section class="database-backup-history">
     <div class="database-backup-history-heading">
