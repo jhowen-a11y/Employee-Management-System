@@ -1,15 +1,27 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-trixie
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Required by the database backup and restore feature.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-17 ca-certificates \
+    && pg_dump --version \
+    && pg_restore --version \
+    && psql --version \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+RUN useradd --create-home --uid 10001 appuser
+COPY --chown=appuser:appuser . .
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-10000} 'app:create_app()'"]
+USER appuser
+EXPOSE 8000
+
+# Backups can run for up to 900 seconds inside a request.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "1000", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
