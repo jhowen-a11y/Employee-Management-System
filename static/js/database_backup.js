@@ -64,10 +64,10 @@
                 form.querySelector("button[type=submit]")?.classList.add("is-loading");
                 HTMLFormElement.prototype.submit.call(form);
             };
-            title.textContent = "Restore to a new database?";
+            title.textContent = "Replace the active database?";
             message.textContent =
-                "A new database will be created and populated. The active database will not be changed.";
-            confirmButton.textContent = "Restore backup";
+                "All active tables will be dropped before this backup is restored. This cannot be undone.";
+            confirmButton.textContent = "Replace database";
             dialog.showModal();
             return;
         }

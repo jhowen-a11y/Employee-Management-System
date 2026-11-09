@@ -125,14 +125,13 @@ def restore():
     try:
         restore_backup(
             upload.stream,
-            request.form.get("restore_database_name", ""),
             request.form.get("restore_password", ""),
         )
     except BackupError as error:
         flash(error.public_message, "error")
     else:
         flash(
-            "Backup restored into the new database. Your active database was not changed.",
+            "Backup restored into the active database. Existing public tables were replaced.",
             "success",
         )
     return redirect(url_for("database_backup.index"))

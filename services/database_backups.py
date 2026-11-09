@@ -17,8 +17,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask import current_app
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text
 from supabase import create_client
 from werkzeug.utils import secure_filename
 
@@ -654,42 +653,23 @@ def delete_backup(backup_id):
     return True
 
 
-def create_destination_database(url, database_name):
-    maintenance_url = url.set(database="postgres")
-    engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+def clear_active_database():
     try:
-        with engine.connect() as connection:
-            quoted_name = connection.dialect.identifier_preparer.quote(database_name)
-            connection.execute(text(f"CREATE DATABASE {quoted_name}"))
-    finally:
-        engine.dispose()
-
-
-def drop_destination_database(url, database_name):
-    maintenance_url = url.set(database="postgres")
-    engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
-    try:
-        with engine.connect() as connection:
-            quoted_name = connection.dialect.identifier_preparer.quote(database_name)
-            connection.execute(text(f"DROP DATABASE IF EXISTS {quoted_name}"))
-    finally:
-        engine.dispose()
-
-
-def restore_backup(upload_stream, database_name, password=""):
-    database_name = database_name.strip()
-    if (
-        not DATABASE_NAME_PATTERN.fullmatch(database_name)
-        or database_name.lower() in {"postgres", "template0", "template1"}
-    ):
-        raise BackupError(
-            "Enter a new database name using letters, numbers, and underscores."
+        with db.engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+    except Exception as error:
+        logger.error(
+            "Could not clear the active database schema: error_type=%s",
+            type(error).__name__,
         )
+        raise BackupError(
+            "Could not clear the active database before restoring the backup."
+        ) from error
+
+
+def restore_backup(upload_stream, password=""):
     url = database_url()
-    if database_name.casefold() == (url.database or "").casefold():
-        raise BackupError(
-            "The active database cannot be used as the restore destination."
-        )
 
     try:
         with tempfile.TemporaryDirectory(prefix="ems-backup-restore-") as temp:
@@ -734,45 +714,25 @@ def restore_backup(upload_stream, database_name, password=""):
             else:
                 os.replace(payload_path, dump_path)
             verify_dump(dump_path, url)
-
+            clear_active_database()
+            arguments = [
+                utility_path("pg_restore"),
+                "--no-owner",
+                "--no-acl",
+                "--exit-on-error",
+                "--single-transaction",
+                str(dump_path),
+            ]
             try:
-                create_destination_database(url, database_name)
-            except SQLAlchemyError as error:
-                logger.error(
-                    "Could not create database restore destination: error_type=%s",
-                    type(error).__name__,
-                )
-                raise BackupError(
-                    "Could not create a new restore database. Your active "
-                    "database has not been changed."
-                ) from error
-
-            try:
-                target_url = url.set(database=database_name)
-                arguments = [
-                    utility_path("pg_restore"),
-                    "--no-owner",
-                    "--no-acl",
-                    "--exit-on-error",
-                    "--single-transaction",
-                    str(dump_path),
-                ]
-                run_tool(arguments, target_url)
+                run_tool(arguments, url)
             except BackupError as error:
-                try:
-                    drop_destination_database(url, database_name)
-                except SQLAlchemyError as cleanup_error:
-                    logger.error(
-                        "Could not remove failed restore destination: error_type=%s",
-                        type(cleanup_error).__name__,
-                    )
                 raise BackupError(
-                    "Unable to restore the backup. Your active database has "
-                    "not been changed."
+                    "Unable to restore the backup. The active database may be "
+                    "incomplete."
                 ) from error
     except BackupError:
         raise
     except (OSError, zipfile.BadZipFile, RuntimeError, ValueError) as error:
         logger.error("Database restore failed: error_type=%s", type(error).__name__)
         raise BackupError("The uploaded backup file is invalid.") from error
-    return database_name
+    return url.database

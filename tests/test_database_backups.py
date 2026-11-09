@@ -157,7 +157,7 @@ class DatabaseBackupTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Database Backup", response.data)
         self.assertIn(b"Create a backup", response.data)
-        self.assertIn(b"Restore to a new database", response.data)
+        self.assertIn(b"Replace active database", response.data)
 
         for username in ("hr", "employee"):
             client = self._login(username)
@@ -207,22 +207,21 @@ class DatabaseBackupTests(unittest.TestCase):
                 403,
             )
 
-    def test_encrypted_package_authenticates_before_creating_destination(self):
+    def test_encrypted_package_authenticates_before_replacing_active_database(self):
         with self.app.app_context():
             backup = self._create_test_backup("very-strong-test-password")
 
             with patch.object(
                 database_backups, "database_url", return_value=self._postgres_url()
             ), patch.object(
-                database_backups, "create_destination_database"
-            ) as create_database:
+                database_backups, "clear_active_database"
+            ) as clear_database:
                 with self.assertRaises(database_backups.BackupError):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
-                        "ems_restore_test",
                         "incorrect-password",
                     )
-                create_database.assert_not_called()
+                clear_database.assert_not_called()
 
                 with patch.object(
                     database_backups,
@@ -236,14 +235,15 @@ class DatabaseBackupTests(unittest.TestCase):
                         stdout=b"",
                         stderr=b"",
                     ),
-                ) as run_tool:
+                ) as run_tool, patch.object(
+                    database_backups, "clear_active_database"
+                ) as clear_database:
                     destination = database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
-                        "ems_restore_test",
                         "very-strong-test-password",
                     )
-                self.assertEqual(destination, "ems_restore_test")
-                create_database.assert_called_once()
+                self.assertEqual(destination, "ems")
+                clear_database.assert_called_once()
                 self.assertIn("--single-transaction", run_tool.call_args_list[-1].args[0])
 
     def test_delete_removes_backup_and_metadata_from_supabase(self):
@@ -263,30 +263,13 @@ class DatabaseBackupTests(unittest.TestCase):
         with self.app.app_context():
             with patch.object(
                 database_backups, "database_url", return_value=self._postgres_url()
-            ), patch.object(
-                database_backups, "create_destination_database"
-            ) as create_database:
+            ):
                 with self.assertRaisesRegex(
                     database_backups.BackupError, "uploaded backup file is invalid"
                 ):
                     database_backups.restore_backup(
                         BytesIO(b"not a backup"),
-                        "ems_restore_test",
                     )
-                create_database.assert_not_called()
-
-    def test_restore_refuses_active_or_unsafe_database_names(self):
-        with self.app.app_context():
-            with patch.object(
-                database_backups, "database_url", return_value=self._postgres_url()
-            ):
-                for database_name in ("ems", "../postgres", "template1", "bad-name"):
-                    with self.subTest(database_name=database_name):
-                        with self.assertRaises(database_backups.BackupError):
-                            database_backups.restore_backup(
-                                BytesIO(b"not read"),
-                                database_name,
-                            )
 
     def test_restore_requires_confirmation_in_the_admin_form(self):
         client = self._login("admin")
@@ -295,7 +278,6 @@ class DatabaseBackupTests(unittest.TestCase):
             data={
                 "_csrf_token": "test-csrf-token",
                 "confirm_overwrite": "on",
-                "restore_database_name": "ems_restore_test",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -343,7 +325,7 @@ class DatabaseBackupTests(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0]["status"], "failed")
 
-    def test_failed_restore_removes_new_destination_database(self):
+    def test_failed_restore_reports_that_active_database_may_be_incomplete(self):
         with self.app.app_context():
             backup = self._create_test_backup()
 
@@ -361,25 +343,15 @@ class DatabaseBackupTests(unittest.TestCase):
             ), patch.object(
                 database_backups, "utility_path", side_effect=lambda name: name
             ), patch.object(
-                database_backups, "create_destination_database"
-            ) as create_database, patch.object(
-                database_backups, "drop_destination_database"
-            ) as drop_database, patch.object(
+                database_backups, "clear_active_database"
+            ) as clear_database, patch.object(
                 database_backups, "run_tool", side_effect=fail_restore
             ):
-                with self.assertRaisesRegex(
-                    database_backups.BackupError,
-                    "active database has not been changed",
-                ):
+                with self.assertRaisesRegex(database_backups.BackupError, "Unable to restore"):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
-                        "ems_restore_test",
                     )
-                create_database.assert_called_once()
-                drop_database.assert_called_once_with(
-                    self._postgres_url(),
-                    "ems_restore_test",
-                )
+                clear_database.assert_called_once()
 
     def test_package_is_signed_and_contains_only_supported_archive(self):
         with self.app.app_context():

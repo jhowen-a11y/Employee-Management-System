@@ -16,7 +16,7 @@
     <div>
         <p class="database-backup-eyebrow">ADMINISTRATION · DATA PROTECTION</p>
         <h1>Database Backup</h1>
-        <p>Create a portable PostgreSQL backup, safely restore to a new database, and review backup activity.</p>
+        <p>Create a portable PostgreSQL backup, replace the active database from a package, and review backup activity.</p>
     </div>
     <span class="database-backup-admin-note">
         <i data-lucide="shield-check" aria-hidden="true"></i>
@@ -103,13 +103,13 @@
         <div class="database-backup-card-heading">
             <span class="database-backup-card-icon"><i data-lucide="folder-sync" aria-hidden="true"></i></span>
             <div>
-                <h2>Restore to a new database</h2>
-                <p>Validate a package before restoring it to a separate destination.</p>
+                <h2>Replace active database</h2>
+                <p>Validate a package, remove the active tables, and restore this database.</p>
             </div>
         </div>
         <div class="database-backup-warning" role="note">
             <i data-lucide="triangle-alert" aria-hidden="true"></i>
-            <p>Restoring creates a <strong>new database</strong>; it never overwrites the active database. Confirm that your hosting account permits creating databases.</p>
+            <p>This is <strong>destructive</strong>: all tables in the active database are dropped before the backup is restored.</p>
         </div>
         <form method="post" action="{{ url_for('database_backup.restore') }}"
               enctype="multipart/form-data" data-backup-operation data-backup-restore>
@@ -120,12 +120,6 @@
                 <input type="file" name="backup_file" id="backupFile"
                        accept=".emsbackup,application/zip" required>
                 <small class="database-backup-help">Only signed MCM EMS PostgreSQL packages are supported (512 MB maximum).</small>
-            </div>
-            <div class="database-backup-field">
-                <label for="restoreDatabaseName">New database name</label>
-                <input type="text" name="restore_database_name" id="restoreDatabaseName"
-                       pattern="[A-Za-z][A-Za-z0-9_]{0,62}"
-                       maxlength="63" autocomplete="off" placeholder="ems_restore_2026" required>
             </div>
             <label class="database-backup-check">
                 <input type="checkbox" id="encryptedRestore">
@@ -138,7 +132,7 @@
             </div>
             <label class="database-backup-check database-backup-restore-check">
                 <input type="checkbox" name="confirm_overwrite" required>
-                <span>I understand this will create and populate a new database named above.</span>
+                <span>I understand this will drop all active tables and replace them with this backup.</span>
             </label>
             <button class="button-primary database-backup-submit" type="submit">
                 <i data-lucide="folder-sync" aria-hidden="true"></i>
