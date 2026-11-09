@@ -7,8 +7,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -29,11 +31,16 @@ FORMAT_VERSION = 1
 MAX_BACKUP_SIZE = 512 * 1024 * 1024
 MAX_MANIFEST_SIZE = 16 * 1024
 MAX_HISTORY_ITEMS = 200
+BACKUP_HISTORY_CACHE_SECONDS = 10
 PBKDF2_ITERATIONS = 600_000
 PASSWORD_MIN_LENGTH = 12
 DATABASE_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,62}$")
 BACKUP_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 PACKAGE_EXTENSION = ".emsbackup"
+_backup_bucket_cache = {}
+_backup_bucket_cache_lock = threading.Lock()
+_backup_history_cache = {}
+_backup_history_cache_lock = threading.Lock()
 
 
 class BackupError(Exception):
@@ -59,12 +66,25 @@ def backup_bucket():
             "Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY."
         )
 
+    bucket_name = backup_bucket_name()
+    cache_key = (
+        threading.get_ident(),
+        project_url,
+        bucket_name,
+        hashlib.sha256(secret_key.encode()).digest(),
+    )
+    with _backup_bucket_cache_lock:
+        cached_bucket = _backup_bucket_cache.get(cache_key)
+    if cached_bucket is not None:
+        return cached_bucket
+
     try:
-        return create_client(project_url, secret_key).storage.from_(
-            backup_bucket_name()
-        )
+        bucket = create_client(project_url, secret_key).storage.from_(bucket_name)
     except Exception as error:
         raise BackupError("Could not connect to Supabase Storage.") from error
+    with _backup_bucket_cache_lock:
+        _backup_bucket_cache[cache_key] = bucket
+    return bucket
 
 
 def raise_storage_error(message, error):
@@ -172,12 +192,22 @@ def tool_environment(url):
     return environment, passfile
 
 
+def tool_arguments(arguments, url):
+    if Path(arguments[0]).stem.lower() != "psql":
+        return arguments
+    database = url.set(
+        drivername="postgresql",
+        password=None,
+    ).render_as_string(hide_password=False)
+    return [*arguments, "--dbname", database]
+
+
 def run_tool(arguments, url, timeout=900):
     passfile = None
     try:
         environment, passfile = tool_environment(url)
         result = subprocess.run(
-            arguments,
+            tool_arguments(arguments, url),
             check=False,
             capture_output=True,
             timeout=timeout,
@@ -204,12 +234,15 @@ def run_tool(arguments, url, timeout=900):
                     "Unable to complete the database operation. Please try again."
                 ) from error
     if result.returncode:
+        error_output = result.stderr.decode("utf-8", errors="replace").strip()
         logger.error(
-            "PostgreSQL backup utility returned an error: return_code=%s",
+            "PostgreSQL backup utility returned an error: return_code=%s stderr=%s",
             result.returncode,
+            error_output[-2000:] if error_output else "(no error output)",
         )
         raise BackupError(
-            "Unable to complete the database operation. Please try again."
+            "PostgreSQL could not complete the database operation. "
+            "Check the server logs for the database error."
         )
     return result
 
@@ -413,11 +446,76 @@ def copy_verified_payload(archive, manifest, payload_name, destination):
 
 
 def verify_dump(dump_path, url):
-    run_tool(
+    return run_tool(
         [utility_path("pg_restore"), "--list", str(dump_path)],
         url,
         timeout=120,
     )
+
+
+def write_restore_list(list_path, listing):
+    excluded_markers = (
+        "EVENT TRIGGER",
+        " auth.",
+        " storage.",
+        "rls_auto_enable",
+        "ensure_rls",
+        "pgrst_drop_watch",
+    )
+    managed_object_markers = (
+        " bucket_",
+        " s3_",
+        " vector_",
+        " objects ",
+        " buckets ",
+        " migrations ",
+        " prefixes ",
+        " objects_id_seq",
+        " webauthn_",
+        " fido_",
+        " sso_",
+        " pgbouncer",
+    )
+    managed_owner_markers = (
+        " supabase_admin",
+        " supabase_storage_admin",
+        " supabase_auth_admin",
+        " supabase_realtime_admin",
+    )
+    try:
+        with list_path.open("w", encoding="utf-8") as restore_list:
+            for line in listing.stdout.decode("utf-8", errors="replace").splitlines(
+                keepends=True
+            ):
+                normalized_line = " ".join(line.lower().split())
+                is_non_public_schema = any(
+                    f" {schema_name} " in f" {normalized_line} "
+                    for schema_name in (
+                        "pgbouncer",
+                        "pg_catalog",
+                        "information_schema",
+                    )
+                )
+                is_managed_object = any(
+                    marker in f" {normalized_line} "
+                    for marker in managed_object_markers
+                )
+                is_managed_owner = any(
+                    normalized_line.endswith(marker)
+                    for marker in managed_owner_markers
+                )
+                if (
+                    not is_non_public_schema
+                    and not is_managed_object
+                    and not is_managed_owner
+                    and not any(
+                    marker.lower() in normalized_line
+                    for marker in excluded_markers
+                    )
+                ):
+                    restore_list.write(line)
+    except OSError as error:
+        raise BackupError("Unable to prepare the database restore.") from error
 
 
 def metadata_object_name(backup_id):
@@ -507,12 +605,19 @@ def has_utility(name):
 
 
 def list_backups(limit=MAX_HISTORY_ITEMS):
+    bucket = backup_bucket()
+    cache_key = (id(bucket), limit)
+    now = datetime.now(timezone.utc).timestamp()
+    with _backup_history_cache_lock:
+        cached = _backup_history_cache.get(cache_key)
+        if cached and now - cached[0] < BACKUP_HISTORY_CACHE_SECONDS:
+            return [*cached[1]]
+
     backups = []
     object_names = set()
     offset = 0
     page_size = 100
     try:
-        bucket = backup_bucket()
         while True:
             page = bucket.list("", {"limit": page_size, "offset": offset})
             object_names.update(
@@ -526,13 +631,29 @@ def list_backups(limit=MAX_HISTORY_ITEMS):
     except Exception as error:
         raise_storage_error("Could not list database backups", error)
 
-    for metadata_name in object_names:
-        if not metadata_name.endswith(".json"):
-            continue
-        backup_id = metadata_name[:-5]
-        if not BACKUP_ID_PATTERN.fullmatch(backup_id):
-            continue
-        metadata = read_metadata(backup_id)
+    metadata_ids = [
+        metadata_name[:-5]
+        for metadata_name in object_names
+        if metadata_name.endswith(".json")
+        and BACKUP_ID_PATTERN.fullmatch(metadata_name[:-5])
+    ]
+
+    def load_metadata(backup_id):
+        try:
+            return backup_id, read_metadata(backup_id)
+        except BackupError as error:
+            logger.warning(
+                "Skipped unreadable database backup metadata: "
+                "backup_id=%s error_type=%s",
+                backup_id,
+                type(error).__name__,
+            )
+            return backup_id, None
+
+    with ThreadPoolExecutor(max_workers=min(8, len(metadata_ids) or 1)) as executor:
+        metadata_results = executor.map(load_metadata, metadata_ids)
+
+    for backup_id, metadata in metadata_results:
         if metadata is None:
             logger.warning("Skipped invalid database backup metadata.")
             continue
@@ -550,7 +671,15 @@ def list_backups(limit=MAX_HISTORY_ITEMS):
             }
         )
     backups.sort(key=lambda item: item["created_at"], reverse=True)
-    return backups if limit is None else backups[:limit]
+    result = backups if limit is None else backups[:limit]
+    with _backup_history_cache_lock:
+        _backup_history_cache[cache_key] = (now, [*result])
+    return result
+
+
+def clear_backup_history_cache():
+    with _backup_history_cache_lock:
+        _backup_history_cache.clear()
 
 
 def create_backup(created_by, password=None):
@@ -583,8 +712,9 @@ def create_backup(created_by, password=None):
             arguments = [
                 dump_utility,
                 "--format=custom",
+                "--schema=public",
                 "--no-owner",
-                "--no-acl",
+                "--no-privileges",
                 "--file",
                 str(dump_path),
             ]
@@ -604,6 +734,7 @@ def create_backup(created_by, password=None):
                 )
         metadata["status"] = "successful"
         write_metadata(metadata)
+        clear_backup_history_cache()
         return metadata
     except Exception as error:
         logger.error("Database backup failed: error_type=%s", type(error).__name__)
@@ -654,6 +785,7 @@ def delete_backup(backup_id):
         backup_bucket().remove(object_names)
     except Exception as error:
         raise_storage_error("Could not delete database backup", error)
+    clear_backup_history_cache()
     return True
 
 
@@ -702,18 +834,23 @@ def restore_backup(upload_stream, password=""):
                     ) from error
             else:
                 os.replace(payload_path, dump_path)
-            verify_dump(dump_path, url)
+            listing = verify_dump(dump_path, url)
+            restore_list_path = temp_directory / "restore.list"
+            write_restore_list(restore_list_path, listing)
 
             generated_sql_path = temp_directory / "generated_restore.sql"
             generate_restore_sql = [
                 utility_path("pg_restore"),
+                "--schema=public",
                 "--no-owner",
-                "--no-acl",
+                "--no-privileges",
                 "--exit-on-error",
                 "--clean",
                 "--if-exists",
                 "--file",
                 str(generated_sql_path),
+                "--use-list",
+                str(restore_list_path),
                 str(dump_path),
             ]
             run_tool(generate_restore_sql, url)
@@ -725,12 +862,16 @@ def restore_backup(upload_stream, password=""):
 
             restore_sql_path = temp_directory / "restore.sql"
             with restore_sql_path.open("wb") as restore_sql:
+                restore_sql.write(b"SET LOCAL lock_timeout = '10s';\n")
+                restore_sql.write(b"SET LOCAL statement_timeout = '10min';\n")
                 restore_sql.write(b"DROP SCHEMA public CASCADE;\n")
                 restore_sql.write(b"CREATE SCHEMA public;\n")
                 with generated_sql_path.open("rb") as generated_sql:
                     restore_sql.write(generated_sql.read())
 
             try:
+                db.session.remove()
+                db.engine.dispose()
                 run_tool(
                     [
                         utility_path("psql"),
@@ -740,6 +881,7 @@ def restore_backup(upload_stream, password=""):
                         str(restore_sql_path),
                     ],
                     url,
+                    timeout=660,
                 )
             except BackupError as error:
                 raise BackupError(

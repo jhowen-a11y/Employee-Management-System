@@ -238,6 +238,32 @@ class DatabaseBackupTests(unittest.TestCase):
                 self.assertIn("--single-transaction", restore_arguments)
                 self.assertIn("psql", restore_arguments[0])
 
+    def test_restore_list_excludes_supabase_managed_objects(self):
+        listing = SimpleNamespace(
+            stdout=(
+                b"1; 0 0 TABLE public employees admin\n"
+                b"2; 0 0 EVENT TRIGGER public pgrst_drop_watch admin\n"
+                b"3; 0 0 FUNCTION public ensure_rls() admin\n"
+                b"4; 0 0 TABLE public vector_indexes supabase_admin\n"
+                b"5; 0 0 TABLE public s3_multipart_uploads_parts supabase_admin\n"
+                b"6; 0 0 TABLE storage objects supabase_admin\n"
+                b"7; 0 0 TABLE DATA storage objects supabase_admin\n"
+                b"8; 0 0 TABLE public bucket_lifecycle_states supabase_admin\n"
+                b"9; 0 0 TABLE public vector_indexes supabase_admin\n"
+                b"10; 0 0 TABLE public webauthn_credentials supabase_admin\n"
+                b"11; 0 0 TABLE public sso_domains supabase_admin\n"
+                b"12; 0 0 SCHEMA - pgbouncer supabase_admin\n"
+                b"13; 0 0 TABLE pgbouncer pgbouncer_stats supabase_admin\n"
+            )
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            list_path = Path(temp) / "restore.list"
+            database_backups.write_restore_list(list_path, listing)
+            self.assertEqual(
+                list_path.read_text(encoding="utf-8"),
+                "1; 0 0 TABLE public employees admin\n",
+            )
+
     def test_delete_removes_backup_and_metadata_from_supabase(self):
         with self.app.app_context():
             backup = self._create_test_backup()
@@ -336,6 +362,14 @@ class DatabaseBackupTests(unittest.TestCase):
                         stdout=b"",
                         stderr=b"",
                     )
+                restore_sql_path = Path(
+                    arguments[arguments.index("--file") + 1]
+                )
+                self.assertTrue(
+                    restore_sql_path.read_bytes().startswith(
+                        b"SET LOCAL lock_timeout = '10s';\n"
+                    )
+                )
                 raise database_backups.BackupError("safe test failure")
 
             with patch.object(
@@ -352,6 +386,20 @@ class DatabaseBackupTests(unittest.TestCase):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
                     )
+
+    def test_unreadable_metadata_is_skipped_from_backup_history(self):
+        with self.app.app_context():
+            with patch.object(
+                database_backups,
+                "backup_bucket",
+                return_value=self.backup_storage,
+            ), patch.object(
+                database_backups,
+                "read_metadata",
+                side_effect=database_backups.BackupError("storage read failed"),
+            ):
+                self.backup_storage.objects["a" * 32 + ".json"] = b"{}"
+                self.assertEqual(database_backups.list_backups(), [])
 
     def test_package_is_signed_and_contains_only_supported_archive(self):
         with self.app.app_context():
