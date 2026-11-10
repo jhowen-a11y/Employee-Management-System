@@ -115,7 +115,7 @@ class ProfileStorageTests(unittest.TestCase):
 
         self.assertEqual(
             storage.return_value.create_signed_urls.call_count,
-            3,
+            1,
         )
 
     def test_signed_url_cache_expires_before_storage_url(self):

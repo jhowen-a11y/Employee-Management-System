@@ -116,6 +116,18 @@ class DatabaseBackupTests(unittest.TestCase):
             "ems-backups"
         )
 
+    def test_utility_path_prefers_versioned_postgresql_binary(self):
+        with self.app.app_context():
+            with patch.object(
+                database_backups.Path,
+                "glob",
+                return_value=[Path("/usr/lib/postgresql/17/bin/pg_dump")],
+            ), patch("pathlib.Path.is_file", return_value=True):
+                self.assertEqual(
+                    database_backups.utility_path("pg_dump"),
+                    str(Path("/usr/lib/postgresql/17/bin/pg_dump").resolve()),
+                )
+
     def _add_user(self, username, role):
         user = self.User(
             username=username,
@@ -157,7 +169,7 @@ class DatabaseBackupTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Database Backup", response.data)
         self.assertIn(b"Create a backup", response.data)
-        self.assertIn(b"Restore to a new database", response.data)
+        self.assertIn(b"Replace active database", response.data)
 
         for username in ("hr", "employee"):
             client = self._login(username)
@@ -207,22 +219,18 @@ class DatabaseBackupTests(unittest.TestCase):
                 403,
             )
 
-    def test_encrypted_package_authenticates_before_creating_destination(self):
+    def test_encrypted_package_authenticates_before_replacing_active_database(self):
         with self.app.app_context():
             backup = self._create_test_backup("very-strong-test-password")
 
             with patch.object(
                 database_backups, "database_url", return_value=self._postgres_url()
-            ), patch.object(
-                database_backups, "create_destination_database"
-            ) as create_database:
+            ):
                 with self.assertRaises(database_backups.BackupError):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
-                        "ems_restore_test",
                         "incorrect-password",
                     )
-                create_database.assert_not_called()
 
                 with patch.object(
                     database_backups,
@@ -231,20 +239,42 @@ class DatabaseBackupTests(unittest.TestCase):
                 ), patch.object(
                     database_backups,
                     "run_tool",
-                    return_value=SimpleNamespace(
-                        returncode=0,
-                        stdout=b"",
-                        stderr=b"",
-                    ),
+                    side_effect=self._mock_tool,
                 ) as run_tool:
                     destination = database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
-                        "ems_restore_test",
                         "very-strong-test-password",
                     )
-                self.assertEqual(destination, "ems_restore_test")
-                create_database.assert_called_once()
-                self.assertIn("--single-transaction", run_tool.call_args_list[-1].args[0])
+                self.assertEqual(destination, "ems")
+                restore_arguments = run_tool.call_args_list[-1].args[0]
+                self.assertIn("--single-transaction", restore_arguments)
+                self.assertIn("psql", restore_arguments[0])
+
+    def test_restore_list_excludes_supabase_managed_objects(self):
+        listing = SimpleNamespace(
+            stdout=(
+                b"1; 0 0 TABLE public employees admin\n"
+                b"2; 0 0 EVENT TRIGGER public pgrst_drop_watch admin\n"
+                b"3; 0 0 FUNCTION public ensure_rls() admin\n"
+                b"4; 0 0 TABLE public vector_indexes supabase_admin\n"
+                b"5; 0 0 TABLE public s3_multipart_uploads_parts supabase_admin\n"
+                b"6; 0 0 TABLE storage objects supabase_admin\n"
+                b"7; 0 0 TABLE DATA storage objects supabase_admin\n"
+                b"8; 0 0 TABLE public bucket_lifecycle_states supabase_admin\n"
+                b"9; 0 0 TABLE public vector_indexes supabase_admin\n"
+                b"10; 0 0 TABLE public webauthn_credentials supabase_admin\n"
+                b"11; 0 0 TABLE public sso_domains supabase_admin\n"
+                b"12; 0 0 SCHEMA - pgbouncer supabase_admin\n"
+                b"13; 0 0 TABLE pgbouncer pgbouncer_stats supabase_admin\n"
+            )
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            list_path = Path(temp) / "restore.list"
+            database_backups.write_restore_list(list_path, listing)
+            self.assertEqual(
+                list_path.read_text(encoding="utf-8"),
+                "1; 0 0 TABLE public employees admin\n",
+            )
 
     def test_delete_removes_backup_and_metadata_from_supabase(self):
         with self.app.app_context():
@@ -263,30 +293,13 @@ class DatabaseBackupTests(unittest.TestCase):
         with self.app.app_context():
             with patch.object(
                 database_backups, "database_url", return_value=self._postgres_url()
-            ), patch.object(
-                database_backups, "create_destination_database"
-            ) as create_database:
+            ):
                 with self.assertRaisesRegex(
                     database_backups.BackupError, "uploaded backup file is invalid"
                 ):
                     database_backups.restore_backup(
                         BytesIO(b"not a backup"),
-                        "ems_restore_test",
                     )
-                create_database.assert_not_called()
-
-    def test_restore_refuses_active_or_unsafe_database_names(self):
-        with self.app.app_context():
-            with patch.object(
-                database_backups, "database_url", return_value=self._postgres_url()
-            ):
-                for database_name in ("ems", "../postgres", "template1", "bad-name"):
-                    with self.subTest(database_name=database_name):
-                        with self.assertRaises(database_backups.BackupError):
-                            database_backups.restore_backup(
-                                BytesIO(b"not read"),
-                                database_name,
-                            )
 
     def test_restore_requires_confirmation_in_the_admin_form(self):
         client = self._login("admin")
@@ -295,7 +308,6 @@ class DatabaseBackupTests(unittest.TestCase):
             data={
                 "_csrf_token": "test-csrf-token",
                 "confirm_overwrite": "on",
-                "restore_database_name": "ems_restore_test",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -343,7 +355,7 @@ class DatabaseBackupTests(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0]["status"], "failed")
 
-    def test_failed_restore_removes_new_destination_database(self):
+    def test_failed_restore_reports_that_active_database_may_be_incomplete(self):
         with self.app.app_context():
             backup = self._create_test_backup()
 
@@ -354,6 +366,22 @@ class DatabaseBackupTests(unittest.TestCase):
                         stdout=b"",
                         stderr=b"",
                     )
+                if "psql" not in arguments[0]:
+                    output_path = Path(arguments[arguments.index("--file") + 1])
+                    output_path.write_bytes(b"restore sql")
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=b"",
+                        stderr=b"",
+                    )
+                restore_sql_path = Path(
+                    arguments[arguments.index("--file") + 1]
+                )
+                self.assertTrue(
+                    restore_sql_path.read_bytes().startswith(
+                        b"SET LOCAL lock_timeout = '10s';\n"
+                    )
+                )
                 raise database_backups.BackupError("safe test failure")
 
             with patch.object(
@@ -361,25 +389,29 @@ class DatabaseBackupTests(unittest.TestCase):
             ), patch.object(
                 database_backups, "utility_path", side_effect=lambda name: name
             ), patch.object(
-                database_backups, "create_destination_database"
-            ) as create_database, patch.object(
-                database_backups, "drop_destination_database"
-            ) as drop_database, patch.object(
                 database_backups, "run_tool", side_effect=fail_restore
             ):
                 with self.assertRaisesRegex(
                     database_backups.BackupError,
-                    "active database has not been changed",
+                    "transaction rolled back",
                 ):
                     database_backups.restore_backup(
                         BytesIO(self.backup_storage.objects[backup["filename"]]),
-                        "ems_restore_test",
                     )
-                create_database.assert_called_once()
-                drop_database.assert_called_once_with(
-                    self._postgres_url(),
-                    "ems_restore_test",
-                )
+
+    def test_unreadable_metadata_is_skipped_from_backup_history(self):
+        with self.app.app_context():
+            with patch.object(
+                database_backups,
+                "backup_bucket",
+                return_value=self.backup_storage,
+            ), patch.object(
+                database_backups,
+                "read_metadata",
+                side_effect=database_backups.BackupError("storage read failed"),
+            ):
+                self.backup_storage.objects["a" * 32 + ".json"] = b"{}"
+                self.assertEqual(database_backups.list_backups(), [])
 
     def test_package_is_signed_and_contains_only_supported_archive(self):
         with self.app.app_context():

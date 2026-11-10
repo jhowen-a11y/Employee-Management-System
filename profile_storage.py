@@ -7,8 +7,7 @@ from collections import OrderedDict
 from io import BytesIO
 from pathlib import Path
 
-from flask import current_app, g, has_request_context, url_for
-from flask_login import current_user
+from flask import current_app, g, url_for
 from supabase import create_client
 from werkzeug.utils import secure_filename
 
@@ -20,6 +19,8 @@ SIGNED_URL_CACHE_SECONDS = 3300
 SIGNED_URL_CACHE_LIMIT = 1024
 _signed_url_cache = OrderedDict()
 _signed_url_cache_lock = threading.Lock()
+_storage_bucket_cache = {}
+_storage_bucket_cache_lock = threading.Lock()
 
 
 class ProfileStorageError(RuntimeError):
@@ -80,7 +81,6 @@ def profile_picture_urls(paths):
         g.profile_picture_urls = cached_urls
         return urls
 
-    user_scope = _signed_url_cache_scope()
     paths_to_sign = []
     project_url = os.getenv("SUPABASE_URL", "")
     bucket_name = _profile_bucket_name()
@@ -93,14 +93,13 @@ def profile_picture_urls(paths):
         if storage_key
         else None
     )
-    cache_scope = user_scope if storage_key_id else None
+    cache_scope = (
+        (project_url, bucket_name, storage_key_id)
+        if storage_key_id
+        else None
+    )
     for path in remote_paths:
-        cache_key = cache_scope + (
-            project_url,
-            bucket_name,
-            storage_key_id,
-            path,
-        ) if cache_scope else None
+        cache_key = cache_scope + (path,) if cache_scope else None
         signed_url = _get_cached_signed_url(cache_key) if cache_key else None
         if signed_url:
             urls[path] = signed_url
@@ -144,24 +143,13 @@ def profile_picture_urls(paths):
         urls[path] = url
         if cache_scope:
             _store_cached_signed_url(
-                cache_scope + (
-                    project_url,
-                    bucket_name,
-                    storage_key_id,
-                    path,
-                ),
+                cache_scope + (path,),
                 url,
             )
 
     cached_urls.update(urls)
     g.profile_picture_urls = cached_urls
     return urls
-
-
-def _signed_url_cache_scope():
-    if not has_request_context() or not current_user.is_authenticated:
-        return None
-    return current_user.get_id(), current_user.role
 
 
 def _get_cached_signed_url(cache_key):
@@ -256,14 +244,22 @@ def _storage_bucket():
             "Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY."
         )
 
+    bucket_name = _profile_bucket_name()
+    cache_key = (project_url, bucket_name, hashlib.sha256(secret_key.encode()).digest())
+    with _storage_bucket_cache_lock:
+        cached_bucket = _storage_bucket_cache.get(cache_key)
+    if cached_bucket is not None:
+        return cached_bucket
+
     try:
-        return create_client(project_url, secret_key).storage.from_(
-            _profile_bucket_name()
-        )
+        bucket = create_client(project_url, secret_key).storage.from_(bucket_name)
     except Exception as error:
         raise ProfileStorageError(
             "Could not connect to Supabase Storage."
         ) from error
+    with _storage_bucket_cache_lock:
+        _storage_bucket_cache[cache_key] = bucket
+    return bucket
 
 
 def upload_profile_picture(path, image_data, content_type):

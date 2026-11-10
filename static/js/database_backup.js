@@ -1,34 +1,39 @@
 (function () {
-    const encryptToggle = document.getElementById("encryptBackup");
-    const createPasswordField = document.getElementById("createPasswordField");
-    const encryptionPassword = document.getElementById("encryptionPassword");
-    const encryptedRestore = document.getElementById("encryptedRestore");
-    const restorePasswordField = document.getElementById("restorePasswordField");
-    const restorePassword = document.getElementById("restorePassword");
-    const dialog = document.getElementById("backupConfirmationDialog");
+    let pendingAction = null;
 
-    if (!dialog) return;
-
-    function syncPasswordField(toggle, field, input) {
+    function syncPasswordField(toggleId, fieldId, inputId) {
+        const toggle = document.getElementById(toggleId);
+        const field = document.getElementById(fieldId);
+        const input = document.getElementById(inputId);
         if (!toggle || !field || !input) return;
         field.hidden = !toggle.checked;
         input.required = toggle.checked;
         if (!toggle.checked) input.value = "";
     }
 
-    encryptToggle?.addEventListener("change", function () {
-        syncPasswordField(encryptToggle, createPasswordField, encryptionPassword);
-    });
+    function initialize() {
+        syncPasswordField("encryptBackup", "createPasswordField", "encryptionPassword");
+        syncPasswordField("encryptedRestore", "restorePasswordField", "restorePassword");
+    }
 
-    encryptedRestore?.addEventListener("change", function () {
-        syncPasswordField(encryptedRestore, restorePasswordField, restorePassword);
-    });
+    function openConfirmation(nextAction, nextTitle, nextMessage, nextButtonLabel) {
+        const dialog = document.getElementById("backupConfirmationDialog");
+        if (!dialog) return;
+        pendingAction = nextAction;
+        document.getElementById("backupConfirmationTitle").textContent = nextTitle;
+        document.getElementById("backupConfirmationMessage").textContent = nextMessage;
+        dialog.querySelector("[data-backup-confirm]").textContent = nextButtonLabel;
+        if (!dialog.open) dialog.showModal();
+    }
 
-    const title = document.getElementById("backupConfirmationTitle");
-    const message = document.getElementById("backupConfirmationMessage");
-    const confirmButton = dialog.querySelector("[data-backup-confirm]");
-    const cancelButton = dialog.querySelector("[data-backup-cancel]");
-    let pendingAction = null;
+    document.addEventListener("change", function (event) {
+        if (
+            event.target?.id === "encryptBackup" ||
+            event.target?.id === "encryptedRestore"
+        ) {
+            initialize();
+        }
+    });
 
     document.addEventListener("submit", function (event) {
         const form = event.target;
@@ -36,14 +41,14 @@
 
         if (form.matches("[data-backup-delete]")) {
             event.preventDefault();
-            pendingAction = function () {
-                HTMLFormElement.prototype.submit.call(form);
-            };
-            title.textContent = "Delete this backup?";
-            message.textContent =
-                "This permanently removes the selected backup package and its history record.";
-            confirmButton.textContent = "Delete backup";
-            dialog.showModal();
+            openConfirmation(
+                function () {
+                    HTMLFormElement.prototype.submit.call(form);
+                },
+                "Delete this backup?",
+                "This permanently removes the selected backup package and its history record.",
+                "Delete backup"
+            );
             return;
         }
 
@@ -58,17 +63,17 @@
                 return;
             }
             event.preventDefault();
-            pendingAction = function () {
-                form.dataset.confirmed = "true";
-                form.elements.namedItem("confirmed_restore").value = "yes";
-                form.querySelector("button[type=submit]")?.classList.add("is-loading");
-                HTMLFormElement.prototype.submit.call(form);
-            };
-            title.textContent = "Restore to a new database?";
-            message.textContent =
-                "A new database will be created and populated. The active database will not be changed.";
-            confirmButton.textContent = "Restore backup";
-            dialog.showModal();
+            openConfirmation(
+                function () {
+                    form.dataset.confirmed = "true";
+                    form.elements.namedItem("confirmed_restore").value = "yes";
+                    form.querySelector("button[type=submit]")?.classList.add("is-loading");
+                    HTMLFormElement.prototype.submit.call(form);
+                },
+                "Replace the active database?",
+                "All active tables will be dropped before this backup is restored. This cannot be undone.",
+                "Replace database"
+            );
             return;
         }
 
@@ -77,22 +82,37 @@
         }
     });
 
-    confirmButton.addEventListener("click", function () {
-        const action = pendingAction;
-        pendingAction = null;
-        dialog.close();
-        if (action) action();
-    });
+    document.addEventListener("click", function (event) {
+        const dialog = document.getElementById("backupConfirmationDialog");
+        if (!dialog) return;
 
-    cancelButton.addEventListener("click", function () {
-        pendingAction = null;
-        dialog.close();
-    });
+        const confirmButton = event.target.closest("[data-backup-confirm]");
+        if (confirmButton && dialog.contains(confirmButton)) {
+            const action = pendingAction;
+            pendingAction = null;
+            dialog.close();
+            if (action) action();
+            return;
+        }
 
-    dialog.addEventListener("click", function (event) {
+        const cancelButton = event.target.closest("[data-backup-cancel]");
+        if (cancelButton && dialog.contains(cancelButton)) {
+            pendingAction = null;
+            dialog.close();
+            return;
+        }
+
         if (event.target === dialog) {
             pendingAction = null;
             dialog.close();
         }
     });
+
+    window.initializeDatabaseBackupPage = initialize;
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initialize, { once: true });
+    } else {
+        initialize();
+    }
 })();
