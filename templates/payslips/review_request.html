@@ -61,7 +61,7 @@
                 {{ record_detail_field('Net salary', "{:,.2f}".format(payroll_record.net_pay), emphasized=true) }}
                 {{ record_detail_field('Payment status', 'Paid on ' ~ payroll_record.payment_date.strftime('%B %d, %Y') if payroll_record.payment_date else 'Not finalized') }}
             </dl>
-            <a class="button button-secondary button-small" data-record-modal data-modal-size="large" href="{{ url_for('payroll.edit_payroll', payroll_id=payroll_record.id) }}">Open payroll record</a>
+            <a class="button button-secondary button-small" href="{{ url_for('payroll.payroll_detail', payroll_id=payroll_record.id) }}">Open payroll record</a>
             {% else %}
             <p class="record-review-empty">No payroll record exists for this employee and period. Create it through the existing payroll process; the request will not create or calculate payroll.</p>
             <a class="button button-primary button-small"

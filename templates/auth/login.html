@@ -16,8 +16,40 @@
         v=static_asset_version('js/script.js')
     ) }}" defer></script>
 </head>
-<body class="auth-page">
-    <main class="auth-card">
+<body class="auth-page login-page">
+    <main class="login-layout">
+        <section class="login-welcome" aria-labelledby="login-welcome-title">
+            <span class="login-eyebrow">MCM · Employee Management System</span>
+            <svg class="login-illustration" viewBox="0 0 360 250" fill="none" aria-hidden="true" focusable="false">
+                <circle cx="180" cy="122" r="104" fill="#E5E9FF"/>
+                <rect x="71" y="40" width="222" height="156" rx="14" fill="white" stroke="#CFD6F5"/>
+                <path d="M71 71H293" stroke="#E6E9F5"/>
+                <circle cx="88" cy="56" r="3" fill="#8190FF"/>
+                <circle cx="99" cy="56" r="3" fill="#CFD6F5"/>
+                <circle cx="110" cy="56" r="3" fill="#CFD6F5"/>
+                <rect x="91" y="91" width="67" height="84" rx="9" fill="#F0F2FF"/>
+                <circle cx="124" cy="117" r="12" fill="#8190FF"/>
+                <path d="M104 151C104 140 113 133 124 133C135 133 144 140 144 151" fill="#8190FF"/>
+                <rect x="178" y="97" width="91" height="6" rx="3" fill="#CFD6F5"/>
+                <rect x="178" y="113" width="62" height="5" rx="2.5" fill="#E6E9F5"/>
+                <rect x="178" y="137" width="40" height="29" rx="6" fill="#E5E9FF"/>
+                <rect x="228" y="137" width="40" height="29" rx="6" fill="#F0F2FF"/>
+                <rect x="46" y="164" width="101" height="49" rx="10" fill="white" stroke="#CFD6F5"/>
+                <circle cx="66" cy="188" r="10" fill="#E5E9FF"/>
+                <path d="M62 188L65 191L71 185" stroke="#6478F5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M85 184H129M85 193H114" stroke="#CFD6F5" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="285" cy="182" r="25" fill="#6478F5"/>
+                <circle cx="280" cy="176" r="6" fill="white"/>
+                <path d="M269 195C269 188 274 184 280 184C286 184 291 188 291 195" fill="white"/>
+                <path d="M296 175V185M291 180H301" stroke="#DCE2FF" stroke-width="2" stroke-linecap="round"/>
+                <path d="M69 226H293" stroke="#D9DEF4" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="login-welcome-copy">
+                <h2 id="login-welcome-title">Good work starts<br>with connected people.</h2>
+                <p>A simpler way to support your team and keep every workday moving.</p>
+            </div>
+        </section>
+        <section class="auth-card" aria-label="Sign in">
         <div class="brand-icon auth-brand-icon">
             <i data-lucide="users"></i>
         </div>
@@ -57,6 +89,7 @@
                 Sign in
             </button>
         </form>
+        </section>
     </main>
 </body>
 </html>

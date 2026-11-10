@@ -1,6 +1,47 @@
     const menuToggle = document.getElementById("menuToggle");
     const sidebar = document.getElementById("sidebar");
 
+    const accountToggle = document.getElementById("sidebarAccountToggle");
+    const accountMenu = document.getElementById("sidebarAccountMenu");
+
+    function closeAccountMenu() {
+        if (!accountToggle || !accountMenu) return;
+        accountToggle.setAttribute("aria-expanded", "false");
+        accountMenu.classList.remove("is-open");
+        accountMenu.inert = true;
+    }
+
+    if (accountToggle && accountMenu) {
+        accountToggle.addEventListener("click", function () {
+            const open = accountToggle.getAttribute("aria-expanded") !== "true";
+            accountToggle.setAttribute("aria-expanded", String(open));
+            accountMenu.inert = !open;
+            accountMenu.classList.toggle("is-open", open);
+        });
+        document.addEventListener("click", function (event) {
+            if (!accountToggle.contains(event.target) &&
+                (!accountMenu.contains(event.target) || event.target.closest("a"))) {
+                closeAccountMenu();
+            }
+        });
+        document.addEventListener("focusin", function (event) {
+            if (!accountToggle.contains(event.target) && !accountMenu.contains(event.target)) {
+                closeAccountMenu();
+            }
+        });
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && accountToggle.getAttribute("aria-expanded") === "true") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                closeAccountMenu();
+                accountToggle.focus();
+            }
+        });
+        accountMenu.addEventListener("submit", closeAccountMenu);
+        if (menuToggle) menuToggle.addEventListener("click", closeAccountMenu);
+        window.addEventListener("resize", closeAccountMenu);
+    }
+
     if (window.lucide) {
         window.lucide.createIcons();
     }

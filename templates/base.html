@@ -164,9 +164,9 @@
             {% set signed_in_name = current_user.username %}
         {% endif %}
         <div class="sidebar-account">
-            <a href="{{ url_for('users.edit_profile') }}"
+            <button type="button" id="sidebarAccountToggle"
                class="sidebar-account-profile {% if request.endpoint == 'users.edit_profile' %}active{% endif %}"
-               {% if request.endpoint == 'users.edit_profile' %}aria-current="page"{% endif %}>
+               aria-expanded="false" aria-controls="sidebarAccountMenu" aria-label="Account options for {{ signed_in_name }}">
                 {{ person_avatar(
                     profile_picture_url(current_user.employee.profile_picture)
                     if current_user.employee and current_user.employee.profile_picture
@@ -178,15 +178,22 @@
                     <strong>{{ signed_in_name }}</strong>
                     <small>{{ current_user.role|capitalize }}</small>
                 </span>
-                <i data-lucide="settings-2" aria-hidden="true"></i>
+                <i data-lucide="chevron-up" aria-hidden="true"></i>
+            </button>
+            <div class="sidebar-account-menu" id="sidebarAccountMenu" inert aria-label="Account options">
+            <a href="{{ url_for('users.edit_profile') }}" class="sidebar-signout {% if request.endpoint == 'users.edit_profile' %}active{% endif %}"
+               {% if request.endpoint == 'users.edit_profile' %}aria-current="page"{% endif %}>
+                <i data-lucide="user-pen" aria-hidden="true"></i>
+                Edit Profile
             </a>
             <form method="post" action="{{ url_for('auth.logout') }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="sidebar-signout" type="submit">
                     <i data-lucide="log-out" aria-hidden="true"></i>
-                    Sign out
+                    Sign Out
                 </button>
             </form>
+            </div>
         </div>
 
     </aside>
