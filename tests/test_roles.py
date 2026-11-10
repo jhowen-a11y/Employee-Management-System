@@ -110,6 +110,36 @@ class RoleManagementTests(unittest.TestCase):
             },
         )
 
+    def test_shared_account_menu_preserves_profile_and_logout_for_all_roles(self):
+        for username, password, role in (
+            ("admin", "AdminPass123", "Admin"),
+            ("hrstaff", "HrPass123", "Hr"),
+            ("staff", "StaffPass123", "Employee"),
+        ):
+            with self.subTest(role=role):
+                client = self.app.test_client()
+                self.login(client, username, password)
+                for path in ("/", "/users/profile"):
+                    response = client.get(path, follow_redirects=True)
+                    self.assertEqual(response.status_code, 200)
+                    content = response.get_data(as_text=True)
+                    trigger = re.search(r'<button\b[^>]*id="sidebarAccountToggle"[^>]*>', content)
+                    self.assertIsNotNone(trigger)
+                    self.assertIn('aria-expanded="false"', trigger.group())
+                    self.assertIn('aria-controls="sidebarAccountMenu"', trigger.group())
+                    self.assertNotIn("href=", trigger.group())
+                    self.assertIn(f"<small>{role}</small>", content)
+                    menu = content.split('id="sidebarAccountMenu"', 1)[1].split('</div>', 1)[0]
+                    self.assertIn('inert', menu)
+                    self.assertIn('href="/users/profile"', menu)
+                    self.assertIn("Edit Profile", menu)
+                    self.assertIn('method="post" action="/logout"', menu)
+                    self.assertEqual(content.count('class="sidebar-signout" type="submit"'), 1)
+                    self.assertIn("Sign Out", menu)
+                logout = client.post("/logout", data={"_csrf_token": self.csrf_token(response)})
+                self.assertEqual(logout.status_code, 302)
+                self.assertEqual(client.get("/users/profile").status_code, 302)
+
     def test_admin_dashboard_combines_people_counts_and_shows_role_distribution(self):
         with self.app.app_context():
             department = self.Department(
@@ -2054,8 +2084,8 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"hrstaff@example.test", response.get_data())
         self.assertIn(b"Users and Employees", response.get_data())
         self.assertIn(b'class="sidebar-account-profile', response.get_data())
-        self.assertEqual(response.get_data().count(b"Sign out"), 1)
-        self.assertNotIn(b"Edit Profile", response.get_data())
+        self.assertEqual(response.get_data().count(b"Sign Out"), 1)
+        self.assertIn(b"Edit Profile", response.get_data())
         self.assertEqual(self.client.get("/users/profile").status_code, 200)
 
     def test_admin_can_assign_existing_user_to_department(self):
@@ -2320,8 +2350,8 @@ class RoleManagementTests(unittest.TestCase):
         self.assertIn(b"My Payslips", home.get_data())
         self.assertNotIn(b"My Payroll", home.get_data())
         self.assertIn(b'class="sidebar-account-profile', home.get_data())
-        self.assertEqual(home.get_data().count(b"Sign out"), 1)
-        self.assertNotIn(b"Edit Profile", home.get_data())
+        self.assertEqual(home.get_data().count(b"Sign Out"), 1)
+        self.assertIn(b"Edit Profile", home.get_data())
         self.assertNotIn(b"Users &amp; Roles", home.get_data())
         self.assertNotIn(b">Employees<", home.get_data())
         self.assertNotIn(b"Finance", home.get_data())
@@ -3089,6 +3119,85 @@ class RoleManagementTests(unittest.TestCase):
         history = second_client.get("/payslips/requests")
         self.assertEqual(history.status_code, 200)
         self.assertNotIn(b"Bank application", history.data)
+
+    def test_payslip_review_opens_associated_payroll_details_for_management(self):
+        from datetime import date
+        from decimal import Decimal
+
+        with self.app.app_context():
+            department = self.Department(department_name="Payroll navigation")
+            employee = self.Employee(
+                user_id=self.employee_id, first_name="Jamie", last_name="Staff",
+                position="Analyst", salary=Decimal("50000.00"),
+                department=department,
+            )
+            # A different period prevents a general/first-record link from passing.
+            other_payroll = self.Payroll(
+                employee=employee, pay_period_start=date(2026, 9, 1),
+                pay_period_end=date(2026, 9, 30), basic_salary=Decimal("10000.00"),
+                allowances=0, deductions=0, net_pay=Decimal("10000.00"),
+                payment_date=date(2026, 10, 5),
+            )
+            payroll = self.Payroll(
+                employee=employee, pay_period_start=date(2026, 10, 1),
+                pay_period_end=date(2026, 10, 31), basic_salary=Decimal("50000.00"),
+                allowances=Decimal("2000.00"), deductions=Decimal("1250.00"),
+                net_pay=Decimal("50750.00"), payment_date=date(2026, 11, 5),
+            )
+            linked = self.PayslipRequest(
+                employee=employee, payroll=payroll,
+                pay_period_start=payroll.pay_period_start,
+                pay_period_end=payroll.pay_period_end, reason="Other",
+            )
+            unlinked = self.PayslipRequest(
+                employee=employee, pay_period_start=other_payroll.pay_period_start,
+                pay_period_end=other_payroll.pay_period_end, reason="Other",
+            )
+            missing = self.PayslipRequest(
+                employee=employee, pay_period_start=date(2026, 11, 1),
+                pay_period_end=date(2026, 11, 30), reason="Other",
+            )
+            self.db.session.add_all([other_payroll, payroll, linked, unlinked, missing])
+            self.db.session.commit()
+            cases = [(linked.id, payroll.id), (unlinked.id, other_payroll.id)]
+            payroll_id, missing_id = payroll.id, missing.id
+
+        for username, password in (("admin", "AdminPass123"), ("hrstaff", "HrPass123")):
+            client = self.app.test_client()
+            self.login(client, username, password)
+            for request_id, expected_id in cases:
+                with self.subTest(role=username, request_id=request_id):
+                    review = client.get(f"/payslips/manage/{request_id}")
+                    self.assertEqual(review.status_code, 200)
+                    link = re.search(
+                        r'<a\b[^>]*>Open payroll record</a>',
+                        review.get_data(as_text=True),
+                    )
+                    self.assertIsNotNone(link)
+                    self.assertIn(f'href="/payroll/{expected_id}"', link.group())
+                    self.assertNotIn("data-record-modal", link.group())
+                    detail = client.get(f"/payroll/{expected_id}")
+                    self.assertEqual(detail.status_code, 200)
+                    self.assertIn(b"Jamie Staff", detail.data)
+                    if expected_id == payroll_id:
+                        for value in (b"October 01, 2026", b"October 31, 2026",
+                                      b"50,000.00", b"2,000.00", b"1,250.00", b"50,750.00"):
+                            self.assertIn(value, detail.data)
+                    # Opening details must preserve the paid-record edit lock.
+                    self.assertEqual(client.get(f"/payroll/{expected_id}/edit").status_code, 409)
+            missing_review = client.get(f"/payslips/manage/{missing_id}")
+            self.assertIn(b"No payroll record exists for this employee and period", missing_review.data)
+            self.assertNotIn(b"Open payroll record</a>", missing_review.data)
+
+        employee_client = self.app.test_client()
+        self.login(employee_client, "staff", "StaffPass123")
+        self.assertEqual(employee_client.get(f"/payroll/{payroll_id}").status_code, 403)
+        self.assertEqual(employee_client.get(f"/payslips/manage/{cases[0][0]}").status_code, 403)
+        self.assertEqual(self.app.test_client().get(f"/payroll/{payroll_id}").status_code, 302)
+        with self.app.app_context():
+            self.assertEqual(self.db.session.get(self.Payroll, payroll_id).net_pay, Decimal("50750.00"))
+            self.assertEqual(self.db.session.get(self.PayslipRequest, cases[0][0]).status, "Pending")
+            self.assertIsNone(self.db.session.get(self.PayslipRequest, cases[1][0]).payroll_id)
 
     def test_hr_reviews_pending_requests_and_employee_sees_remarks(self):
         from datetime import date
