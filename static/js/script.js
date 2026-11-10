@@ -1515,6 +1515,9 @@
                 activeUrl = null;
                 activeController = null;
                 if (window.lucide) window.lucide.createIcons();
+                if (window.initializeDatabaseBackupPage) {
+                    window.initializeDatabaseBackupPage();
+                }
                 if (addHistory) mainArea.scrollTo(0, 0);
             } catch (error) {
                 if (controller.signal.aborted || currentNavigationId !== navigationId) {
