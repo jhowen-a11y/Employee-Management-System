@@ -158,8 +158,9 @@
 
         </nav>
 
-        {% if current_user.employee %}
-            {% set signed_in_name = current_user.employee.first_name ~ ' ' ~ current_user.employee.last_name %}
+        {% set account_employee = none if request.blueprint == 'database_backup' else current_user.employee %}
+        {% if account_employee %}
+            {% set signed_in_name = account_employee.first_name ~ ' ' ~ account_employee.last_name %}
         {% else %}
             {% set signed_in_name = current_user.username %}
         {% endif %}
@@ -168,8 +169,8 @@
                class="sidebar-account-profile {% if request.endpoint == 'users.edit_profile' %}active{% endif %}"
                aria-expanded="false" aria-controls="sidebarAccountMenu" aria-label="Account options for {{ signed_in_name }}">
                 {{ person_avatar(
-                    profile_picture_url(current_user.employee.profile_picture)
-                    if current_user.employee and current_user.employee.profile_picture
+                    profile_picture_url(account_employee.profile_picture)
+                    if account_employee and account_employee.profile_picture
                     else none,
                     signed_in_name,
                     'sidebar-avatar'

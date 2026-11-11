@@ -186,6 +186,44 @@ class DatabaseBackupTests(unittest.TestCase):
             )
             self.assertNotIn(b"Database Backup", client.get("/").data)
 
+    def test_website_recovery_with_only_users_table_remaining(self):
+        with self.app.app_context():
+            backup = self._create_test_backup()
+            self.db.session.remove()
+            self.db.metadata.drop_all(
+                bind=self.db.engine,
+                tables=[
+                    table for table in reversed(self.db.metadata.sorted_tables)
+                    if table.name != "users"
+                ],
+            )
+
+        client = self.app.test_client()
+        with client.session_transaction() as session:
+            session["_csrf_token"] = "login-token"
+        response = client.post("/login", data={
+            "username": "admin", "password": "test-password",
+            "_csrf_token": "login-token",
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Application tables are missing", response.data)
+        self.assertIn(backup["filename"].encode(), response.data)
+        with client.session_transaction() as session:
+            csrf_token = session["_csrf_token"]
+        with patch("routes.database_backup_routes.restore_backup") as restore:
+            response = client.post("/admin/database-backups/restore", data={
+                "_csrf_token": csrf_token,
+                "confirm_overwrite": "on", "confirmed_restore": "yes",
+                "backup_file": (BytesIO(b"backup"), "test.emsbackup"),
+            }, follow_redirects=True)
+        restore.assert_called_once()
+        self.assertEqual(response.status_code, 200)
+        for username in ("hr", "employee"):
+            self.assertEqual(
+                self._login(username).get("/admin/database-backups").status_code,
+                403,
+            )
+
     def test_creation_history_and_download_use_private_storage(self):
         with self.app.app_context():
             backup = self._create_test_backup()

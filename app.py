@@ -8,13 +8,13 @@ from pathlib import Path
 
 
 import click
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, inspect, select
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import HTTPException
-from sqlalchemy.orm import joinedload
 from flask import (
     Flask,
     abort,
+    flash,
     g,
     has_request_context,
     jsonify,
@@ -310,7 +310,6 @@ def create_app(test_config=None):
         try:
             return db.session.execute(
                 select(User)
-                .options(joinedload(User.employee))
                 .where(User.id == int(user_id))
             ).scalar_one_or_none()
         except (TypeError, ValueError):
@@ -374,6 +373,15 @@ def create_app(test_config=None):
             return redirect(url_for("auth.employee_home"))
         if current_user.role == User.HR:
             return redirect(url_for("auth.hr_home"))
+        existing_tables = set(inspect(db.engine).get_table_names())
+        required_tables = {table.name for table in db.metadata.sorted_tables}
+        if required_tables - existing_tables:
+            flash(
+                "Application tables are missing. Restore an existing backup "
+                "using Database Backup to recover your data.",
+                "error",
+            )
+            return redirect(url_for("database_backup.index"))
         counts = db.session.execute(
             select(
                 select(func.count(Employee.id))
